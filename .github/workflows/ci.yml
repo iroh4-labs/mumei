@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # bash の静的解析。GitHub Actions runner には shellcheck がプリインストール済。
+      # ─────────────────────────────────────────
+      - name: shellcheck (hooks/*.sh + hooks/_lib/*.sh)
+        run: |
+          shellcheck hooks/_lib/*.sh hooks/*.sh
+
+      # ─────────────────────────────────────────
+      # bash syntax check (shellcheck では拾えないケースの保険)
+      # ─────────────────────────────────────────
+      - name: bash -n
+        run: |
+          for f in hooks/_lib/*.sh hooks/*.sh; do
+            bash -n "$f" || { echo "FAIL: $f"; exit 1; }
+          done
+
+      # ─────────────────────────────────────────
+      # JSON validation
+      # ─────────────────────────────────────────
+      - name: jq empty (manifest, hooks, schemas)
+        run: |
+          jq empty .claude-plugin/plugin.json
+          jq empty hooks/hooks.json
+          jq empty skills/state/schemas/state.schema.json
+
+      # ─────────────────────────────────────────
+      # 配布物 frontmatter check
+      # ─────────────────────────────────────────
+      - name: agent frontmatter check
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in agents/*.md; do
+            head -1 "$f" | grep -qx '---' || { echo "FAIL: $f - missing frontmatter"; fail=1; continue; }
+            fm="$(awk '/^---$/{c++; next} c==1' "$f")"
+            for required in name description model; do
+              printf '%s' "$fm" | grep -qE "^${required}:" || { echo "FAIL: $f - missing field: ${required}"; fail=1; }
+            done
+            for forbidden in hooks mcpServers permissionMode; do
+              if printf '%s' "$fm" | grep -qE "^${forbidden}:"; then
+                echo "FAIL: $f - forbidden plugin-agent field: ${forbidden}"
+                fail=1
+              fi
+            done
+          done
+          [[ "$fail" == "0" ]]
+
+      - name: skill frontmatter check
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            head -1 "$f" | grep -qx '---' || { echo "FAIL: $f - missing frontmatter"; fail=1; continue; }
+            fm="$(awk '/^---$/{c++; next} c==1' "$f")"
+            printf '%s' "$fm" | grep -qE '^description:' || { echo "FAIL: $f - missing description"; fail=1; }
+          done < <(find skills -name SKILL.md)
+          [[ "$fail" == "0" ]]
+
+      # ─────────────────────────────────────────
+      # 配布物 README / LICENSE 存在確認
+      # ─────────────────────────────────────────
+      - name: required top-level files
+        run: |
+          [[ -f README.md ]] || { echo "FAIL: README.md missing"; exit 1; }
+          [[ -f LICENSE ]] || { echo "FAIL: LICENSE missing"; exit 1; }
+          [[ -f .claude-plugin/plugin.json ]] || { echo "FAIL: plugin.json missing"; exit 1; }

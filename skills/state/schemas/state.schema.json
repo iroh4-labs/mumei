@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mumei.dev/schemas/state.schema.json",
+  "title": "mumei feature state",
+  "type": "object",
+  "required": [
+    "id",
+    "slug",
+    "phase",
+    "approvals",
+    "current_wave",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^REQ-[0-9]+$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["plan", "implement", "review", "done"]
+    },
+    "approvals": {
+      "type": "object",
+      "required": ["requirements", "design", "tasks"],
+      "properties": {
+        "requirements": { "type": "string", "enum": ["draft", "approved"] },
+        "design": { "type": "string", "enum": ["draft", "approved"] },
+        "tasks": { "type": "string", "enum": ["draft", "approved"] }
+      },
+      "additionalProperties": false
+    },
+    "current_wave": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
