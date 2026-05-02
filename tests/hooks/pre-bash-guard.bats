@@ -1,0 +1,133 @@
+#!/usr/bin/env bats
+# Tests for hooks/pre-bash-guard.sh.
+# Rules under test:
+#   I3 — Tests red on `git commit` → deny
+#   R2 — review verdict MAJOR_ISSUES on `git push` → deny
+#   W2 — Wave incomplete on `git commit` → deny
+# Plus the MUMEI_BYPASS=1 escape hatch.
+
+bats_require_minimum_version 1.5.0
+
+load '../test_helper'
+
+setup() {
+  MUMEI_TEST_TMPDIR="$(mktemp -d -t mumei-test.XXXXXX)"
+  export MUMEI_TEST_TMPDIR
+  cd "$MUMEI_TEST_TMPDIR" || return 1
+}
+
+# Run the hook with the given JSON on stdin. stdout / stderr / status
+# are captured by `run --separate-stderr` into $output / $stderr / $status.
+_run_hook() {
+  local input_json="$1"
+  local input_file="${MUMEI_TEST_TMPDIR}/.input.json"
+  printf '%s' "$input_json" > "$input_file"
+  run --separate-stderr bash -c \
+    "bash '${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash-guard.sh' < '${input_file}'"
+}
+
+_init_feature() {
+  local feature="REQ-1-foo"
+  mkdir -p ".mumei/specs/${feature}"
+  echo "${feature}" > .mumei/current
+  cat > ".mumei/specs/${feature}/state.json" <<EOF
+{
+  "id": "REQ-1",
+  "slug": "foo",
+  "phase": "implement",
+  "approvals": {"requirements":"approved","design":"approved","tasks":"approved"},
+  "current_wave": 1,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}
+EOF
+  cat > ".mumei/specs/${feature}/tasks.md" <<'EOF'
+# foo plan
+
+## Wave 1: alpha
+
+- [ ] 1.1 task one
+  - _Files: src/a.ts_
+  - _Depends: -_
+  - _Requirements: REQ-1.1_
+EOF
+}
+
+# ─── happy paths ─────────────────────────────────────────────
+
+@test "allows non-commit Bash command (no .mumei project)" {
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "allows commit when no active feature is set" {
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m wip"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "allows non-commit Bash command in an active feature" {
+  _init_feature
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+# ─── W2: incomplete Wave on git commit ──────────────────────
+
+@test "denies git commit when current Wave has [ ] tasks (W2)" {
+  _init_feature
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"Wave 1"* ]]
+  [[ "$reason" == *"incomplete"* ]]
+}
+
+@test "allows git commit once the current Wave is complete" {
+  _init_feature
+  # Mark task complete
+  sed -i.bak 's/- \[ \] 1\.1/- [x] 1.1/' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  # No deny JSON expected (no test runner detected → no I3 check)
+  [ "$output" = "" ]
+}
+
+# ─── R2: MAJOR_ISSUES verdict on git push ───────────────────
+
+@test "denies git push when latest review verdict is MAJOR_ISSUES (R2)" {
+  _init_feature
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '{"verdict":"MAJOR_ISSUES"}' \
+    > .mumei/specs/REQ-1-foo/reviews/2026-01-01T00-00-00Z.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"MAJOR_ISSUES"* ]]
+}
+
+@test "allows git push when latest review verdict is PASS" {
+  _init_feature
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '{"verdict":"PASS"}' \
+    > .mumei/specs/REQ-1-foo/reviews/2026-01-01T00-00-00Z.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+# ─── MUMEI_BYPASS escape hatch ───────────────────────────────
+
+@test "MUMEI_BYPASS=1 short-circuits to allow even when Wave is incomplete" {
+  _init_feature
+  MUMEI_BYPASS=1 _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
