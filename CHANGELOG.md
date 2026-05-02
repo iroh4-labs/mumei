@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **README install instructions** rewritten around the marketplace flow. The legacy `claude --plugin-dir` path is documented as a development-only option.
+- **Description** now leads with "A Claude Code harness" to surface the harness-engineering positioning. `harness` and `harness-engineering` added to `keywords`.
+- **Manifest cleanup**: `email` field removed from `author` / `owner` blocks in both `plugin.json` and `marketplace.json` (privacy).
 
 ## [0.1.0] - 2026-05-03
 
