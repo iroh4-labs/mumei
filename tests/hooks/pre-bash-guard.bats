@@ -99,6 +99,7 @@ EOF
   [ "$status" -eq 0 ]
   # No deny JSON expected (no test runner detected → no I3 check)
   [ "$output" = "" ]
+  [ -z "$stderr" ]
 }
 
 # ─── R2: MAJOR_ISSUES verdict on git push ───────────────────
