@@ -1,8 +1,7 @@
 {
   "name": "mumei",
   "owner": {
-    "name": "Shunichi Hirata",
-    "email": "shunichi@hir4ta.com"
+    "name": "Shunichi Hirata"
   },
   "description": "mumei marketplace (single-plugin, self-hosted)",
   "plugins": [
