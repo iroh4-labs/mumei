@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-03
+
+### Fixed
+
+- **Orchestrator → archive handoff was silently skipped on `phase=done`.** When `/mumei:plan` reached `verdict=PASS` and advanced the feature to `phase=done`, the orchestrator was not consistently prompting the user to run `/mumei:archive`. The Stop hook now physically enforces the handoff: if a feature is `phase=done` and still listed as active in `.mumei/current`, session exit is blocked with a message prompting `/mumei:archive <feature>` (or `.mumei/current` clearing). Documented as Hook rule **R3** in `docs/mumei-decisions.md` Part 10.3.
+- **`skills/plan/SKILL.md`** Phase 5 verdict-PASS branch now explicitly documents the archive-handoff steps so future orchestrator runs do not depend on the model remembering.
+
+### Added
+
+- **bats unit test suite for hook logic** under `tests/` (112 tests covering `hooks/_lib/{log,state,tasks}.sh` + all 5 `hooks/*.sh` entry-point scripts + plugin manifest / frontmatter checks). Local run: `bats -r tests/`.
+- **CI matrix job** (`.github/workflows/ci.yml`) runs the bats suite on `ubuntu-latest` and `macos-latest` to catch BSD/GNU and jq version drift. Uses `bats-core/bats-action@3.0.0` with `bats-version: 1.11.0` pinned.
+
+### Internal
+
+- The test-suite feature itself (`REQ-1-test-suite`) was the first end-to-end dogfood of the mumei workflow: brainstorm → plan → 8 implementation Waves → 2 review iterations (4 reviewers + per-issue validators) → done → archive. Spec and review history archived under `.mumei/archive/2026-05/REQ-1-test-suite/` of the development repo (gitignored, not distributed).
+
 ## [0.1.2] - 2026-05-03
 
 ### Added
