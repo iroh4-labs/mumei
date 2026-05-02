@@ -57,7 +57,8 @@ NEEDS_REVIEW=0
 if [[ ! -d "$REVIEW_DIR" ]]; then
   NEEDS_REVIEW=1
 else
-  LATEST_REVIEW="$(ls -1t "${REVIEW_DIR}"/*.json 2>/dev/null | head -n1 || true)"
+  # review file 名は ISO 8601 timestamp なのでアルファベット順 = 時系列順。
+  LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
   if [[ -z "$LATEST_REVIEW" ]]; then
     NEEDS_REVIEW=1
   else

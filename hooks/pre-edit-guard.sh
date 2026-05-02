@@ -39,7 +39,7 @@ FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.
 
 # 相対パスに正規化 (CLAUDE_PROJECT_DIR からの相対)
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
-  FILE_PATH="${FILE_PATH#${CLAUDE_PROJECT_DIR}/}"
+  FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
 # active feature が無ければ何もしない (mumei 未利用)

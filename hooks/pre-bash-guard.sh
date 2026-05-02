@@ -111,7 +111,9 @@ if is_git_push "$COMMAND"; then
   # 直近の review 結果を確認。 .mumei/specs/<f>/reviews/<latest>.json の verdict を読む。
   REVIEW_DIR=".mumei/specs/${FEATURE}/reviews"
   if [[ -d "$REVIEW_DIR" ]]; then
-    LATEST_REVIEW="$(ls -1t "${REVIEW_DIR}"/*.json 2>/dev/null | head -n1 || true)"
+    # review file 名は ISO 8601 timestamp なのでアルファベット順 = 時系列順。
+    # 最新を取るには sort | tail -n1 で十分。find を使うと SC2012 を回避できる。
+    LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
     if [[ -n "$LATEST_REVIEW" ]] && [[ -f "$LATEST_REVIEW" ]]; then
       VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
       if [[ "$VERDICT" == "MAJOR_ISSUES" ]]; then

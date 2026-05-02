@@ -30,7 +30,7 @@ FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')"
 
 # 相対パス正規化
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
-  FILE_PATH="${FILE_PATH#${CLAUDE_PROJECT_DIR}/}"
+  FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
@@ -75,13 +75,13 @@ while IFS= read -r task_id; do
     [[ -n "$f" ]] || continue
     # tasks.md 自体は除外
     [[ "$f" == "$TASKS_FILE" ]] && continue
-    # diff に該当ファイルの変更があるか
+    # diff に該当ファイルの変更があるか (HEAD vs worktree、staged 含む)
     if git diff --name-only HEAD 2>/dev/null | grep -qFx "$f"; then
       has_implementation=1
       break
     fi
-    # untracked も含める
-    if git status --porcelain 2>/dev/null | grep -qE "^\?\? $(printf '%s' "$f" | sed 's/[].[\*^$()+?{|]/\\&/g')\$"; then
+    # untracked file も含める (git ls-files は厳密にファイルパスを照合する)
+    if [[ -n "$(git ls-files --others --exclude-standard -- "$f" 2>/dev/null)" ]]; then
       has_implementation=1
       break
     fi

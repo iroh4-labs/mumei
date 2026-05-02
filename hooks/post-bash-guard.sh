@@ -22,7 +22,9 @@ source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
 
-INPUT="$(cat)"
+# この hook は Hook の input JSON を参照しない (git status を直接見るため)。
+# stdin は読み捨て、Claude Code 側のパイプを閉じる。
+cat >/dev/null
 
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
 if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
