@@ -249,7 +249,7 @@ Skips all hook gates. Use sparingly. There is no other escape hatch — no `--no
 
 ## Status
 
-Pre-release (v0.1.4). Expect breaking changes until v1.0.
+Pre-release (v0.1.5). Expect breaking changes until v1.0.
 
 ## License
 

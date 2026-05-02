@@ -93,10 +93,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: install bats
-        uses: bats-core/bats-action@3.0.0
-        with:
-          bats-version: 1.11.0
+      # bats-core を install.sh で直接入れる。bats-core/bats-action@3.0.0 は
+      # 内部で actions/cache@v4 を使い Node 20 deprecation + tar restore failure
+      # warning を出すため不採用。git clone shallow + sudo install.sh は両 OS
+      # (ubuntu-latest, macos-latest) で動き、Node 依存も外せる。
+      - name: install bats 1.11.0
+        run: |
+          git clone --depth 1 --branch v1.11.0 https://github.com/bats-core/bats-core.git /tmp/bats-core
+          sudo /tmp/bats-core/install.sh /usr/local
+          bats --version
 
       - name: bats tests/
         run: bats -r tests/

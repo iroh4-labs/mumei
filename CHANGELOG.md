@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-05-03
+
+### Added
+
+- **`/mumei:init` now generates `.mumei/.gitignore`** so team-shared spec content (`requirements.md` / `design.md` / `tasks.md` / `coverage-check.json` / `reviews/*.json` / `scratch/` / `archive/`) is tracked by git, while per-developer state (`.mumei/current` cursor and `specs/*/state.json` progress) is ignored. Existing `.mumei/.gitignore` files are NOT overwritten.
+
+### Changed
+
+- **`/mumei:init` no longer adds `.mumei/scratch/` to the project-root `.gitignore`.** Brainstorm history is the source of design decisions and is now intentionally tracked. Existing projects whose root `.gitignore` already lists `.mumei/scratch/` are not auto-migrated; remove the line manually if you want scratch tracked.
+- **CI bats install switched from `bats-core/bats-action@3.0.0` to direct `git clone + install.sh`.** The action pulled in `actions/cache@v4` (Node 20 deprecation warning) and surfaced four "Failed to restore: tar exit code 2" warnings per bats job in v0.1.4 due to cache corruption. The shallow `git clone --depth 1 --branch v1.11.0` + `sudo /tmp/bats-core/install.sh /usr/local` runs in a few seconds on both `ubuntu-latest` and `macos-latest`, removes the Node-20 warning, removes the tar-restore warnings, and keeps the bats version pinned.
+
 ## [0.1.4] - 2026-05-03
 
 ### Changed

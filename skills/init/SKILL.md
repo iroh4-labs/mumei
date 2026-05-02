@@ -38,14 +38,27 @@ Read all of:
 
 Summarize what is currently in place. Do NOT modify anything yet.
 
-### Step 2 — Create `.mumei/` directory
+### Step 2 — Create `.mumei/` directory and its `.gitignore`
 
 ```bash
 mkdir -p .mumei/specs .mumei/archive .mumei/scratch
 [[ -f .mumei/current ]] || : > .mumei/current  # empty until first feature
 ```
 
-Add `.gitignore` entries idempotently. Always check before appending so re-running this skill does not add duplicates:
+Generate `.mumei/.gitignore` so team-shared spec content (requirements / design / tasks / coverage-check / reviews / scratch / archive) is tracked, while per-developer state (`current` cursor, `state.json` progress) is ignored. **Do not overwrite an existing `.mumei/.gitignore`** — the user may have customized it.
+
+```bash
+if [[ ! -f .mumei/.gitignore ]]; then
+  cat > .mumei/.gitignore <<'EOF'
+# mumei: per-developer state only. Everything else (specs/*/{requirements,design,tasks}.md,
+# coverage-check.json, reviews/, scratch/, archive/) is tracked for team handoff.
+current
+specs/*/state.json
+EOF
+fi
+```
+
+Add a project-root `.gitignore` entry idempotently for the per-issue-validator's local memory:
 
 ```bash
 add_gitignore_line() {
@@ -54,11 +67,10 @@ add_gitignore_line() {
   grep -qxF "$pattern" .gitignore || printf '%s\n' "$pattern" >> .gitignore
 }
 
-add_gitignore_line ".mumei/scratch/"
 add_gitignore_line ".claude/agent-memory-local/"
 ```
 
-`.mumei/scratch/` keeps brainstorm output local-only. `.claude/agent-memory-local/` is the per-issue-validator's memory directory (local scope).
+Note: `.mumei/scratch/` is **NOT** added to the project-root `.gitignore` — it is intentionally tracked so brainstorm history (the source of design decisions) is shared with teammates.
 
 ### Step 3 — Propose CLAUDE.md additions
 
@@ -103,7 +115,8 @@ Run a self-check:
 test -d .mumei/specs
 test -d .mumei/archive
 test -d .mumei/scratch
-test -f .gitignore && grep -q "\.mumei/scratch" .gitignore
+test -f .mumei/.gitignore && grep -qxF "current" .mumei/.gitignore
+test -f .gitignore && grep -qxF ".claude/agent-memory-local/" .gitignore
 ```
 
 Report success or what is missing.
