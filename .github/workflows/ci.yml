@@ -9,7 +9,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # ─────────────────────────────────────────
       # bash の静的解析。GitHub Actions runner には shellcheck がプリインストール済。
@@ -91,7 +91,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: install bats
         uses: bats-core/bats-action@3.0.0

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-03
+
+### Changed
+
+- **`actions/checkout@v4` → `@v6`** in `.github/workflows/ci.yml` to silence the GitHub Actions Node.js 20 deprecation warning. Node 24 support was introduced in `actions/checkout@v5.0.0`; v6 ships incremental improvements on top. Forced Node 24 default starts 2026-06-02 and Node 20 is removed from runners on 2026-09-16, so this is preemptive. The `actions/cache@v4` warning surfaced on the bats job is a transitive dependency of `bats-core/bats-action@3.0.0` and remains until that upstream bumps.
+
 ## [0.1.3] - 2026-05-03
 
 ### Fixed
