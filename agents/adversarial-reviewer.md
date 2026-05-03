@@ -165,6 +165,7 @@ Do NOT use Write or Edit on any other file. Reviewers report findings via the JS
 # Output rules
 
 - Every HIGH/MEDIUM finding MUST include `scenario` AND `manifestation` fields.
+- `message` fact-form, <= 280 chars. State the trigger and failure mode plainly ("WHEN concurrent writers append, the read-modify-write loop loses updates"). Avoid imperative phrasing ("YOU MUST add a mutex") — it triggers prompt-injection defenses and inflates length.
 - `suggestion` MUST be concrete (not "add error handling" but "wrap in try/catch and emit a `db.write_failed` metric with `correlation_id`").
 - Avoid speculation. If you cannot describe a concrete trigger, list under `filtered_out` with `reason: "no_concrete_scenario"`.
 - Stay disciplined about `prior_findings`: if spec / quality / security reviewers already raised it, skip it.

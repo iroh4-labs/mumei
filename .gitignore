@@ -9,8 +9,9 @@
 # 開発者環境の Claude Code 設定 (rules / skills / agents / settings)
 /.claude/
 
-# リサーチ・決定ログ
-/docs/
+# リサーチ・決定ログ (dev 専用、ただし配布対象の英語ドキュメントは個別に許可)
+/docs/*
+!/docs/document-corruption.md
 
 # mumei plugin を mumei 自身で利用する場合の状態 (dogfood 想定)
 /.mumei/
