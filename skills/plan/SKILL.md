@@ -315,25 +315,31 @@ emits a JSON summary on stdout:
 }
 ```
 
-Behavior, by exit status:
+Branch on the captured signals in this priority order. Always check
+`bypassed` BEFORE applying the clean-run invariant:
 
-- **`rc == 0`** — clean run. `detectors_ran` is `true`, `failed_detectors`
-  is empty. Read `high_count` and proceed to Stage 1.
-- **`rc == 2`** — STOP. Surface stderr to the user verbatim and do NOT
-  launch reviewers. Possible causes:
-  - Missing `semgrep` / `osv-scanner` binary (install required).
-  - Detector binary crashed mid-run (exited ≥ 2). The summary's
-    `failed_detectors` array names which one(s); `detectors_ran` is
-    `false` and the report's `errors[]` contains diagnostic entries.
-  - No active feature in `.mumei/current` or spec directory missing.
-  In every `rc == 2` case the LLM reviewers cannot replace the detector
-  ground truth; user must fix the underlying cause or set `MUMEI_BYPASS=1`.
-- **`MUMEI_BYPASS=1`** → script exits 0 with `bypassed: true`. Skip the
-  HIGH-branching logic in Stage 1; behave as if `high_count == 0`.
+1. **`bypassed: true`** in the JSON (set when `MUMEI_BYPASS=1`) — script
+   exited 0. Skip the HIGH-branching logic in Stage 1 and behave as if
+   `high_count == 0`. Do not apply the clean-run invariant below; bypass is
+   a documented escape hatch and carries `detectors_ran: false` by design.
+2. **`rc == 2`** — STOP. Surface stderr to the user verbatim and do NOT
+   launch reviewers. Possible causes:
+   - Missing `semgrep` / `osv-scanner` binary (install required).
+   - Detector binary crashed mid-run (exited ≥ 2). The summary's
+     `failed_detectors` array names which one(s); `detectors_ran` is
+     `false` and the report's `errors[]` contains diagnostic entries.
+   - No active feature in `.mumei/current` or spec directory missing.
+   - Run interrupted by signal (Ctrl-C / SIGTERM); the JSON includes
+     `interrupted: true` and a `signal` field. Re-run when ready.
+   In every `rc == 2` case the LLM reviewers cannot replace the detector
+   ground truth; user must fix the underlying cause or set `MUMEI_BYPASS=1`.
+3. **`rc == 0` AND `bypassed != true`** — clean run. The invariant
+   `detectors_ran == true` AND `failed_detectors == []` MUST hold; if not,
+   treat as `rc == 2` (defense-in-depth). Read `high_count` and proceed
+   to Stage 1.
 
-Defense-in-depth: do not rely on `detectors_ran` alone (the JSON only) or
-on `rc` alone — check both. A truthful clean run requires `rc == 0` AND
-`detectors_ran == true` AND `failed_detectors == []`.
+Any other exit code (e.g. unexpected signal not handled by the script's
+trap) MUST be treated as `rc == 2` — STOP and surface to the user.
 
 Note: a detector's *binary running successfully but reporting "skipped"*
 (e.g. no `package-lock.json` for osv-scanner, no `package.json` for the

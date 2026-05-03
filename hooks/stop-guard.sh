@@ -118,14 +118,20 @@ fi
 # stop-guard to a specific timestamp format used by pre-review-detector.sh.
 
 # Validate the review JSON parses before attempting to read fields. A
-# corrupt review file (truncated write, manual edit gone wrong) and a
-# missing detector_report field both produce empty `jq -r` output, so
-# without this check the user would see a misleading "Stage 0 was
-# skipped" message instead of "your review file is corrupt".
+# corrupt review file (truncated write, manual edit gone wrong, 0-byte
+# from a killed editor) and a missing detector_report field both produce
+# empty `jq -r` output, so without this check the user would see a
+# misleading "Stage 0 was skipped" message instead of "your review file
+# is corrupt".
+#
+# `jq empty` accepts 0-byte and whitespace-only input as "no JSON value at
+# all" and exits 0 — exactly the truncated-write shape we need to reject.
+# Combine `[[ -s ]]` (rejects 0-byte) with `jq -e 'type'` (requires at
+# least one parseable JSON value, rejecting whitespace-only files).
 REVIEW_NAME="$(basename "$LATEST_REVIEW")"
-if ! jq empty < "$LATEST_REVIEW" 2>/dev/null; then
-  REASON="Review ${REVIEW_NAME} is not valid JSON. Delete or restore the file and re-run /mumei:plan review."
-  CONTEXT="${LATEST_REVIEW} cannot be parsed by jq. Likely causes: truncated write, manual edit with syntax error, or filesystem corruption. Either restore from git history (.mumei/specs/<feature>/reviews/ is tracked) or delete the file and let /mumei:plan write a fresh review. Set MUMEI_BYPASS=1 to skip (not recommended)."
+if [[ ! -s "$LATEST_REVIEW" ]] || ! jq -e 'type' < "$LATEST_REVIEW" >/dev/null 2>&1; then
+  REASON="Review ${REVIEW_NAME} is empty or not valid JSON. Delete or restore the file and re-run /mumei:plan review."
+  CONTEXT="${LATEST_REVIEW} cannot be parsed by jq. Likely causes: 0-byte truncated write (disk full, killed editor, network mount disconnected), manual edit with syntax error, or filesystem corruption. Either restore from git history (.mumei/specs/<feature>/reviews/ is tracked) or delete the file and let /mumei:plan write a fresh review. Set MUMEI_BYPASS=1 to skip (not recommended)."
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,

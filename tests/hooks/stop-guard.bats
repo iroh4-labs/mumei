@@ -155,6 +155,46 @@ EOF
   [ "$output" = "" ]
 }
 
+@test "blocks when latest review is malformed JSON (corrupt-file branch)" {
+  _init_feature_with_tasks "implement" "yes"
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '%s' '{not valid json' > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  touch -t 202612010000 .mumei/specs/REQ-1-foo/tasks.md
+  touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  _run_hook '{"stop_hook_active":false}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.decision')"
+  [ "$decision" = "block" ]
+  reason="$(printf '%s' "$output" | jq -r '.reason')"
+  [[ "$reason" == *"not valid JSON"* ]]
+}
+
+@test "blocks when latest review is 0-byte (truncated write)" {
+  _init_feature_with_tasks "implement" "yes"
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  : > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  touch -t 202612010000 .mumei/specs/REQ-1-foo/tasks.md
+  touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  _run_hook '{"stop_hook_active":false}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.decision')"
+  [ "$decision" = "block" ]
+  reason="$(printf '%s' "$output" | jq -r '.reason')"
+  [[ "$reason" == *"empty or not valid JSON"* ]]
+}
+
+@test "blocks when latest review is whitespace-only" {
+  _init_feature_with_tasks "implement" "yes"
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '   \n\n  ' > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  touch -t 202612010000 .mumei/specs/REQ-1-foo/tasks.md
+  touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  _run_hook '{"stop_hook_active":false}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.decision')"
+  [ "$decision" = "block" ]
+}
+
 @test "decoupled timestamp formats: review uses colons, detector uses hyphens" {
   _init_feature_with_tasks "implement" "yes"
   mkdir -p .mumei/specs/REQ-1-foo/reviews

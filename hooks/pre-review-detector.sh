@@ -27,7 +27,10 @@ source "${PLUGIN_ROOT}/hooks/_lib/detectors.sh"
 # missing-binary hard fail. This keeps the escape hatch usable in offline
 # CI environments where neither binary may be installed.
 if [[ "${MUMEI_BYPASS:-0}" == "1" ]]; then
-  jq -n '{detectors_ran: false, high_count: 0, report_path: null, bypassed: true}'
+  # Include failed_detectors:[] so the bypass shape carries the same set of
+  # fields as a clean run; the orchestrator distinguishes the two by the
+  # `bypassed` discriminator. See SKILL.md Stage 0 for the priority rule.
+  jq -n '{detectors_ran: false, high_count: 0, report_path: null, failed_detectors: [], bypassed: true}'
   exit 0
 fi
 
@@ -68,11 +71,23 @@ FINAL_PATH="${REVIEWS_DIR}/${TS}-detectors.json"
 
 # 2.5 — Per-detector intermediate outputs go to a temp dir so we can clean
 # them up regardless of failure. The aggregator writes the canonical file.
-# A trap covers EXIT (normal and abnormal) plus signals (Ctrl-C, kill);
-# without it a long semgrep run interrupted by the user would leak the dir.
 WORK_DIR="$(mktemp -d -t mumei-detector-run.XXXXXX)"
+
+# Signal-aware traps. On Ctrl-C / SIGTERM, emit a stub JSON before exiting
+# so the orchestrator can distinguish "interrupted" from "missing binary"
+# even when stdout would otherwise be empty. The EXIT trap only cleans up;
+# signal traps emit the stub then exit 2 (which fires EXIT trap for cleanup).
+_mumei_detector_on_signal() {
+  local sig="$1"
+  jq -n --arg sig "$sig" \
+    '{detectors_ran: false, high_count: 0, report_path: null, failed_detectors: [], interrupted: true, signal: $sig}'
+  mumei_log_error "detector run interrupted by ${sig}; re-run /mumei:plan when ready."
+  exit 2
+}
 # shellcheck disable=SC2064
-trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
+trap 'rm -rf "$WORK_DIR"' EXIT
+trap '_mumei_detector_on_signal SIGINT' INT
+trap '_mumei_detector_on_signal SIGTERM' TERM
 SG_OUT="${WORK_DIR}/semgrep.json"
 OSV_OUT="${WORK_DIR}/osv.json"
 HPC_OUT="${WORK_DIR}/hpc.json"
