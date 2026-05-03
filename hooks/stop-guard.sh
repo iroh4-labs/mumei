@@ -51,10 +51,7 @@ if [[ "$PHASE" == "done" ]]; then
     jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
       decision: "block",
       reason: $r,
-      hookSpecificOutput: {
-        hookEventName: "Stop",
-        additionalContext: $c
-      }
+      systemMessage: $c
     }'
     exit 0
   fi
@@ -102,10 +99,7 @@ if [[ "$NEEDS_REVIEW" == "1" ]]; then
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,
-    hookSpecificOutput: {
-      hookEventName: "Stop",
-      additionalContext: $c
-    }
+    systemMessage: $c
   }'
   exit 0
 fi
@@ -135,10 +129,7 @@ if [[ ! -s "$LATEST_REVIEW" ]] || ! jq -e 'type' < "$LATEST_REVIEW" >/dev/null 2
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,
-    hookSpecificOutput: {
-      hookEventName: "Stop",
-      additionalContext: $c
-    }
+    systemMessage: $c
   }'
   exit 0
 fi
@@ -150,10 +141,7 @@ if [[ -z "$DETECTORS_FILE" || ! -f "$DETECTORS_FILE" ]]; then
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,
-    hookSpecificOutput: {
-      hookEventName: "Stop",
-      additionalContext: $c
-    }
+    systemMessage: $c
   }'
   exit 0
 fi
