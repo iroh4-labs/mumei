@@ -77,7 +77,10 @@ WORK_DIR="$(mktemp -d -t mumei-detector-run.XXXXXX)"
 # so the orchestrator can distinguish "interrupted" from "missing binary"
 # even when stdout would otherwise be empty. The EXIT trap only cleans up;
 # signal traps emit the stub then exit 2 (which fires EXIT trap for cleanup).
-# shellcheck disable=SC2329  # invoked indirectly via the INT/TERM trap below
+# Function is invoked indirectly via the INT/TERM trap below; shellcheck
+# cannot trace string-form trap handlers and would otherwise mark every
+# statement here as SC2329 (unused) / SC2317 (unreachable).
+# shellcheck disable=SC2329,SC2317
 _mumei_detector_on_signal() {
   local sig="$1"
   jq -n --arg sig "$sig" \
