@@ -28,6 +28,22 @@ jobs:
           done
 
       # ─────────────────────────────────────────
+      # bash function prefix discipline (mumei_ / _mumei_ 必須)
+      # tests/ は対象外 (bats fixture 関数があるため)
+      # ─────────────────────────────────────────
+      - name: verify mumei_ prefix on bash functions
+        run: |
+          set -euo pipefail
+          bad="$(grep -hnE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' hooks/_lib/*.sh hooks/*.sh \
+                 | grep -vE '^[0-9]+:(mumei_|_mumei_)' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::Non-prefixed function definitions found in hooks/:" >&2
+            printf '%s\n' "$bad" >&2
+            exit 1
+          fi
+          echo "all functions use mumei_ / _mumei_ prefix"
+
+      # ─────────────────────────────────────────
       # JSON validation
       # ─────────────────────────────────────────
       - name: jq empty (manifest, hooks, schemas)
