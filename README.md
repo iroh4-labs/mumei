@@ -109,6 +109,36 @@ When the review verdict is `PASS`, the feature transitions to `phase: done`.
 
 Moves the feature to `.mumei/archive/<YYYY-MM>/user-auth/`.
 
+## Prerequisites
+
+mumei's review pipeline relies on two deterministic detectors as ground
+truth for security findings. These are **hard prerequisites** — the
+review-phase Hook fails closed when either is missing (set
+`MUMEI_BYPASS=1` to override, not recommended).
+
+| Tool | Purpose | Install |
+|---|---|---|
+| `semgrep` (≥ 1.50.0) | SAST, OWASP Top 10 patterns | `brew install semgrep` (macOS), `pip install semgrep` (Linux) |
+| `osv-scanner` (≥ 1.7.0) | CVE / dependency vulnerability check | `brew install osv-scanner` (macOS), [release binary](https://github.com/google/osv-scanner/releases) (Linux) |
+
+`/mumei:init` warns if these are missing, but never blocks. The hard
+fail happens at `/mumei:plan` review time so you can defer install
+until your first review.
+
+### CI snippet (GitHub Actions)
+
+```yaml
+- name: Install mumei detectors
+  run: |
+    pip install semgrep
+    curl -sL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner
+    chmod +x /usr/local/bin/osv-scanner
+```
+
+mumei's `hallucinated-package-check` (npm registry probe) requires
+network egress to `https://registry.npmjs.org/`. On self-hosted
+runners with restricted egress, set `MUMEI_BYPASS=1` for that job.
+
 ## Installation
 
 mumei ships its own self-hosted marketplace. Inside Claude Code, run:

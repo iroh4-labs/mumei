@@ -121,7 +121,35 @@ test -f .gitignore && grep -qxF ".claude/agent-memory-local/" .gitignore
 
 Report success or what is missing.
 
-### Step 6 — Suggest first feature
+### Step 6 — Detector binary check
+
+mumei's review pipeline (`/mumei:plan` Stage 0) executes deterministic
+detectors as ground truth before LLM reviewers run. These binaries are a
+hard prerequisite — the review-phase Hook will fail without them.
+
+```bash
+missing=()
+for b in semgrep osv-scanner; do
+  command -v "$b" >/dev/null 2>&1 || missing+=("$b")
+done
+if (( ${#missing[@]} > 0 )); then
+  echo "WARNING: mumei requires the following binaries for /mumei:plan review:"
+  printf '  - %s\n' "${missing[@]}"
+  echo
+  echo "macOS:  brew install ${missing[*]}"
+  echo "Linux:  see https://semgrep.dev/docs/getting-started"
+  echo "        and https://github.com/google/osv-scanner/releases"
+  echo
+  echo "Install before invoking /mumei:plan, or set MUMEI_BYPASS=1"
+  echo "to skip detectors (not recommended for production reviews)."
+fi
+```
+
+Surface the warning verbatim to the user. Do NOT block init on missing
+binaries — let the user decide when to install. The hard fail happens
+later, at review time.
+
+### Step 7 — Suggest first feature
 
 > Setup complete. To create your first feature, run `/mumei:brainstorm <topic>` for an interactive brainstorm, or `/mumei:plan <feature-slug>` if you already know what you want.
 

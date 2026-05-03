@@ -105,18 +105,50 @@ EOF
   [ -z "$stderr" ]
 }
 
-@test "exits cleanly when latest review is newer than tasks.md" {
+@test "exits cleanly when latest review is newer than tasks.md and detectors.json is present" {
   _init_feature "implement" "yes"
   mkdir -p .mumei/specs/REQ-1-foo/reviews
   printf '{"verdict":"PASS"}' \
     > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
-  # Make the review newer than tasks.md
+  # Detector defense line requires a matching detectors.json companion.
+  printf '{"counts":{"HIGH":0}}' \
+    > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z-detectors.json
   touch -t 202612010000 .mumei/specs/REQ-1-foo/tasks.md
   touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z-detectors.json
   _run_hook '{"stop_hook_active":false}'
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
   [ -z "$stderr" ]
+}
+
+@test "blocks when latest review has no matching detectors.json (defense line)" {
+  _init_feature "implement" "yes"
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '{"verdict":"PASS"}' \
+    > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  # No detectors.json companion -> Stage 0 was skipped -> block.
+  touch -t 202612010000 .mumei/specs/REQ-1-foo/tasks.md
+  touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  _run_hook '{"stop_hook_active":false}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.decision')"
+  [ "$decision" = "block" ]
+  reason="$(printf '%s' "$output" | jq -r '.reason')"
+  [[ "$reason" == *"detectors.json"* ]]
+}
+
+@test "MUMEI_BYPASS=1 short-circuits the detector defense line" {
+  _init_feature "implement" "yes"
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '{"verdict":"PASS"}' \
+    > .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  # No detectors.json, but bypass should override.
+  touch -t 202612010000 .mumei/specs/REQ-1-foo/tasks.md
+  touch -t 202612020000 .mumei/specs/REQ-1-foo/reviews/2026-12-01T00-00-00Z.json
+  MUMEI_BYPASS=1 _run_hook '{"stop_hook_active":false}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
 }
 
 # ─── R1: review pending or stale ─────────────────────────────

@@ -83,7 +83,9 @@ if [[ ! -d "$REVIEW_DIR" ]]; then
   NEEDS_REVIEW=1
 else
   # Review file names are ISO 8601 timestamps, so alphabetical = chronological.
-  LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
+  # Exclude detector reports (<ts>-detectors.json) so we pin the actual review.
+  LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' \
+                     ! -name '*-detectors.json' 2>/dev/null | sort | tail -n1)"
   if [[ -z "$LATEST_REVIEW" ]]; then
     NEEDS_REVIEW=1
   else
@@ -97,6 +99,25 @@ fi
 if [[ "$NEEDS_REVIEW" == "1" ]]; then
   REASON="All tasks complete but review pending. Run /mumei:plan to invoke the 4-stage review and per-issue validator before finishing."
   CONTEXT="Feature ${FEATURE} has all tasks marked [x] but no current review result exists in .mumei/specs/${FEATURE}/reviews/. The review phase is required before phase=done. Set MUMEI_BYPASS=1 to skip (not recommended)."
+  jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
+    decision: "block",
+    reason: $r,
+    hookSpecificOutput: {
+      hookEventName: "Stop",
+      additionalContext: $c
+    }
+  }'
+  exit 0
+fi
+
+# --- Detector defense line: skill-led Stage 0 must have written a matching
+# <ts>-detectors.json next to the review. If it didn't, Stage 0 was skipped
+# (skill bug, manually-authored review, etc.) and we must force a re-run.
+REVIEW_TS="$(basename "$LATEST_REVIEW" .json)"
+DETECTORS_FILE="${REVIEW_DIR}/${REVIEW_TS}-detectors.json"
+if [[ ! -f "$DETECTORS_FILE" ]]; then
+  REASON="Review at ${REVIEW_TS} has no matching detectors.json — Stage 0 (deterministic detector run) was skipped. Re-run /mumei:plan review."
+  CONTEXT="Expected file: ${DETECTORS_FILE}. The /mumei:plan skill must execute hooks/pre-review-detector.sh before reviewer fan-out so detectors (semgrep, osv-scanner, hallucinated-package-check) emit ground-truth findings. Set MUMEI_BYPASS=1 to skip (not recommended)."
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,

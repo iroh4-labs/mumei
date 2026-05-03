@@ -107,6 +107,34 @@ Stage 6: reviews/<timestamp>.json に書き込み + state 更新
 
 `.mumei/archive/<YYYY-MM>/user-auth/` に移動する。
 
+## 前提条件 (Prerequisites)
+
+mumei の review pipeline は 2 つの決定論的 detector を security findings の
+ground truth として使う。これらは **ハード前提条件** で、review phase の
+Hook は不在時に fail-closed する (`MUMEI_BYPASS=1` で override 可能、推奨しない)。
+
+| ツール | 用途 | インストール |
+|---|---|---|
+| `semgrep` (≥ 1.50.0) | SAST、OWASP Top 10 パターン | `brew install semgrep` (macOS)、`pip install semgrep` (Linux) |
+| `osv-scanner` (≥ 1.7.0) | CVE / 依存脆弱性チェック | `brew install osv-scanner` (macOS)、[release binary](https://github.com/google/osv-scanner/releases) (Linux) |
+
+`/mumei:init` は不在を警告するが block しない。hard fail は `/mumei:plan`
+review 段で発生するため、最初の review までは install を遅らせられる。
+
+### CI snippet (GitHub Actions)
+
+```yaml
+- name: Install mumei detectors
+  run: |
+    pip install semgrep
+    curl -sL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner
+    chmod +x /usr/local/bin/osv-scanner
+```
+
+mumei の `hallucinated-package-check` (npm registry probe) は
+`https://registry.npmjs.org/` への network egress が必要。
+egress 制限がある self-hosted runner ではそのジョブだけ `MUMEI_BYPASS=1` を設定する。
+
 ## インストール
 
 mumei は self-hosted marketplace として配布されている。Claude Code 内で実行:
