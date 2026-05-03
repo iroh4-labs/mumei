@@ -244,145 +244,148 @@ mumei_detector_run_hpc() {
   return 0
 }
 
-# Merge the three per-detector JSON outputs into a single severity-classified
-# report and atomically write it to <final_path>.
-# Args: <semgrep_json> <osv_json> <hpc_json> <errors_json> <final_path> <feature>
-mumei_detector_aggregate() {
+# Append semgrep findings to the shared findings array.
+# Args: <semgrep_json> <findings_tmp>
+_mumei_detector_collect_semgrep() {
   local semgrep_json="$1"
-  local osv_json="$2"
-  local hpc_json="$3"
-  local errors_json="$4"
-  local final_path="$5"
-  local feature="$6"
+  local findings_tmp="$2"
 
-  # Build a flat findings array by transforming each detector output into
-  # the common DetectorFinding shape.
-  local findings_tmp
-  findings_tmp="$(mktemp -t mumei-detector-findings.XXXXXX)"
-  printf '[]' > "$findings_tmp"
+  [[ -s "$semgrep_json" ]] || return 0
+  jq -e '.results | type == "array"' < "$semgrep_json" >/dev/null 2>&1 || return 0
 
-  # ---- semgrep ----
-  if [[ -s "$semgrep_json" ]] && jq -e '.results | type == "array"' < "$semgrep_json" >/dev/null 2>&1; then
-    local count
-    count="$(jq '.results | length' < "$semgrep_json")"
-    local i raw norm finding row
-    for ((i = 0; i < count; i++)); do
-      row="$(jq -c ".results[$i]" < "$semgrep_json")"
-      raw="$(printf '%s' "$row" | jq -r '.extra.severity // "WARNING"')"
-      norm="$(mumei_detector_normalize_severity semgrep "$raw")"
-      finding="$(jq -n \
-        --arg src "semgrep" \
-        --arg sev "$norm" \
-        --arg raw "$raw" \
-        --arg file "$(printf '%s' "$row" | jq -r '.path // ""')" \
-        --argjson line "$(printf '%s' "$row" | jq '.start.line // 0')" \
-        --arg msg "$(printf '%s' "$row" | jq -r '.extra.message // ""')" \
-        --arg rule "$(printf '%s' "$row" | jq -r '.check_id // ""')" \
-        '{
-          source: $src,
-          severity: $sev,
-          raw_severity: $raw,
-          location: { file: $file, line: $line },
-          message: $msg,
-          rule_id: $rule
-        }')"
-      jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
-      mv "${findings_tmp}.new" "$findings_tmp"
-    done
-  fi
+  local count i row raw norm finding
+  count="$(jq '.results | length' < "$semgrep_json")"
+  for ((i = 0; i < count; i++)); do
+    row="$(jq -c ".results[$i]" < "$semgrep_json")"
+    raw="$(printf '%s' "$row" | jq -r '.extra.severity // "WARNING"')"
+    norm="$(mumei_detector_normalize_severity semgrep "$raw")"
+    finding="$(jq -n \
+      --arg src "semgrep" \
+      --arg sev "$norm" \
+      --arg raw "$raw" \
+      --arg file "$(printf '%s' "$row" | jq -r '.path // ""')" \
+      --argjson line "$(printf '%s' "$row" | jq '.start.line // 0')" \
+      --arg msg "$(printf '%s' "$row" | jq -r '.extra.message // ""')" \
+      --arg rule "$(printf '%s' "$row" | jq -r '.check_id // ""')" \
+      '{
+        source: $src,
+        severity: $sev,
+        raw_severity: $raw,
+        location: { file: $file, line: $line },
+        message: $msg,
+        rule_id: $rule
+      }')"
+    jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
+    mv "${findings_tmp}.new" "$findings_tmp"
+  done
+}
 
-  # ---- osv-scanner ----
-  if [[ -s "$osv_json" ]] && jq -e '.results' < "$osv_json" >/dev/null 2>&1; then
-    # osv-scanner JSON: results[].packages[].vulnerabilities[]
-    # We collect each vuln per package; severity comes from the highest CVSS.
-    local osv_count
-    osv_count="$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' < "$osv_json")"
-    local j vuln pkg cvss norm finding
-    for ((j = 0; j < osv_count; j++)); do
-      vuln="$(jq -c "[.results[]?.packages[]?.vulnerabilities[]?][$j]" < "$osv_json")"
-      # The package the vuln belongs to lives at the parent layer; we re-find it by id match.
-      pkg="$(jq -c --argjson v "$vuln" \
-        '[.results[]?.packages[]? | select((.vulnerabilities // []) | any(.id == $v.id))][0]' \
-        < "$osv_json")"
-      # Pick the highest CVSS base score from severity[] entries (skip non-numeric).
-      cvss="$(printf '%s' "$vuln" | jq -r '
-        [.severity[]? | select(.score | type == "string") | .score]
-        | map(capture("(?<n>[0-9]+(\\.[0-9]+)?)").n | tonumber? // 0)
-        | (max // 0)
-      ')"
-      norm="$(mumei_detector_normalize_severity osv-scanner "$cvss")"
-      finding="$(jq -n \
-        --arg src "osv-scanner" \
-        --arg sev "$norm" \
-        --arg raw "$cvss" \
-        --arg cve "$(printf '%s' "$vuln" | jq -r '.id // ""')" \
-        --arg msg "$(printf '%s' "$vuln" | jq -r '.summary // .details // ""' | head -c 500)" \
-        --arg pkg_name "$(printf '%s' "$pkg" | jq -r '.package.name // ""')" \
-        --arg pkg_ver "$(printf '%s' "$pkg" | jq -r '.package.version // ""')" \
-        '{
-          source: $src,
-          severity: $sev,
-          raw_severity: $raw,
-          location: { file: "(lockfile)" },
-          message: $msg,
-          cve_id: $cve,
-          package: { name: $pkg_name, version: $pkg_ver }
-        }')"
-      jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
-      mv "${findings_tmp}.new" "$findings_tmp"
-    done
-  fi
+# Append osv-scanner findings to the shared findings array.
+# Args: <osv_json> <findings_tmp>
+_mumei_detector_collect_osv() {
+  local osv_json="$1"
+  local findings_tmp="$2"
 
-  # ---- hallucinated-package-check ----
-  if [[ -s "$hpc_json" ]] && jq -e 'type == "array"' < "$hpc_json" >/dev/null 2>&1; then
-    local hpc_count
-    hpc_count="$(jq 'length' < "$hpc_json")"
-    local k entry st norm finding
-    for ((k = 0; k < hpc_count; k++)); do
-      entry="$(jq -c ".[$k]" < "$hpc_json")"
-      st="$(printf '%s' "$entry" | jq -r '.status // ""')"
-      norm="$(mumei_detector_normalize_severity hallucinated-package-check "$st")"
-      finding="$(jq -n \
-        --arg src "hallucinated-package-check" \
-        --arg sev "$norm" \
-        --arg raw "$st" \
-        --arg name "$(printf '%s' "$entry" | jq -r '.name // ""')" \
-        --arg code "$(printf '%s' "$entry" | jq -r '.http_code // ""')" \
-        '{
-          source: $src,
-          severity: $sev,
-          raw_severity: $raw,
-          location: { file: "package.json" },
-          message: ("npm registry returned " + $code + " for " + $name),
-          package: { name: $name, status: $raw }
-        }')"
-      jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
-      mv "${findings_tmp}.new" "$findings_tmp"
-    done
-  fi
+  [[ -s "$osv_json" ]] || return 0
+  jq -e '.results' < "$osv_json" >/dev/null 2>&1 || return 0
 
-  # ---- errors ----
+  # osv-scanner JSON: results[].packages[].vulnerabilities[]
+  # Severity is the highest CVSS base score across severity[] entries.
+  local osv_count j vuln pkg cvss norm finding
+  osv_count="$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' < "$osv_json")"
+  for ((j = 0; j < osv_count; j++)); do
+    vuln="$(jq -c "[.results[]?.packages[]?.vulnerabilities[]?][$j]" < "$osv_json")"
+    pkg="$(jq -c --argjson v "$vuln" \
+      '[.results[]?.packages[]? | select((.vulnerabilities // []) | any(.id == $v.id))][0]' \
+      < "$osv_json")"
+    cvss="$(printf '%s' "$vuln" | jq -r '
+      [.severity[]? | select(.score | type == "string") | .score]
+      | map(capture("(?<n>[0-9]+(\\.[0-9]+)?)").n | tonumber? // 0)
+      | (max // 0)
+    ')"
+    norm="$(mumei_detector_normalize_severity osv-scanner "$cvss")"
+    finding="$(jq -n \
+      --arg src "osv-scanner" \
+      --arg sev "$norm" \
+      --arg raw "$cvss" \
+      --arg cve "$(printf '%s' "$vuln" | jq -r '.id // ""')" \
+      --arg msg "$(printf '%s' "$vuln" | jq -r '.summary // .details // ""' | head -c 500)" \
+      --arg pkg_name "$(printf '%s' "$pkg" | jq -r '.package.name // ""')" \
+      --arg pkg_ver "$(printf '%s' "$pkg" | jq -r '.package.version // ""')" \
+      '{
+        source: $src,
+        severity: $sev,
+        raw_severity: $raw,
+        location: { file: "(lockfile)" },
+        message: $msg,
+        cve_id: $cve,
+        package: { name: $pkg_name, version: $pkg_ver }
+      }')"
+    jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
+    mv "${findings_tmp}.new" "$findings_tmp"
+  done
+}
+
+# Append hallucinated-package-check findings to the shared findings array.
+# Args: <hpc_json> <findings_tmp>
+_mumei_detector_collect_hpc() {
+  local hpc_json="$1"
+  local findings_tmp="$2"
+
+  [[ -s "$hpc_json" ]] || return 0
+  jq -e 'type == "array"' < "$hpc_json" >/dev/null 2>&1 || return 0
+
+  local hpc_count k entry st norm finding
+  hpc_count="$(jq 'length' < "$hpc_json")"
+  for ((k = 0; k < hpc_count; k++)); do
+    entry="$(jq -c ".[$k]" < "$hpc_json")"
+    st="$(printf '%s' "$entry" | jq -r '.status // ""')"
+    norm="$(mumei_detector_normalize_severity hallucinated-package-check "$st")"
+    finding="$(jq -n \
+      --arg src "hallucinated-package-check" \
+      --arg sev "$norm" \
+      --arg raw "$st" \
+      --arg name "$(printf '%s' "$entry" | jq -r '.name // ""')" \
+      --arg code "$(printf '%s' "$entry" | jq -r '.http_code // ""')" \
+      '{
+        source: $src,
+        severity: $sev,
+        raw_severity: $raw,
+        location: { file: "package.json" },
+        message: ("npm registry returned " + $code + " for " + $name),
+        package: { name: $name, status: $raw }
+      }')"
+    jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
+    mv "${findings_tmp}.new" "$findings_tmp"
+  done
+}
+
+# Compose the final report from the findings array + errors stream and write it
+# atomically to <final_path>. Returns 1 on jq failure.
+# Args: <feature> <findings_tmp> <errors_json> <final_path>
+_mumei_detector_assemble_report() {
+  local feature="$1"
+  local findings_tmp="$2"
+  local errors_json="$3"
+  local final_path="$4"
+
+  # errors_json is a stream of objects (one per line); slurp into an array.
   local errors_arr="[]"
   if [[ -s "$errors_json" ]]; then
-    # errors_json is a stream of objects (one per line); slurp into an array.
     errors_arr="$(jq -s '.' < "$errors_json")"
   fi
 
-  # ---- detectors_run / detectors_skipped ----
   # A detector is "skipped" when its error entry has skipped=true.
-  local skipped_arr ran_arr
+  local skipped_arr ran_arr errors_only
   skipped_arr="$(printf '%s' "$errors_arr" | jq '[.[] | select(.skipped == true) | {name: .detector, reason: .message}]')"
   ran_arr="$(printf '%s' "$errors_arr" | jq '
     ["semgrep", "osv-scanner", "hallucinated-package-check"]
     - [.[] | select(.skipped == true) | .detector]
   ')"
-  local errors_only
   errors_only="$(printf '%s' "$errors_arr" | jq '[.[] | select(.skipped != true) | {detector: .detector, message: .message}]')"
 
-  # ---- assemble final ----
-  local now
+  local now tmp_final
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  local tmp_final
   tmp_final="$(mktemp "${final_path}.XXXXXX")"
   jq -n \
     --arg feature "$feature" \
@@ -407,14 +410,41 @@ mumei_detector_aggregate() {
         LOW:    ([$findings[] | select(.severity == "LOW")] | length)
       },
       errors: $errors
-    }' > "$tmp_final" || { rm -f "$tmp_final" "$findings_tmp"; return 1; }
+    }' > "$tmp_final" || { rm -f "$tmp_final"; return 1; }
 
   if ! jq empty < "$tmp_final" 2>/dev/null; then
-    rm -f "$tmp_final" "$findings_tmp"
+    rm -f "$tmp_final"
     mumei_log_error "aggregate produced invalid JSON"
     return 1
   fi
   mv "$tmp_final" "$final_path"
+  return 0
+}
+
+# Merge the three per-detector JSON outputs into a single severity-classified
+# report and atomically write it to <final_path>.
+# Args: <semgrep_json> <osv_json> <hpc_json> <errors_json> <final_path> <feature>
+mumei_detector_aggregate() {
+  local semgrep_json="$1"
+  local osv_json="$2"
+  local hpc_json="$3"
+  local errors_json="$4"
+  local final_path="$5"
+  local feature="$6"
+
+  # Build a flat findings array via per-detector helpers.
+  local findings_tmp
+  findings_tmp="$(mktemp -t mumei-detector-findings.XXXXXX)"
+  printf '[]' > "$findings_tmp"
+
+  _mumei_detector_collect_semgrep "$semgrep_json" "$findings_tmp"
+  _mumei_detector_collect_osv     "$osv_json"     "$findings_tmp"
+  _mumei_detector_collect_hpc     "$hpc_json"     "$findings_tmp"
+
+  if ! _mumei_detector_assemble_report "$feature" "$findings_tmp" "$errors_json" "$final_path"; then
+    rm -f "$findings_tmp"
+    return 1
+  fi
   rm -f "$findings_tmp"
   return 0
 }
