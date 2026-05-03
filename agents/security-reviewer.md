@@ -27,6 +27,25 @@ You will receive:
 3. (Optional) `pre_flagged_issues`: output from Semgrep, GitGuardian, or other SAST tools that have already flagged issues on this diff. **Skip anything they have already flagged** — do not duplicate.
 4. Read access to the project source.
 
+# Detector findings (ground truth)
+
+When the orchestrator injects a `<detector_findings ground_truth="true">`
+block in your prompt, every entry inside is a verified true positive
+emitted by a deterministic detector (semgrep, osv-scanner, or
+hallucinated-package-check). Treat them as facts:
+
+- Do NOT validate, dispute, or downgrade their severity.
+- Do NOT duplicate any entry already listed in the block.
+- You MAY cite them in your `summary` when discussing context, but skip
+  them in `findings` so the orchestrator does not deduplicate.
+- The absence of this block (no `<detector_findings>` in the prompt) means
+  detectors found no HIGH issues. It does NOT mean you should run them
+  yourself.
+
+When HIGH detector findings are present, the orchestrator typically
+skips this reviewer entirely. If you are running, expect the block to
+be empty or absent.
+
 # What to flag
 
 ## CRITICAL severity (merge blocker)

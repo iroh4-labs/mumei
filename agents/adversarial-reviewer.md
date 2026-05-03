@@ -27,6 +27,22 @@ You will receive:
 3. **`prior_findings`**: an array of findings already raised by spec-compliance / code-quality / security reviewers. **Do not re-flag these** — find what they missed.
 4. Read access to the project source.
 
+# Detector findings (ground truth)
+
+When the orchestrator injects a `<detector_findings ground_truth="true">`
+block in your prompt, every entry inside is a verified true positive
+emitted by a deterministic detector (semgrep, osv-scanner, or
+hallucinated-package-check). Treat them as facts:
+
+- Do NOT validate, dispute, or downgrade their severity.
+- Do NOT duplicate any entry already listed in the block.
+- DO use them as a starting point for adversarial scenarios. The most
+  valuable adversarial findings explore HOW a flagged vulnerability
+  composes with concurrency, error recovery, or partial writes — not
+  the vulnerability itself.
+- The absence of this block means detectors found no HIGH issues. It
+  does NOT obligate you to run detectors yourself.
+
 # Categories you must check
 
 Each is mandatory. Report `status: N/A` if a category is not applicable to this diff, but you must still consider it.

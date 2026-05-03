@@ -27,6 +27,21 @@ You will receive:
 3. Read access to `.mumei/specs/<feature>/requirements.md`, `.mumei/specs/<feature>/tasks.md`, and `.mumei/specs/<feature>/design.md` (optional, for over-engineering detection).
 4. The git diff for the Wave under review. Use `gh pr diff` if a PR exists, otherwise `git diff <wave-start-sha>..HEAD` where `wave-start-sha` is recorded in `.mumei/specs/<feature>/state.json`.
 
+# Detector findings (ground truth)
+
+When the orchestrator injects a `<detector_findings ground_truth="true">`
+block in your prompt, every entry inside is a verified true positive
+emitted by a deterministic detector (semgrep, osv-scanner, or
+hallucinated-package-check). Treat them as facts:
+
+- Do NOT validate, dispute, or downgrade their severity.
+- Do NOT duplicate any entry already listed in the block.
+- You MAY reference them in your `summary` when relevant to spec
+  compliance (e.g. "the AC for input validation is undermined by the
+  injection finding at line 12"), but do NOT add them to `findings`.
+- The absence of this block means detectors found no HIGH issues. It
+  does NOT obligate you to run detectors yourself.
+
 # What to flag
 
 ## HIGH severity (merge blocker)

@@ -286,22 +286,75 @@ fi
 
 ## Phase 5 — Review pipeline
 
-When `phase=review`, run the 6-stage pipeline:
+When `phase=review`, run the 7-stage pipeline. Stage 0 produces deterministic
+detector findings that the LLM reviewers treat as ground truth.
+
+### Stage 0 — Detector run (mandatory)
+
+Invoke the detector entry point as a single Bash call before any reviewer
+launches. This satisfies REQ-2.4 (run once, not per-reviewer) and gives the
+orchestrator a HIGH count to branch on.
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/hooks/pre-review-detector.sh"
+```
+
+The script writes `.mumei/specs/<feature>/reviews/<ts>-detectors.json` and
+emits a JSON summary on stdout:
+
+```json
+{ "detectors_ran": true, "high_count": N, "report_path": "..." }
+```
+
+Behavior:
+
+- **`MUMEI_BYPASS=1`** → script exits 0 with `bypassed: true`. Skip the
+  HIGH-branching logic in Stage 1; behave as if `high_count == 0`.
+- **Missing semgrep / osv-scanner** → script exits 2 with brew install
+  guidance on stderr. Surface this to the user verbatim and STOP. Do not
+  proceed with reviewers; the user must install or set `MUMEI_BYPASS=1`.
+- **Detector exits ≥2 (real error)** → individual detector errors are
+  recorded in the report's `errors` array, but the script itself returns
+  0 as long as one detector succeeded. Inspect `.errors` if needed.
+
+Read `high_count` from stdout. Stage 1 branches on it.
 
 ### Stage 1 — Parallel reviewers (3 agents)
 
-Launch in parallel:
+Branch on `high_count` from Stage 0:
 
-- `Task(subagent_type: "spec-compliance-reviewer", description: "Review spec compliance for feature <feature>", prompt: ...)`
-- `Task(subagent_type: "code-quality-reviewer", ...)`
-- `Task(subagent_type: "security-reviewer", ...)`
+- **`high_count == 0`** (the common case) — launch all 3 reviewers in parallel:
+  - `Task(subagent_type: "spec-compliance-reviewer", ...)`
+  - `Task(subagent_type: "code-quality-reviewer", ...)`
+  - `Task(subagent_type: "security-reviewer", ...)`
 
-Pass them:
+- **`high_count > 0`** — skip `security-reviewer`. Detector findings are
+  ground truth for the security category, so duplicating the work in an LLM
+  reviewer wastes tokens and risks the LLM downgrading them. Launch only:
+  - `Task(subagent_type: "spec-compliance-reviewer", ...)`
+  - `Task(subagent_type: "code-quality-reviewer", ...)`
+
+  Stage 6 will pin the verdict to `MAJOR_ISSUES` regardless of what the two
+  remaining reviewers report.
+
+Pass each reviewer:
 - The active feature slug
 - The git diff for the Wave under review (or for the whole feature if reviewing at end)
 - Read access to spec files
+- **HIGH detector findings** (only when `high_count > 0`) injected into the
+  prompt as a `<detector_findings ground_truth="true">` block. The block
+  contains the JSON array from `.findings.HIGH` of the detectors report.
+  Build the prompt inline:
 
-Wait for all 3 to complete.
+  ```
+  <detector_findings ground_truth="true">
+  [JSON array of HIGH findings, copied verbatim from the report]
+  </detector_findings>
+  ```
+
+  Do NOT inject the block when `high_count == 0` (token economy).
+
+Wait for all reviewers to complete (2 or 3 depending on the branch).
 
 ### Stage 2 — Adversarial reviewer (sequential)
 
@@ -310,6 +363,11 @@ Launch:
 - `Task(subagent_type: "adversarial-reviewer", prompt: ..., prior_findings: <findings from Stage 1>)`
 
 Adversarial sees the other reviewers' findings via `prior_findings` and avoids duplicating.
+
+When `high_count > 0`, also inject the same `<detector_findings ground_truth="true">`
+block into the adversarial prompt so it can reason about edge cases AROUND
+the deterministic findings (e.g. concurrency interactions with a flagged
+vulnerability) without re-flagging them.
 
 ### Stage 3 — Aggregate findings
 
@@ -347,9 +405,18 @@ Write the result to `.mumei/specs/<feature>/reviews/<ISO-timestamp>.json`:
 
 Verdict aggregation rules:
 
+- **HIGH detector findings present** (`high_count > 0` from Stage 0) → overall `MAJOR_ISSUES`. This is non-negotiable; the deterministic detector is ground truth.
 - ANY reviewer returns `MAJOR_ISSUES` → overall `MAJOR_ISSUES`.
 - ANY surfaced finding has `severity: CRITICAL` or `HIGH` → at least `NEEDS_IMPROVEMENT`.
 - All clean → `PASS`.
+
+The persisted JSON SHOULD include the detector report path under a
+`detector_report` field so downstream tooling (and the Stop hook) can
+verify Stage 0 ran:
+
+```json
+{ "detector_report": ".mumei/specs/<feature>/reviews/<ts>-detectors.json", ... }
+```
 
 If `verdict == PASS`:
 

@@ -44,6 +44,27 @@ You will receive a JSON object with a single finding. The `reviewer` field is se
 
 You also have read access to the project source.
 
+# Skip rule for detector findings
+
+Before evaluating the three axes, check the finding's `source` field. If
+it is one of `"semgrep"`, `"osv-scanner"`, `"hallucinated-package-check"`,
+or any value containing `"detector"`, this finding came from a
+deterministic detector and is ground truth. Do NOT analyze it. Echo
+back this verdict immediately and stop:
+
+```json
+{
+  "reviewer": "<from input>",
+  "finding_id": "<from input>",
+  "decision": "valid",
+  "confidence": "high",
+  "reason": "ground truth from deterministic detector"
+}
+```
+
+LLM validation of detector findings is wasted effort and risks
+overriding a true positive. Skip all three axes for these inputs.
+
 # Decision criteria
 
 For the finding, evaluate THREE axes (each yes/no):
