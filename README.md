@@ -246,17 +246,30 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 
 ## Escape hatch
 
-```
-MUMEI_BYPASS=1 claude
+mumei provides three environment variables. Use them as inline prefixes for one-shot, or `export` them for the whole session.
+
+| Variable | Effect | Example |
+|---|---|---|
+| `MUMEI_BYPASS=1` | Skip all Hook gates (every mumei check becomes a no-op) | `MUMEI_BYPASS=1 claude "..."` |
+| `MUMEI_SKIP_TEST=1` | Skip only the pre-commit test runner gate (rule I3); other gates still apply | `MUMEI_SKIP_TEST=1 git commit -m "wip"` |
+| `MUMEI_DEBUG=1` | Print `[mumei DEBUG] ...` lines to stderr from hooks (for troubleshooting) | `MUMEI_DEBUG=1 claude` |
+
+For a session-long override, `export` it:
+
+```sh
+export MUMEI_BYPASS=1
+claude  # mumei is silent for the rest of this shell
 ```
 
-Skips all hook gates. Use sparingly. There is no other escape hatch — no `--no-verify`, no `mumei skip`, no per-rule disable. By design.
+There is no other escape hatch — no `--no-verify` flag, no `mumei skip` command, no per-rule disable, no settings file. By design.
+
+Use sparingly. The point of mumei is to make skipping painful. If you reach for `MUMEI_BYPASS=1` often, fix the workflow, not the gate.
 
 ## What `mumei` is NOT
 
 - Not a CI/CD tool. Hooks run inside Claude Code only.
 - Not a code review service. Reviewers run locally via your Claude Code subscription.
-- Not a SDD adapter. mumei has its own opinionated spec format. If you use spec-kit / spec-workflow / tsumiki / cc-sdd, mumei does not integrate with them — they live in parallel.
+- Not a SDD adapter. mumei has its own opinionated spec format. If you already use another SDD tool, mumei does not integrate with it — they live in parallel.
 - Not multi-tool. Cursor / Codex / Aider are not supported. The physical enforcement layer is Claude Code Hooks.
 - Not a storage system. State is plain files. No DB, no MCP server.
 

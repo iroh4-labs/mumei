@@ -248,17 +248,30 @@ annotations:
 
 ## Escape hatch
 
-```
-MUMEI_BYPASS=1 claude
+mumei は環境変数 3 つを提供する。1 コマンドだけならインラインプレフィックスで、シェルセッション全体に効かせるなら `export` する。
+
+| 変数 | 効果 | 例 |
+|---|---|---|
+| `MUMEI_BYPASS=1` | 全 Hook gate をスキップ (mumei の検査が一切動かなくなる) | `MUMEI_BYPASS=1 claude "..."` |
+| `MUMEI_SKIP_TEST=1` | commit 前のテスト実行 gate (ルール I3) のみスキップ。他の gate は有効 | `MUMEI_SKIP_TEST=1 git commit -m "wip"` |
+| `MUMEI_DEBUG=1` | hook から `[mumei DEBUG] ...` を stderr に出力 (トラブルシュート用) | `MUMEI_DEBUG=1 claude` |
+
+セッション全体に効かせたいときは `export`:
+
+```sh
+export MUMEI_BYPASS=1
+claude  # このシェルでは以降 mumei は黙る
 ```
 
-すべての Hook gate をスキップする。慎重に使うこと。この他に escape はない — `--no-verify` も `mumei skip` も、ルールごとの disable もない。意図的にそういう設計。
+これ以外に escape はない — `--no-verify` フラグも `mumei skip` コマンドも、ルールごとの disable も、設定ファイルも存在しない。意図的にそういう設計。
+
+慎重に使うこと。mumei の存在意義は「スキップを面倒にする」こと。`MUMEI_BYPASS=1` を頻繁に使うことになったら、gate ではなくワークフロー側を直すべき。
 
 ## `mumei` が **しない** こと
 
 - CI/CD ツールではない。Hook は Claude Code 内でのみ動く。
 - コードレビューサービスではない。reviewer は Claude Code subscription でローカルで動く。
-- SDD アダプタではない。mumei は独自の opinionated spec フォーマットを持つ。spec-kit / spec-workflow / tsumiki / cc-sdd を使っているなら、mumei はそれらと統合せず、並走する形になる。
+- SDD アダプタではない。mumei は独自の opinionated spec フォーマットを持つ。既存の SDD ツールを使っているなら、mumei はそれらと統合せず、並走する形になる。
 - マルチツール対応ではない。Cursor / Codex / Aider はサポート外。物理強制レイヤーは Claude Code Hook 固有。
 - ストレージシステムではない。状態はプレーンファイル。DB なし、MCP server なし。
 
