@@ -418,6 +418,27 @@ verify Stage 0 ran:
 { "detector_report": ".mumei/specs/<feature>/reviews/<ts>-detectors.json", ... }
 ```
 
+**Detector findings in `findings_surfaced`** (REQ-2.14): when `high_count > 0`
+(security-reviewer was skipped), read `.findings.HIGH` from the detector
+report and prepend each entry to `findings_surfaced` before writing the
+review JSON. Preserve each entry's `source` field (`"semgrep"` /
+`"osv-scanner"` / `"hallucinated-package-check"`) so the issue-validator's
+detector-skip rule still applies on any future iteration. Without this
+step the verdict is correctly `MAJOR_ISSUES` but the user sees no
+findings explaining why — the review JSON appears clean.
+
+```json
+{
+  "verdict": "MAJOR_ISSUES",
+  "detector_report": ".mumei/specs/<f>/reviews/<ts>-detectors.json",
+  "findings_surfaced": [
+    { "source": "semgrep", "severity": "HIGH", "rule_id": "...", "location": ..., "message": "..." },
+    ...rest of HIGH detector findings...,
+    ...then the LLM reviewer findings...
+  ]
+}
+```
+
 If `verdict == PASS`:
 
 ```bash

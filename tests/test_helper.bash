@@ -25,3 +25,35 @@ teardown() {
     rm -rf "${MUMEI_TEST_TMPDIR}"
   fi
 }
+
+# Build a fake mumei feature (.mumei/current + state.json) inside the
+# test's tmpdir. Used by hook bats to set up consistent baselines.
+# Args: [feature_dir] [phase] [current_wave]
+#   feature_dir: e.g. "REQ-1-foo" (default), "REQ-99-test"
+#   phase: plan|implement|review|done (default: implement)
+#   current_wave: integer (default: 1)
+# Splits feature_dir into REQ-N id + slug for state.json content.
+_init_feature() {
+  local feature="${1:-REQ-1-foo}"
+  local phase="${2:-implement}"
+  local current_wave="${3:-1}"
+  local id slug
+  id="$(printf '%s' "$feature" | grep -oE '^REQ-[0-9]+')"
+  slug="${feature#${id}-}"
+  mkdir -p ".mumei/specs/${feature}"
+  printf '%s\n' "$feature" > .mumei/current
+  jq -n \
+    --arg id "$id" \
+    --arg slug "$slug" \
+    --arg phase "$phase" \
+    --argjson wave "$current_wave" \
+    '{
+      id: $id,
+      slug: $slug,
+      phase: $phase,
+      approvals: {requirements: "approved", design: "approved", tasks: "approved"},
+      current_wave: $wave,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z"
+    }' > ".mumei/specs/${feature}/state.json"
+}

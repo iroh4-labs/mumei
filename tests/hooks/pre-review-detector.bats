@@ -58,20 +58,10 @@ _restore_path() {
   fi
 }
 
-_init_feature() {
-  mkdir -p .mumei/specs/REQ-99-test
-  echo "REQ-99-test" > .mumei/current
-  cat > .mumei/specs/REQ-99-test/state.json <<'JSON'
-{
-  "id": "REQ-99",
-  "slug": "test",
-  "phase": "review",
-  "approvals": { "requirements": "approved", "design": "approved", "tasks": "approved" },
-  "current_wave": 0,
-  "created_at": "2026-05-03T00:00:00Z",
-  "updated_at": "2026-05-03T00:00:00Z"
-}
-JSON
+# Local helper: thin wrapper for the test_helper _init_feature, pinning the
+# REQ-99-test feature in review phase used by every test in this file.
+_init_test_feature() {
+  _init_feature REQ-99-test review 0
 }
 
 # ─── bypass path ─────────────────────────────────────────────
@@ -122,7 +112,7 @@ JSON
 # ─── happy path with stubbed binaries ─────────────────────────
 
 @test "happy: stubbed binaries produce a valid summary JSON and detectors.json file" {
-  _init_feature
+  _init_test_feature
   _build_stubs
   run env PATH="$STUB_DIR:$PATH" bash "$CLAUDE_PLUGIN_ROOT/hooks/pre-review-detector.sh"
   _restore_path
@@ -142,7 +132,7 @@ JSON
 }
 
 @test "happy: report path lives under .mumei/specs/<feature>/reviews/" {
-  _init_feature
+  _init_test_feature
   _build_stubs
   run env PATH="$STUB_DIR:$PATH" bash "$CLAUDE_PLUGIN_ROOT/hooks/pre-review-detector.sh"
   _restore_path

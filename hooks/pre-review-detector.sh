@@ -75,14 +75,19 @@ HPC_OUT="${WORK_DIR}/hpc.json"
 ERR_OUT="${WORK_DIR}/errors.ndjson"
 : > "$ERR_OUT"
 
+# Track detectors whose binary ran but exited fatally (rc>=2). Fall-through
+# to aggregate so the report is written, but exit 2 at the end so the
+# orchestrator does not silently treat the run as ground truth.
+FAILED_DETECTORS=()
+
 mumei_log_info "running semgrep (this may take a few minutes on large repos)..."
-mumei_detector_run_semgrep "$SG_OUT" "$ERR_OUT" || mumei_log_warn "semgrep returned a non-zero exit"
+mumei_detector_run_semgrep "$SG_OUT" "$ERR_OUT" || FAILED_DETECTORS+=("semgrep")
 
 mumei_log_info "running osv-scanner..."
-mumei_detector_run_osv "$OSV_OUT" "$ERR_OUT" || mumei_log_warn "osv-scanner returned a non-zero exit"
+mumei_detector_run_osv "$OSV_OUT" "$ERR_OUT" || FAILED_DETECTORS+=("osv-scanner")
 
 mumei_log_info "running hallucinated-package-check..."
-mumei_detector_run_hpc "$HPC_OUT" "$ERR_OUT" || mumei_log_warn "hallucinated-package-check returned a non-zero exit"
+mumei_detector_run_hpc "$HPC_OUT" "$ERR_OUT" || FAILED_DETECTORS+=("hallucinated-package-check")
 
 mumei_log_info "aggregating findings..."
 if ! mumei_detector_aggregate "$SG_OUT" "$OSV_OUT" "$HPC_OUT" "$ERR_OUT" "$FINAL_PATH" "$FEATURE"; then
@@ -93,10 +98,32 @@ fi
 rm -rf "$WORK_DIR"
 
 # 2.6 — Emit a JSON summary on stdout for the skill orchestrator to parse.
+# Always include failed_detectors so the orchestrator can detect partial
+# runs even if it forgets to read the report's errors[] array.
 HIGH_COUNT="$(jq '.counts.HIGH' < "$FINAL_PATH")"
+if (( ${#FAILED_DETECTORS[@]} == 0 )); then
+  FAILED_JSON='[]'
+else
+  FAILED_JSON="$(printf '%s\n' "${FAILED_DETECTORS[@]}" | jq -R . | jq -s .)"
+fi
 jq -n \
   --argjson high "$HIGH_COUNT" \
   --arg path "$FINAL_PATH" \
-  '{detectors_ran: true, high_count: $high, report_path: $path}'
+  --argjson failed "$FAILED_JSON" \
+  '{detectors_ran: true, high_count: $high, report_path: $path, failed_detectors: $failed}'
+
+# Hard fail when one or more detectors crashed (exit code >=2 from the
+# binary). Treat this the same as missing-binary: surfacing a partial
+# ground-truth signal as if it were complete defeats the design.
+if (( ${#FAILED_DETECTORS[@]} > 0 )); then
+  mumei_log_error "the following detectors failed (exit code >=2):"
+  printf '  - %s\n' "${FAILED_DETECTORS[@]}" >&2
+  mumei_log_error ""
+  mumei_log_error "common causes: offline / restricted CI (semgrep --config=auto needs"
+  mumei_log_error "  network access), corrupt config, scanner crash."
+  mumei_log_error "the partial report at ${FINAL_PATH} contains errors[] for triage."
+  mumei_log_error "set MUMEI_BYPASS=1 to skip detectors entirely (not recommended)."
+  exit 2
+fi
 
 exit 0

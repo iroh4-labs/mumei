@@ -110,14 +110,17 @@ if [[ "$NEEDS_REVIEW" == "1" ]]; then
   exit 0
 fi
 
-# --- Detector defense line: skill-led Stage 0 must have written a matching
-# <ts>-detectors.json next to the review. If it didn't, Stage 0 was skipped
-# (skill bug, manually-authored review, etc.) and we must force a re-run.
-REVIEW_TS="$(basename "$LATEST_REVIEW" .json)"
-DETECTORS_FILE="${REVIEW_DIR}/${REVIEW_TS}-detectors.json"
-if [[ ! -f "$DETECTORS_FILE" ]]; then
-  REASON="Review at ${REVIEW_TS} has no matching detectors.json — Stage 0 (deterministic detector run) was skipped. Re-run /mumei:plan review."
-  CONTEXT="Expected file: ${DETECTORS_FILE}. The /mumei:plan skill must execute hooks/pre-review-detector.sh before reviewer fan-out so detectors (semgrep, osv-scanner, hallucinated-package-check) emit ground-truth findings. Set MUMEI_BYPASS=1 to skip (not recommended)."
+# --- Detector defense line: skill-led Stage 0 must have written a detectors
+# report and the review JSON must point to it via detector_report. If the
+# pointer is missing or the file does not exist, Stage 0 was skipped
+# (skill bug, manually-authored review, etc.) and we force a re-run.
+# Reading the field rather than reconstructing a filename avoids coupling
+# stop-guard to a specific timestamp format used by pre-review-detector.sh.
+DETECTORS_FILE="$(jq -r '.detector_report // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
+if [[ -z "$DETECTORS_FILE" || ! -f "$DETECTORS_FILE" ]]; then
+  REVIEW_NAME="$(basename "$LATEST_REVIEW")"
+  REASON="Review ${REVIEW_NAME} has no resolvable detector_report — Stage 0 (deterministic detector run) was skipped. Re-run /mumei:plan review."
+  CONTEXT="The review JSON must include a top-level \"detector_report\" field whose value is a readable path to a detectors.json from hooks/pre-review-detector.sh. Either the field is missing, empty, or points to a file that no longer exists. Detectors (semgrep, osv-scanner, hallucinated-package-check) provide ground-truth findings that LLM reviewers cannot replace. Set MUMEI_BYPASS=1 to skip (not recommended)."
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,
