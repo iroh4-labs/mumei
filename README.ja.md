@@ -248,20 +248,38 @@ annotations:
 
 ## Escape hatch
 
-mumei は環境変数 3 つを提供する。1 コマンドだけならインラインプレフィックスで、シェルセッション全体に効かせるなら `export` する。
+通常使用では、いつも通り `claude` を起動するだけでよい。mumei は Claude Code の**内部** Hook として動くので、`mumei` という独立 CLI コマンドは存在しない。
 
-| 変数 | 効果 | 例 |
-|---|---|---|
-| `MUMEI_BYPASS=1` | 全 Hook gate をスキップ (mumei の検査が一切動かなくなる) | `MUMEI_BYPASS=1 claude "..."` |
-| `MUMEI_SKIP_TEST=1` | commit 前のテスト実行 gate (ルール I3) のみスキップ。他の gate は有効 | `MUMEI_SKIP_TEST=1 git commit -m "wip"` |
-| `MUMEI_DEBUG=1` | hook から `[mumei DEBUG] ...` を stderr に出力 (トラブルシュート用) | `MUMEI_DEBUG=1 claude` |
+mumei の gate を無視したいときは、その `claude` (または `git`) コマンドの**前**に環境変数を付ける。これは shell (bash/zsh) の標準記法 (`VAR=value command`) で、変数はその 1 回のコマンド実行**だけ**有効になる (グローバルに export はされない)。
 
-セッション全体に効かせたいときは `export`:
+```sh
+# 通常 — gate 有効
+claude
+
+# この 1 回の Claude Code セッションだけ全 mumei gate を無効化
+MUMEI_BYPASS=1 claude
+
+# この 1 回の git commit だけ pre-commit テスト gate (ルール I3) をスキップ
+MUMEI_SKIP_TEST=1 git commit -m "wip"
+
+# この 1 回の Claude Code セッションだけ [mumei DEBUG] ... を stderr に出力 (トラブルシュート用)
+MUMEI_DEBUG=1 claude
+```
+
+同じ shell で `claude` を何度も起動する間ずっと有効化したいなら `export`:
 
 ```sh
 export MUMEI_BYPASS=1
-claude  # このシェルでは以降 mumei は黙る
+claude            # gate 無効
+claude "..."      # gate 無効
+unset MUMEI_BYPASS  # 元に戻す
 ```
+
+| 変数 | 効果 |
+|---|---|
+| `MUMEI_BYPASS=1` | 全 Hook gate をスキップ |
+| `MUMEI_SKIP_TEST=1` | commit 前のテスト実行 gate (ルール I3) のみスキップ |
+| `MUMEI_DEBUG=1` | hook から `[mumei DEBUG] ...` を stderr に出力 |
 
 これ以外に escape はない — `--no-verify` フラグも `mumei skip` コマンドも、ルールごとの disable も、設定ファイルも存在しない。意図的にそういう設計。
 

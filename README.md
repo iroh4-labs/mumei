@@ -246,20 +246,38 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 
 ## Escape hatch
 
-mumei provides three environment variables. Use them as inline prefixes for one-shot, or `export` them for the whole session.
+In normal use, just run `claude` as usual — mumei runs as Hooks **inside** Claude Code. There is no separate `mumei` CLI command.
 
-| Variable | Effect | Example |
-|---|---|---|
-| `MUMEI_BYPASS=1` | Skip all Hook gates (every mumei check becomes a no-op) | `MUMEI_BYPASS=1 claude "..."` |
-| `MUMEI_SKIP_TEST=1` | Skip only the pre-commit test runner gate (rule I3); other gates still apply | `MUMEI_SKIP_TEST=1 git commit -m "wip"` |
-| `MUMEI_DEBUG=1` | Print `[mumei DEBUG] ...` lines to stderr from hooks (for troubleshooting) | `MUMEI_DEBUG=1 claude` |
+To bypass mumei's gates, prepend an environment variable to that same `claude` (or `git`) invocation. This is standard shell syntax (`VAR=value command`) — the variable is set **only for that single command**, not exported globally.
 
-For a session-long override, `export` it:
+```sh
+# Normal — gates active
+claude
+
+# This one Claude Code session: skip ALL mumei gates
+MUMEI_BYPASS=1 claude
+
+# Just this one git commit: skip only the pre-commit test gate (rule I3)
+MUMEI_SKIP_TEST=1 git commit -m "wip"
+
+# This one Claude Code session: print [mumei DEBUG] ... to stderr (for troubleshooting)
+MUMEI_DEBUG=1 claude
+```
+
+To keep an override active across many `claude` runs in the same shell, `export` it:
 
 ```sh
 export MUMEI_BYPASS=1
-claude  # mumei is silent for the rest of this shell
+claude            # bypassed
+claude "..."      # bypassed
+unset MUMEI_BYPASS  # back to normal
 ```
+
+| Variable | Effect |
+|---|---|
+| `MUMEI_BYPASS=1` | Skip all Hook gates |
+| `MUMEI_SKIP_TEST=1` | Skip only the pre-commit test runner gate (rule I3) |
+| `MUMEI_DEBUG=1` | Print `[mumei DEBUG] ...` to stderr from hooks |
 
 There is no other escape hatch — no `--no-verify` flag, no `mumei skip` command, no per-rule disable, no settings file. By design.
 
