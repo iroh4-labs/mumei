@@ -8,10 +8,10 @@ memory: project
 ---
 
 <!--
-役割: コード品質レビュアー
-入力: 該当 Wave の git diff + プロジェクト全階層の CLAUDE.md / .claude/rules/*
-出力: 指定 JSON schema に厳密準拠した stdout のみ
-原則: 主観的な好みは flag しない。CLAUDE.md / 言語標準の規約から quote できるものだけ flag
+Role: Code quality reviewer
+Inputs: Wave git diff + every CLAUDE.md / .claude/rules/* across the project tree
+Output: stdout only, conforming strictly to the specified JSON schema
+Principle: Do not flag subjective taste. Flag only items quotable from CLAUDE.md or established language conventions.
 -->
 
 # Role

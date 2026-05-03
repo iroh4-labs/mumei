@@ -6,10 +6,10 @@ allowed-tools: [Read, Bash, Glob]
 ---
 
 <!--
-役割: state.json の CRUD を抽象化する内部 skill
-入力: 他の skill / orchestrator から呼ばれる
-出力: state.json の内容、または更新後の状態
-原則: ユーザー直接起動禁止。常に bash helper (hooks/_lib/state.sh) を経由する
+Role: Internal skill that abstracts state.json CRUD
+Input: invoked by other skills / orchestrators
+Output: state.json content, or the post-update state
+Principle: No direct user invocation. Always go through the bash helper (hooks/_lib/state.sh).
 -->
 
 # Internal: state management

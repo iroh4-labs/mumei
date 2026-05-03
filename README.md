@@ -293,7 +293,7 @@ Use sparingly. The point of mumei is to make skipping painful. If you reach for 
 
 ## Status
 
-Pre-release (v0.1.5). Expect breaking changes until v1.0.
+Pre-release (v0.1.6). Expect breaking changes until v1.0.
 
 ## License
 

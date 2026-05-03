@@ -7,10 +7,10 @@ argument-hint: <feature>
 ---
 
 <!--
-役割: 完了 feature を archive/{YYYY-MM}/ に退避
-入力: feature slug
-出力: .mumei/specs/<feature>/ → .mumei/archive/<YYYY-MM>/<feature>/ への mv
-原則: 副作用大のため disable-model-invocation: true (ユーザー明示起動のみ)
+Role: Move a completed feature into archive/{YYYY-MM}/
+Input: feature slug
+Output: mv .mumei/specs/<feature>/ -> .mumei/archive/<YYYY-MM>/<feature>/
+Principle: Side-effect heavy, so disable-model-invocation: true (user-invoked only)
 -->
 
 # Archive

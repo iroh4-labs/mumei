@@ -8,10 +8,10 @@ memory: local
 ---
 
 <!--
-役割: per-issue validator (各 finding を fresh context で個別再検証)
-入力: 単一の finding (JSON)
-出力: 指定 JSON schema に厳密準拠した stdout のみ
-原則: MEMORY.md は read-only。並列起動時の書き込み競合回避のため書き込み禁止。
+Role: per-issue validator (re-evaluate each finding individually with fresh context)
+Input: a single finding (JSON)
+Output: stdout only, conforming strictly to the specified JSON schema
+Principle: MEMORY.md is read-only. No writes — parallel invocations would race.
 -->
 
 # Role

@@ -8,10 +8,10 @@ memory: project
 ---
 
 <!--
-役割: 仕様準拠レビュアー
-入力: 該当 Wave の git diff + .mumei/specs/<feature>/{requirements.md, tasks.md}
-出力: 指定 JSON schema に厳密準拠した stdout のみ (前後に余計な文章を出さない)
-原則: スコープ厳守 — 自分の担当 (spec compliance) 以外は filtered_out に逃がす
+Role: Spec compliance reviewer
+Inputs: Wave git diff + .mumei/specs/<feature>/{requirements.md, tasks.md}
+Output: stdout only, conforming strictly to the specified JSON schema (no surrounding prose)
+Principle: Stay in lane — anything outside spec compliance routes to filtered_out
 -->
 
 # Role

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # PostToolUse Bash hook.
-# 担当ルール:
-#   X1: Bash 経由でスコープ外ファイル変更 → 警告のみ (block しない)
+# Rules covered:
+#   X1: Bash modified files outside the current scope -> warn only (do not block)
 #
-# 設計原則:
-#   - X1 は副作用大きい block ではなく、Claude に additionalContext で警告
-#   - block すると正当な操作 (例えば npm install で node_modules 変更) も止まる
-#   - escape: MUMEI_BYPASS=1 で即 exit 0
+# Design principles:
+#   - X1 warns Claude via additionalContext rather than blocking, because
+#     blocking would also stop legitimate operations (e.g. npm install
+#     touching node_modules).
+#   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
 
 set -u
 
@@ -22,8 +23,8 @@ source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
 
-# この hook は Hook の input JSON を参照しない (git status を直接見るため)。
-# stdin は読み捨て、Claude Code 側のパイプを閉じる。
+# This hook does not consult the input JSON (it inspects git status directly).
+# Drain stdin so Claude Code's pipe closes cleanly.
 cat >/dev/null
 
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
@@ -38,7 +39,7 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 0
 fi
 
-# 直前の Bash 実行で変更されたファイルを git status で検出
+# Detect files modified by the most recent Bash invocation via git status
 CHANGED_FILES="$(git status --porcelain 2>/dev/null \
   | awk '{print $2}' \
   | grep -vE '^(\.mumei/|\.claude/|node_modules/|\.git/|dist/|build/|target/|\.next/|\.venv/|__pycache__/)' \
@@ -46,7 +47,7 @@ CHANGED_FILES="$(git status --porcelain 2>/dev/null \
 
 [[ -n "$CHANGED_FILES" ]] || exit 0
 
-# tasks.md にスコープ登録されていないファイルがあれば warning
+# Warn if any modified file is not registered in tasks.md scope
 OUT_OF_SCOPE=""
 while IFS= read -r f; do
   [[ -n "$f" ]] || continue

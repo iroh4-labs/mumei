@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook.
-# 担当ルール:
-#   I3: test red のまま git commit → deny
-#   R2: review verdict が MAJOR_ISSUES のまま git push → deny
-#   W2: Wave 内 [ ] 残のまま git commit → deny
+# Rules covered:
+#   I3: git commit while tests are red -> deny
+#   R2: git push while the review verdict is MAJOR_ISSUES -> deny
+#   W2: git commit while the current Wave still has unchecked [ ] tasks -> deny
 #
-# 設計原則:
-#   - escape: MUMEI_BYPASS=1 で即 exit 0
-#   - 出力: deny 時は permissionDecision JSON
-#   - test runner の自動検出は package.json / pyproject.toml / Cargo.toml ベース
+# Design principles:
+#   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
+#   - output: on deny, emit permissionDecision JSON
+#   - test runner is auto-detected from package.json / pyproject.toml / Cargo.toml
 
 set -u
 
@@ -47,17 +47,17 @@ deny() {
   exit 0
 }
 
-# git commit を含むか判定 (chain command 対応)。
+# Detect a git commit invocation, including chained commands.
 is_git_commit() {
   printf '%s' "$1" | grep -qE '(^|[[:space:];|&])git[[:space:]]+commit([[:space:]]|$)'
 }
 
-# git push を含むか判定。
+# Detect a git push invocation.
 is_git_push() {
   printf '%s' "$1" | grep -qE '(^|[[:space:];|&])git[[:space:]]+push([[:space:]]|$)'
 }
 
-# --- W2: Wave 内 [ ] 残のまま git commit ---
+# --- W2: git commit while the current Wave still has unchecked [ ] tasks ---
 if is_git_commit "$COMMAND"; then
   CURRENT_WAVE="$(mumei_state_get "$FEATURE" '.current_wave // 0')"
   if [[ -n "$CURRENT_WAVE" ]] && [[ "$CURRENT_WAVE" -gt 0 ]]; then
@@ -74,8 +74,8 @@ if is_git_commit "$COMMAND"; then
     fi
   fi
 
-  # --- I3: test red のまま git commit ---
-  # test runner を検出して実行。失敗 (exit != 0) なら deny。
+  # --- I3: git commit while tests are red ---
+  # Detect the project's test runner and execute it. Deny if it exits non-zero.
   TEST_CMD=""
   if [[ -f "package.json" ]]; then
     if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
@@ -92,11 +92,11 @@ if is_git_commit "$COMMAND"; then
   fi
 
   if [[ -n "$TEST_CMD" ]]; then
-    # MUMEI_SKIP_TEST=1 で test runner skip (CI などで個別制御したい場合)
+    # MUMEI_SKIP_TEST=1 skips the test runner (useful when CI runs tests separately)
     if [[ "${MUMEI_SKIP_TEST:-0}" != "1" ]]; then
       mumei_log_info "running tests before commit: ${TEST_CMD}"
       if ! TEST_OUTPUT="$(eval "$TEST_CMD" 2>&1)"; then
-        # 失敗テスト名を最大 5 個抽出 (truncate)
+        # Truncate test output to the last 30 lines for the deny reason
         TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
         deny \
           "Tests failing. Fix before committing." \
@@ -106,13 +106,14 @@ if is_git_commit "$COMMAND"; then
   fi
 fi
 
-# --- R2: review verdict が MAJOR_ISSUES のまま git push ---
+# --- R2: git push while the review verdict is MAJOR_ISSUES ---
 if is_git_push "$COMMAND"; then
-  # 直近の review 結果を確認。 .mumei/specs/<f>/reviews/<latest>.json の verdict を読む。
+  # Inspect the latest review record. Read .verdict from
+  # .mumei/specs/<feature>/reviews/<latest>.json.
   REVIEW_DIR=".mumei/specs/${FEATURE}/reviews"
   if [[ -d "$REVIEW_DIR" ]]; then
-    # review file 名は ISO 8601 timestamp なのでアルファベット順 = 時系列順。
-    # 最新を取るには sort | tail -n1 で十分。find を使うと SC2012 を回避できる。
+    # Review file names are ISO 8601 timestamps, so alphabetical order = chronological.
+    # `find ... | sort | tail -n1` picks the newest while avoiding shellcheck SC2012.
     LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
     if [[ -n "$LATEST_REVIEW" ]] && [[ -f "$LATEST_REVIEW" ]]; then
       VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"

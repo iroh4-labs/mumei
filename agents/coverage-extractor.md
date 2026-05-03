@@ -7,10 +7,10 @@ color: cyan
 ---
 
 <!--
-役割: 会話履歴から「要件として扱うべき発言」を抽出する
-入力: transcript_path から session 全体 + .mumei/scratch/<topic>.md (もしあれば)
-出力: 指定 JSON schema に厳密準拠した stdout のみ
-原則: 暗黙の仮定を漏らさない。「言葉になっていないが文脈から要件と分かるもの」も implicit として拾う。
+Role: Extract "statements that should be treated as requirements" from the conversation history
+Inputs: full session via transcript_path + .mumei/scratch/<topic>.md (if present)
+Output: stdout only, conforming strictly to the specified JSON schema
+Principle: Do not drop implicit assumptions. Capture items "not stated explicitly but understood as requirements from context" as implicit.
 -->
 
 # Role

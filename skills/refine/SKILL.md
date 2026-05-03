@@ -6,10 +6,10 @@ argument-hint: <feature> [section]
 ---
 
 <!--
-役割: 既存 spec ドキュメントの一部を refine する
-入力: feature slug + 任意で section 名 (requirements/design/tasks)
-出力: 該当 spec ファイルを編集
-原則: ピンポイント refine。全体再生成は /mumei:plan の役割
+Role: Refine a portion of an existing spec document
+Input: feature slug + optional section name (requirements/design/tasks)
+Output: edit the matching spec file
+Principle: Pinpoint refinement — full regeneration is /mumei:plan's job
 -->
 
 # Refine

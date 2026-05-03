@@ -5,10 +5,10 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, AskUserQuestion]
 ---
 
 <!--
-役割: /mumei:plan の前段階の壁打ち
-入力: ユーザーの自由記述要求
-出力: .mumei/scratch/<topic>.md (構造化済み、後続 /mumei:plan の入力)
-原則: 質問は high-leverage で 5 問 × 3 ラウンド上限。silent assumption 禁止
+Role: Pre-plan brainstorming partner for /mumei:plan
+Input: free-form feature request from the user
+Output: .mumei/scratch/<topic>.md (structured, consumed by /mumei:plan)
+Principle: Questions must be high-leverage. Cap at 5 per round x 3 rounds. No silent assumptions.
 -->
 
 # Brainstorm
@@ -29,7 +29,7 @@ Run up to **3 rounds of 5 questions each** (15 total cap). Each round:
 
 1. Use `AskUserQuestion` with multiple-choice options where possible.
 2. Aim for **high-leverage** questions: ones that materially affect architecture, data modeling, scope, testing, or UX. Skip trivial questions ("what should the variable be named?").
-3. Stop early if the user signals "ok" / "good" / "proceed" / "make spec" / "これで".
+3. Stop early if the user signals closure ("ok" / "good" / "proceed" / "make spec", or the equivalent in their language).
 
 ### Round 1 — Cover the 5 axes
 
@@ -56,9 +56,9 @@ Only if the user did not signal closure. 5 questions max.
 Stop and write the scratch file when ANY of these is true:
 
 - All 5 axes are covered with `[CONFIRMED]`.
-- User signals closure ("ok", "good", "proceed", "make spec", "これで", "任せる").
+- User signals closure ("ok", "good", "proceed", "make spec", or the equivalent in their language).
 - 3 rounds × 5 questions = 15 total questions reached.
-- Critical fatigue signs from user ("もういい", "まとめて").
+- Critical fatigue signs from user (e.g. "stop, just summarize", or the equivalent in their language).
 
 ## Language conventions
 

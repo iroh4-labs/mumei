@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Stop hook.
-# 担当ルール:
-#   R1: 全 task 完了だが review 未実行で session 終了 → block で続行強制
+# Rules covered:
+#   R1: session ending with every task complete but no review run -> block to force continuation
 #
-# 設計原則:
-#   - 無限ループ防止: stop_hook_active=true なら即 exit 0
-#   - block 時は decision: block + reason、Claude が次ターンで /mumei:review を実行
-#   - escape: MUMEI_BYPASS=1 で即 exit 0
+# Design principles:
+#   - Loop prevention: if stop_hook_active=true, exit 0 immediately.
+#   - On block: emit decision: block + reason, so Claude runs /mumei:plan
+#     review on the next turn.
+#   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
 
 set -u
 
@@ -24,7 +25,7 @@ source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
 
 INPUT="$(cat)"
 
-# 無限ループ防止: 既に Stop hook が block していたら即 allow
+# Loop prevention: if a Stop hook is already blocking, allow immediately
 STOP_HOOK_ACTIVE="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false')"
 if [[ "$STOP_HOOK_ACTIVE" == "true" ]]; then
   exit 0
@@ -37,10 +38,11 @@ fi
 
 PHASE="$(mumei_state_phase "$FEATURE")"
 
-# --- R3: phase=done だが active feature が .mumei/current のまま → block + archive 促進 ---
-# orchestrator (/mumei:plan) が verdict=PASS で phase=done に進めた後、
-# user に /mumei:archive を勧めずに離脱するのを防ぐ。archive skill 自体は
-# disable-model-invocation: true なので Claude からは呼べない。Hook で物理強制する。
+# --- R3: phase=done while .mumei/current still points at the feature -> block and prompt archive ---
+# After the orchestrator (/mumei:plan) advances phase=done with verdict=PASS,
+# this prevents the session from ending without telling the user to run
+# /mumei:archive. The archive skill is disable-model-invocation: true so Claude
+# cannot run it itself; we enforce it via this Hook.
 if [[ "$PHASE" == "done" ]]; then
   CURRENT="$(mumei_current_feature 2>/dev/null || true)"
   if [[ "$CURRENT" == "$FEATURE" ]]; then
@@ -58,10 +60,10 @@ if [[ "$PHASE" == "done" ]]; then
   fi
 fi
 
-# 以降は phase=implement のみ
+# Everything below applies only to phase=implement
 [[ "$PHASE" == "implement" ]] || exit 0
 
-# 全 task が complete か確認
+# Check whether every task is complete
 ANY_INCOMPLETE=0
 while IFS= read -r tid; do
   [[ -n "$tid" ]] || continue
@@ -74,18 +76,18 @@ done < <(mumei_tasks_list_ids "$FEATURE")
 
 [[ "$ANY_INCOMPLETE" == "0" ]] || exit 0
 
-# 全完了 + 直近 review 結果なし or stale なら block
+# All tasks complete + missing or stale review -> block
 REVIEW_DIR=".mumei/specs/${FEATURE}/reviews"
 NEEDS_REVIEW=0
 if [[ ! -d "$REVIEW_DIR" ]]; then
   NEEDS_REVIEW=1
 else
-  # review file 名は ISO 8601 timestamp なのでアルファベット順 = 時系列順。
+  # Review file names are ISO 8601 timestamps, so alphabetical = chronological.
   LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
   if [[ -z "$LATEST_REVIEW" ]]; then
     NEEDS_REVIEW=1
   else
-    # review 結果が tasks.md より古ければ stale → 再 review 必要
+    # If the review is older than tasks.md it is stale -> re-review required
     if [[ ".mumei/specs/${FEATURE}/tasks.md" -nt "$LATEST_REVIEW" ]]; then
       NEEDS_REVIEW=1
     fi

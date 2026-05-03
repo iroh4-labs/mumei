@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # PostToolUse Edit|Write|MultiEdit hook.
-# 担当ルール:
-#   I4: task 完了マーク [x] を実装伴わず付与 (phantom completion) → block + reason 注入
+# Rules covered:
+#   I4: a task is marked [x] without an implementation (phantom completion) ->
+#       block with an injected reason
 #
-# 設計原則:
-#   - PostToolUse は tool 実行を取り消せない。decision: block で agent loop に介入する。
-#   - 検出ロジック: tasks.md の編集で新しく [x] 化された task について、
-#     その task の _Files: に列挙されたファイルが直近 git diff に出現するか確認。
-#     出現しない = phantom completion。
-#   - escape: MUMEI_BYPASS=1 で即 exit 0
+# Design principles:
+#   - PostToolUse cannot undo a tool invocation. Use decision: block to steer
+#     the agent loop instead.
+#   - Detection: when tasks.md has just been edited, look at every task whose
+#     checkbox switched to [x]. For each such task, verify that at least one
+#     file listed in its _Files: meta also appears in the latest git diff.
+#     If none of those files were modified, this is a phantom completion.
+#   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
 
 set -u
 
@@ -28,7 +31,7 @@ INPUT="$(cat)"
 FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')"
 [[ -n "$FILE_PATH" ]] || exit 0
 
-# 相対パス正規化
+# Normalize the file path
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
@@ -38,20 +41,20 @@ if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
   exit 0
 fi
 
-# tasks.md の編集に限定
+# Only act on edits to tasks.md
 TASKS_FILE=".mumei/specs/${FEATURE}/tasks.md"
 [[ "$FILE_PATH" == "$TASKS_FILE" ]] || exit 0
 
-# git で直前の tasks.md 状態を取得し、新しく [x] になった task ID を検出。
+# Compare against the previous tasks.md state via git to find newly [x] tasks.
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
-  # git なしでは検出不能、スキップ
+  # Without git we cannot detect anything reliably -> skip
   exit 0
 fi
 
-# tasks.md の差分から `+- [x] ` 行を抜き出す
+# Pull `+- [x] ` lines out of the tasks.md diff
 DIFF="$(git diff HEAD -- "$TASKS_FILE" 2>/dev/null || true)"
 if [[ -z "$DIFF" ]]; then
-  # 既に commit 済 or 変更なし
+  # Already committed or no change
   exit 0
 fi
 
@@ -61,7 +64,7 @@ NEWLY_COMPLETED="$(printf '%s' "$DIFF" \
 
 [[ -n "$NEWLY_COMPLETED" ]] || exit 0
 
-# 各完了 task について、その _Files: のファイルが diff に存在するか確認
+# For each newly completed task, verify that at least one file from its _Files: meta is in the diff
 PHANTOM_TASKS=""
 while IFS= read -r task_id; do
   [[ -n "$task_id" ]] || continue
@@ -73,14 +76,14 @@ while IFS= read -r task_id; do
   for f in "${file_arr[@]}"; do
     f="$(echo "$f" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
     [[ -n "$f" ]] || continue
-    # tasks.md 自体は除外
+    # Skip tasks.md itself
     [[ "$f" == "$TASKS_FILE" ]] && continue
-    # diff に該当ファイルの変更があるか (HEAD vs worktree、staged 含む)
+    # Was this file changed (HEAD vs worktree, staged included)?
     if git diff --name-only HEAD 2>/dev/null | grep -qFx "$f"; then
       has_implementation=1
       break
     fi
-    # untracked file も含める (git ls-files は厳密にファイルパスを照合する)
+    # Also count untracked files (git ls-files matches the path exactly)
     if [[ -n "$(git ls-files --others --exclude-standard -- "$f" 2>/dev/null)" ]]; then
       has_implementation=1
       break

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-05-03
+
+### Added
+
+- **`$schema` declaration in `.claude-plugin/marketplace.json`** pointing at `https://json.schemastore.org/claude-code-marketplace.json` so editors can autocomplete and validate the marketplace manifest. Claude Code itself ignores the field at load time per the official plugin marketplace spec; this is purely an editor-facing aid. The schemastore URL is the catalog-registered schema and matches the convention already used for `plugin.json` and `hooks.json` in this repo.
+
+### Changed
+
+- **Distribution language boundary tightened.** Japanese maintainer comments in shipped artifacts (`agents/*.md`, `skills/*/SKILL.md`, `hooks/*.sh`, `hooks/_lib/*.sh`) are now in English. Plugin distributions had Japanese prose inside HTML comments, bash comments, and a Japanese-body example in `skills/plan/SKILL.md`; the language boundary contract calls for distributed files to be English-only. The Japanese-body example in `/mumei:plan` is replaced by a one-line note instructing the model to mirror the English template structure with the user's language for the prose around English EARS keywords. README's `日本語版 README` link and the `(無名)` etymology in the Philosophy section are kept — they are user-facing references to the project's name origin, not maintainer notes.
+
+### Internal
+
+- Self-evaluation rubric run produced a 3.62 / 4.00 baseline (`.claude/skills/self-evaluate/results/2026-05-03.md`, gitignored). The two changes above were the top two improvement items the rubric surfaced (`1.5_schemas` G→E, `1.2_jp_chars_in_dist` P→E for the distribution-only count).
+
 ## [0.1.5] - 2026-05-03
 
 ### Added

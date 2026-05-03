@@ -5,10 +5,10 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash]
 ---
 
 <!--
-役割: プロジェクトに mumei を導入する一回限りのセットアップ
-入力: ユーザーの指示
-出力: .mumei/ ディレクトリ作成 + CLAUDE.md / .claude/rules/ への追記提案
-原則: ユーザー同意なしに既存ファイルを書き換えない (claude-md-improver パターン)
+Role: One-time setup that installs mumei into a project
+Input: user instruction
+Output: create .mumei/ directory + propose additions to CLAUDE.md / .claude/rules/
+Principle: Never modify existing files without user consent (claude-md-improver pattern)
 -->
 
 # Init

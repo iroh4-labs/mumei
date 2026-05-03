@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # PreToolUse Edit|Write|MultiEdit hook.
-# 担当ルール:
-#   P1: 仕様書未完成のまま src/ を編集 → deny
-#   P2: requirements.md に [NEEDS CLARIFICATION] 残存のまま design.md 作成 → deny
-#   P3: design.md なしで tasks.md 作成 → deny
-#   I1: 前提タスク未完了のまま後タスクを編集 → deny
-#   I2: tasks.md に列挙されていないファイルを編集 (scope creep) → deny
-#   W1: 前 Wave 未 commit のまま次 Wave のファイルを編集 → deny
+# Rules covered:
+#   P1: edit src/ before the spec is complete -> deny
+#   P2: write design.md while requirements.md still has [NEEDS CLARIFICATION] -> deny
+#   P3: write tasks.md without a design.md -> deny
+#   I1: edit a task whose dependencies are not yet complete -> deny
+#   I2: edit a file not listed in any task's _Files: meta (scope creep) -> deny
+#   W1: edit files for the next Wave while the current Wave is uncommitted -> deny
 #
-# 設計原則:
-#   - escape: MUMEI_BYPASS=1 で即 exit 0
-#   - 出力: deny 時は permissionDecision JSON を stdout、exit 0
-#   - reason は事実形 (命令形は prompt-injection 防御で打ち消されうる)
-#   - active feature が判定できなければ何もせず allow (mumei 未利用プロジェクトを邪魔しない)
+# Design principles:
+#   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
+#   - output: on deny, emit permissionDecision JSON to stdout and exit 0
+#   - reason text is fact-form (imperative phrasing can be neutralized by prompt-injection guards)
+#   - if no active feature can be determined, do nothing and allow (don't disturb non-mumei projects)
 
 set -u
 
@@ -21,7 +21,7 @@ if [[ "${MUMEI_BYPASS:-0}" == "1" ]]; then
   exit 0
 fi
 
-# library を load
+# Load shared libraries
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/log.sh"
@@ -30,19 +30,19 @@ source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
 
-# stdin から JSON を読む
+# Read JSON from stdin
 INPUT="$(cat)"
 
-# 編集対象ファイルパスを抽出
+# Extract the target file path
 FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')"
 [[ -n "$FILE_PATH" ]] || exit 0
 
-# 相対パスに正規化 (CLAUDE_PROJECT_DIR からの相対)
+# Normalize to a path relative to CLAUDE_PROJECT_DIR
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
-# active feature が無ければ何もしない (mumei 未利用)
+# No active feature -> do nothing (project is not using mumei)
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
 if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
   exit 0
@@ -64,7 +64,7 @@ deny() {
 
 PHASE="$(mumei_state_phase "$FEATURE")"
 
-# --- P2: requirements.md に [NEEDS CLARIFICATION] が残存のまま design.md を作ろうとした ---
+# --- P2: design.md is being written while requirements.md still has [NEEDS CLARIFICATION] ---
 if [[ "$FILE_PATH" == ".mumei/specs/${FEATURE}/design.md" ]]; then
   REQ_FILE=".mumei/specs/${FEATURE}/requirements.md"
   if [[ -f "$REQ_FILE" ]] && grep -q '\[NEEDS CLARIFICATION' "$REQ_FILE"; then
@@ -74,7 +74,7 @@ if [[ "$FILE_PATH" == ".mumei/specs/${FEATURE}/design.md" ]]; then
   fi
 fi
 
-# --- P3: design.md なしで tasks.md を作ろうとした ---
+# --- P3: tasks.md is being written without a design.md ---
 if [[ "$FILE_PATH" == ".mumei/specs/${FEATURE}/tasks.md" ]]; then
   DESIGN_FILE=".mumei/specs/${FEATURE}/design.md"
   if [[ ! -f "$DESIGN_FILE" ]]; then
@@ -84,14 +84,15 @@ if [[ "$FILE_PATH" == ".mumei/specs/${FEATURE}/tasks.md" ]]; then
   fi
 fi
 
-# 一般的な project meta ファイルは scope/phase 判定の対象外。
-# 拡充: dotfiles (.gitignore, .dockerignore, .editorconfig 等), 設定 (Makefile, *.toml, *.yaml,
-# *.yml, *.lock, *.json), README, LICENSE, CLAUDE.md / AGENTS.md, .github/, .vscode/。
+# Common project meta files are exempt from scope/phase checks.
+# Covers: dotfiles (.gitignore, .dockerignore, .editorconfig, etc.), config files
+# (Makefile, *.toml, *.yaml, *.yml, *.lock, *.json), README, LICENSE,
+# CLAUDE.md / AGENTS.md, .github/, .vscode/.
 is_meta_path() {
   local p="$1"
   case "$p" in
     .mumei/*|.claude/*|.github/*|.vscode/*|.gitlab/*|.idea/*) return 0 ;;
-    .[a-zA-Z]*) return 0 ;;            # dotfiles 全般 (.gitignore, .editorconfig, .npmrc, ...)
+    .[a-zA-Z]*) return 0 ;;            # dotfiles in general (.gitignore, .editorconfig, .npmrc, ...)
     README*|LICENSE*|CHANGELOG*|CONTRIBUTING*|CODEOWNERS|NOTICE*) return 0 ;;
     CLAUDE.md|AGENTS.md) return 0 ;;
     Makefile|Dockerfile*|Rakefile|Gemfile*|Procfile|justfile|Justfile) return 0 ;;
@@ -103,8 +104,8 @@ is_meta_path() {
   return 1
 }
 
-# --- P1: 仕様書未完成のまま src/ などを編集 ---
-# meta ファイルは許可。それ以外で phase=plan なら deny。
+# --- P1: editing src/ etc. before the spec is complete ---
+# Allow meta files. For everything else, deny while phase=plan.
 if [[ "$PHASE" == "plan" ]]; then
   if ! is_meta_path "$FILE_PATH"; then
     deny \
@@ -113,17 +114,17 @@ if [[ "$PHASE" == "plan" ]]; then
   fi
 fi
 
-# 以降は phase=implement 前提
+# Everything below assumes phase=implement
 if [[ "$PHASE" != "implement" ]]; then
   exit 0
 fi
 
-# meta ファイルは scope check の対象外
+# Meta files are exempt from scope checks
 if is_meta_path "$FILE_PATH"; then
   exit 0
 fi
 
-# --- I2: tasks.md に列挙されていないファイルを編集 (scope creep) ---
+# --- I2: editing a file not listed in tasks.md (scope creep) ---
 OWNERS="$(mumei_tasks_owners_of_file "$FEATURE" "$FILE_PATH" 2>/dev/null || true)"
 if [[ -z "$OWNERS" ]]; then
   deny \
@@ -131,8 +132,8 @@ if [[ -z "$OWNERS" ]]; then
     "If editing this file is intentional, add it to the owning task's _Files: line in .mumei/specs/${FEATURE}/tasks.md, then retry."
 fi
 
-# --- I1: 前提タスク未完了のまま後タスクを編集 ---
-# OWNERS は空白区切りの task ID リスト。最初の owner の依存を確認。
+# --- I1: editing a downstream task while its prerequisite is incomplete ---
+# OWNERS is a space-separated list of task IDs. Check the first owner's dependencies.
 OWNER_TASK="$(printf '%s' "$OWNERS" | awk '{print $1}')"
 if [[ -n "$OWNER_TASK" ]]; then
   DEPS="$(mumei_tasks_depends "$FEATURE" "$OWNER_TASK" 2>/dev/null || true)"
@@ -151,13 +152,13 @@ if [[ -n "$OWNER_TASK" ]]; then
   fi
 fi
 
-# --- W1: 前 Wave 未 commit のまま次 Wave のファイルを編集 ---
-# 現在 task ID から Wave 番号を抽出 (例: 2.1 → Wave 2)。
+# --- W1: editing files for the next Wave while the current Wave is uncommitted ---
+# Extract the Wave number from the current task ID (e.g. 2.1 -> Wave 2).
 TASK_WAVE="${OWNER_TASK%%.*}"
 CURRENT_WAVE="$(mumei_state_get "$FEATURE" '.current_wave // 0')"
 if [[ -n "$TASK_WAVE" ]] && [[ "$TASK_WAVE" -gt "$CURRENT_WAVE" ]]; then
-  # 前 Wave の commit 状態を確認。git log で [wave-N] の commit が無いまたは
-  # uncommitted な変更が specs/ 以外に残っていれば deny。
+  # Check whether the previous Wave is committed: deny when [wave-N] commit is
+  # missing from git log, or uncommitted changes remain outside .mumei/.
   if git rev-parse --git-dir >/dev/null 2>&1; then
     if [[ -n "$(git status --porcelain | grep -v '^?? \.mumei/' || true)" ]]; then
       deny \
@@ -167,5 +168,5 @@ if [[ -n "$TASK_WAVE" ]] && [[ "$TASK_WAVE" -gt "$CURRENT_WAVE" ]]; then
   fi
 fi
 
-# 全チェック通過 → allow
+# All checks passed -> allow
 exit 0

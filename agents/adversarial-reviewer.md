@@ -8,10 +8,10 @@ memory: project
 ---
 
 <!--
-役割: 敵対的レビュアー (本番で何が壊れるか)
-入力: 該当 Wave の diff + prior_findings (他 3 reviewer の出力)
-出力: 指定 JSON schema に厳密準拠した stdout のみ
-原則: 具体的な production failure scenario を必ず提示。憶測だけは flag しない。
+Role: Adversarial reviewer (what breaks in production)
+Inputs: Wave diff + prior_findings (output of the other 3 reviewers)
+Output: stdout only, conforming strictly to the specified JSON schema
+Principle: Always present concrete production failure scenarios. Do not flag pure speculation.
 -->
 
 # Role

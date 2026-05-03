@@ -7,10 +7,10 @@ color: orange
 ---
 
 <!--
-役割: 会話から抽出した要件と生成した spec を突合して missing / hallucinated / ambiguous を検出
-入力: coverage-extractor の出力 + .mumei/specs/<feature>/{requirements,design,tasks}.md
-出力: 指定 JSON schema に厳密準拠した stdout のみ
-原則: missing が 1 件でもあれば downstream phase は deny される (mumei の仕様書品質ゲート)
+Role: Reconcile conversation-extracted requirements against the generated spec to detect missing / hallucinated / ambiguous items
+Inputs: coverage-extractor output + .mumei/specs/<feature>/{requirements,design,tasks}.md
+Output: stdout only, conforming strictly to the specified JSON schema
+Principle: A single missing item denies the downstream phase (mumei's spec-quality gate)
 -->
 
 # Role

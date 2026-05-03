@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# 共通ログ関数。stderr に書き出す (stdout は Hook の JSON 出力用に予約)。
-# 使い方: source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/log.sh"
+# Shared logging helpers. All output goes to stderr (stdout is reserved for the
+# hook's JSON response).
+# Usage: source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/log.sh"
 
 set -u
 
-# MUMEI_DEBUG=1 で debug log を有効化
+# MUMEI_DEBUG=1 enables debug logging
 mumei_log_debug() {
   [[ "${MUMEI_DEBUG:-0}" == "1" ]] || return 0
   printf '[mumei DEBUG] %s\n' "$*" >&2

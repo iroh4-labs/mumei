@@ -6,10 +6,10 @@ argument-hint: <feature-slug>
 ---
 
 <!--
-役割: mumei のメインフロー全体を駆動する orchestrator
-入力: feature slug
-出力: .mumei/specs/<feature>/{requirements,design,tasks}.md + 実装 + review レポート
-原則: phase ごとに gate を通過させる。途中で escape は MUMEI_BYPASS=1 のみ
+Role: Orchestrator that drives the entire mumei main flow
+Input: feature slug
+Output: .mumei/specs/<feature>/{requirements,design,tasks}.md + implementation + review reports
+Principle: Each phase must pass its gate. Mid-flow escape is via MUMEI_BYPASS=1 only.
 -->
 
 # Plan — mumei orchestrator
@@ -53,19 +53,7 @@ The skill produces three documents per feature: `requirements.md`, `design.md`, 
 - **Trace IDs stay as-is**: `REQ-1.1`, `REQ-1.2`, etc.
 - **Task meta stays in English**: `_Files:_`, `_Depends:_`, `_Requirements:_`. The values inside are file paths and IDs (also unchanged).
 
-Example — Japanese body:
-
-```markdown
-## User Story
-ユーザーとして、メールアドレスとパスワードでログインしたい。自分のデータにアクセスするため。
-
-## Acceptance Criteria
-- REQ-1.1 [CONFIRMED] WHEN ユーザーが正しい credentials を送信, the system SHALL セッション cookie を発行する。
-- REQ-1.2 [CONFIRMED] IF 連続 5 回失敗した場合, then the system SHALL 15 分間アカウントをロックする。
-
-## Out of Scope
-- MFA は v2 で対応 (本リリースでは扱わない)。
-```
+When the user writes in a non-English language, mirror this structure but render the prose around the English EARS keywords (`WHEN`, `IF`, `SHALL`, etc.) in their language. The structure, headings, EARS keywords, REQ IDs, and `[CONFIRMED]`/`[ASSUMPTION]` annotations stay identical.
 
 Example — English body:
 

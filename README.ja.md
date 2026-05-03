@@ -132,7 +132,7 @@ install 後、プロジェクトごとに 1 回だけセットアップを実行
 
 ### その他のインストール経路
 
-- **特定バージョンに pin**: marketplace plugin は marketplace repo の git ref に従う。tag を pin するには `/plugin marketplace add hir4ta/mumei#v0.1.5` のように書く。
+- **特定バージョンに pin**: marketplace plugin は marketplace repo の git ref に従う。tag を pin するには `/plugin marketplace add hir4ta/mumei#v0.1.6` のように書く。
 - **ローカル開発 clone**: ローカルに clone した mumei を marketplace cache を経由せずテストするには、`claude --plugin-dir /path/to/your/clone-of-mumei` で Claude Code を起動する。
 - **アンインストール**: `/plugin uninstall mumei@mumei` (プロジェクトの `.mumei/` ディレクトリは残る)。
 
@@ -295,7 +295,7 @@ unset MUMEI_BYPASS  # 元に戻す
 
 ## Status
 
-Pre-release (v0.1.5)。v1.0 までは破壊的変更がありうる。
+Pre-release (v0.1.6)。v1.0 までは破壊的変更がありうる。
 
 ## License
 

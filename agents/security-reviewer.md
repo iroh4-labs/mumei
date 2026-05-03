@@ -8,10 +8,10 @@ memory: project
 ---
 
 <!--
-役割: セキュリティレビュアー
-入力: 該当 Wave の git diff + Semgrep/GitGuardian の出力 (もしあれば pre_flagged_issues として)
-出力: 指定 JSON schema に厳密準拠した stdout のみ
-原則: 「sink がある場合のみ」injection/auth bypass を flag。speculation 禁止。
+Role: Security reviewer
+Inputs: Wave git diff + Semgrep/GitGuardian output (passed as pre_flagged_issues when available)
+Output: stdout only, conforming strictly to the specified JSON schema
+Principle: Flag injection / auth bypass only when a concrete sink is present. No speculation.
 -->
 
 # Role
