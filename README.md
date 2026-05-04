@@ -27,10 +27,8 @@ brainstorm → plan (3 spec reviewers + approval) → implement (Wave gate) → 
 - [Spec document format](#spec-document-format)
 - [Tasks document format](#tasks-document-format)
 - [Hook rules](#hook-rules-full-list)
-- [Escape hatch](#escape-hatch)
 - [Security and Privacy](#security-and-privacy)
 - [What `mumei` is NOT](#what-mumei-is-not)
-- [Status](#status)
 - [License](#license)
 
 ## Features
@@ -155,12 +153,6 @@ review-phase Hook fails closed when either is missing (set
 | `semgrep` (≥ 1.50.0) | SAST, OWASP Top 10 patterns | `brew install semgrep` (macOS), `pip install semgrep` (Linux) |
 | `osv-scanner` (≥ 1.7.0) | CVE / dependency vulnerability check | `brew install osv-scanner` (macOS), [release binary](https://github.com/google/osv-scanner/releases) (Linux) |
 
-`/mumei:init` warns if these are missing, but never blocks. The hard
-fail happens at `/mumei:plan` review time so you can defer install
-until your first review.
-
-The `hallucinated-package-check` detector queries `https://registry.npmjs.org/` during the review phase. If your local environment blocks that egress, set `MUMEI_BYPASS=1` to skip mumei for that session.
-
 ### Detector tunables
 
 These are **not** escape hatches — the detectors still run. They tune
@@ -194,22 +186,7 @@ After install, run the one-time per-project setup:
 /mumei:init
 ```
 
-This creates `.mumei/` and proposes additions to your `CLAUDE.md` (with diff preview and explicit approval).
-
-### Other install paths
-
-- **Pin a specific version**: marketplace plugins follow git refs of the marketplace repo. Pin a tag with `/plugin marketplace add hir4ta/mumei#v0.1.9`.
-- **Local development clone**: if you cloned mumei locally and want to test edits without going through GitHub, start Claude Code with `claude --plugin-dir /path/to/your/clone-of-mumei`. This bypasses the marketplace cache.
 - **Uninstall**: `/plugin uninstall mumei@mumei` (the `.mumei/` directory in your project is left intact).
-
-### Updates
-
-```text
-/plugin marketplace update mumei
-/reload-plugins
-```
-
-Auto-update for third-party marketplaces is off by default. Enable it from `/plugin` → Marketplaces tab if you want hands-off updates.
 
 ## Project layout (after `/mumei:init`)
 
@@ -313,45 +290,6 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 | X1 | any | PostToolUse(Bash) | Bash modified files outside scope (advisory only) |
 | X2 | any | PostToolUse(Edit\|Write) | `.mumei/specs/*/tasks.md` format violation: missing `_Files:_`/`_Depends:_`/`_Requirements:_` meta, bad REQ-N.M syntax, or non-existent `_Files:_` path (advisory only) |
 
-## Escape hatch
-
-In normal use, just run `claude` as usual — mumei runs as Hooks **inside** Claude Code. There is no separate `mumei` CLI command.
-
-To bypass mumei's gates, prepend an environment variable to that same `claude` (or `git`) invocation. This is standard shell syntax (`VAR=value command`) — the variable is set **only for that single command**, not exported globally.
-
-```sh
-# Normal — gates active
-claude
-
-# This one Claude Code session: skip ALL mumei gates
-MUMEI_BYPASS=1 claude
-
-# Just this one git commit: skip only the pre-commit test gate (rule I3)
-MUMEI_SKIP_TEST=1 git commit -m "wip"
-
-# This one Claude Code session: print [mumei DEBUG] ... to stderr (for troubleshooting)
-MUMEI_DEBUG=1 claude
-```
-
-To keep an override active across many `claude` runs in the same shell, `export` it:
-
-```sh
-export MUMEI_BYPASS=1
-claude            # bypassed
-claude "..."      # bypassed
-unset MUMEI_BYPASS  # back to normal
-```
-
-| Variable | Effect |
-|---|---|
-| `MUMEI_BYPASS=1` | Skip all Hook gates |
-| `MUMEI_SKIP_TEST=1` | Skip only the pre-commit test runner gate (rule I3) |
-| `MUMEI_DEBUG=1` | Print `[mumei DEBUG] ...` to stderr from hooks |
-
-There is no other escape hatch — no `--no-verify` flag, no `mumei skip` command, no per-rule disable, no settings file. By design.
-
-Use sparingly. The point of mumei is to make skipping painful. If you reach for `MUMEI_BYPASS=1` often, fix the workflow, not the gate.
-
 ## Security and Privacy
 
 mumei operates **entirely locally** with one narrow exception (npm registry probe during review).
@@ -374,10 +312,6 @@ Full policy: [PRIVACY.md](./PRIVACY.md)
 - Not a SDD adapter. mumei has its own opinionated spec format. If you already use another SDD tool, mumei does not integrate with it — they live in parallel.
 - Not multi-tool. Cursor / Codex / Aider are not supported. The physical enforcement layer is Claude Code Hooks.
 - Not a storage system. State is plain files. No DB, no MCP server.
-
-## Status
-
-Pre-release (v0.1.10). Expect breaking changes until v1.0.
 
 ## License
 
