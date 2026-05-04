@@ -565,7 +565,6 @@ Do NOT redo completed sub-phases unless the user explicitly says to.
 
 - Don't approve a phase yourself. Phase 4 entry requires `mumei_state_set ... .phase = implement`, but only after the user explicitly approves at Phase 3.5. Hooks would deny anyway.
 - Don't ask the user to approve specs individually. The model is: 3 reviewer-PASSed specs, then ONE user gate. Asking three times defeats the purpose of this redesign.
-- Don't auto-commit. Always let the user commit after a Wave is done.
 - Don't proceed to review (Phase 5) if any task is still `[ ]`. Hook will block; the orchestrator should not propose it either.
 - Don't run Phase 5 reviewers serially. Stage 1's three reviewers MUST be parallel for performance.
 - Don't run per-issue validators serially. Phase 5 Stage 4 MUST be parallel.
