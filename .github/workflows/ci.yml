@@ -14,16 +14,16 @@ jobs:
       # ─────────────────────────────────────────
       # bash の静的解析。GitHub Actions runner には shellcheck がプリインストール済。
       # ─────────────────────────────────────────
-      - name: shellcheck (hooks/*.sh + hooks/_lib/*.sh)
+      - name: shellcheck (hooks/*.sh + hooks/_lib/*.sh + scripts/*.sh)
         run: |
-          shellcheck hooks/_lib/*.sh hooks/*.sh
+          shellcheck hooks/_lib/*.sh hooks/*.sh scripts/*.sh
 
       # ─────────────────────────────────────────
       # bash syntax check (shellcheck では拾えないケースの保険)
       # ─────────────────────────────────────────
       - name: bash -n
         run: |
-          for f in hooks/_lib/*.sh hooks/*.sh; do
+          for f in hooks/_lib/*.sh hooks/*.sh scripts/*.sh; do
             bash -n "$f" || { echo "FAIL: $f"; exit 1; }
           done
 
@@ -48,9 +48,9 @@ jobs:
               if (n !~ /^(mumei_|_mumei_)/) printf "%s:%d: %s\n", FILENAME, NR, $0
               next
             }
-          ' hooks/_lib/*.sh hooks/*.sh || true)"
+          ' hooks/_lib/*.sh hooks/*.sh scripts/*.sh || true)"
           if [ -n "$bad" ]; then
-            echo "::error::Non-prefixed function definitions found in hooks/:" >&2
+            echo "::error::Non-prefixed function definitions found in hooks/ or scripts/:" >&2
             printf '%s\n' "$bad" >&2
             exit 1
           fi
