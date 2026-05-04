@@ -84,7 +84,7 @@ This project uses [mumei](https://github.com/.../mumei) for spec-driven developm
 ### Workflow
 
 1. `/mumei:brainstorm <topic>` — structured brainstorm before specing
-2. `/mumei:plan <feature>` — generate requirements / design / tasks (with Coverage Check)
+2. `/mumei:plan <feature>` — generate requirements / design / tasks (each auto-reviewed by an independent spec-reviewer agent; single user approval gate at the end)
 3. Implement Wave by Wave; commit after each Wave completes
 4. `/mumei:plan` re-invocation triggers the 4-stage review when all tasks are `[x]`
 5. `/mumei:archive <feature>` after the feature is done

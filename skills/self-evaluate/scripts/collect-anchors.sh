@@ -105,8 +105,8 @@ imperative_count=$(mumei_safe_grep_count 'YOU MUST|MUST NOT|YOU SHOULD' hooks/*.
 additional_context_count=$(mumei_safe_grep_count 'additionalContext' hooks/*.sh)
 
 # ---------- Dim 3: Spec Quality ----------
-missing_logic_present=$(mumei_safe_grep_count 'missing.*MAJOR_ISSUES|missing > 0|missing >= 1' agents/coverage-validator.md)
-hallucinated_logic_present=$(mumei_safe_grep_count 'hallucinated.*NEEDS_IMPROVEMENT|hallucinated >= 1|hallucinated.*MEDIUM' agents/coverage-validator.md)
+missing_logic_present=$(mumei_safe_grep_count 'missing.*MAJOR_ISSUES|missing > 0|missing >= 1|missing_count' agents/requirements-reviewer.md)
+hallucinated_logic_present=$(mumei_safe_grep_count 'hallucinated.*NEEDS_IMPROVEMENT|hallucinated >= 1|hallucinated.*MEDIUM|hallucinated_count' agents/requirements-reviewer.md)
 ears_keyword_count=$(mumei_safe_grep_count 'WHEN|WHILE|IF|WHERE|SHALL' skills/plan/SKILL.md)
 req_id_count_in_archive=$(find .mumei/archive -type f 2>/dev/null -exec grep -hoE 'REQ-[0-9]+\.[0-9]+' {} + 2>/dev/null | wc -l | tr -d ' ')
 tasks_meta_required=$(mumei_safe_grep_count '_Files:_|_Depends:_|_Requirements:_' skills/plan/SKILL.md)
@@ -257,8 +257,10 @@ done
 
 # ---------- Dim 9: Distribution ----------
 marketplace_exists=$(exists_file .claude-plugin/marketplace.json)
-changelog_exists=$(exists_file CHANGELOG.md)
-changelog_versions=$(mumei_safe_grep_count '^## \[' CHANGELOG.md)
+# Versioning anchor: count of release tags (v*). CHANGELOG.md was
+# retired in 0.1.9 in favour of `git log v<prev>..v<curr>` for release
+# notes; the rubric now treats git tags as the version-history source.
+release_tag_count=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | wc -l | tr -d ' ')
 
 license_top=$(head -1 LICENSE 2>/dev/null | tr -d '\n')
 license_in_plugin=$(jq -r '.license // empty' .claude-plugin/plugin.json 2>/dev/null)
@@ -382,8 +384,7 @@ jq -n \
   --argjson max_func_lines "$max_func_lines" \
   --argjson stdout_pollution "$stdout_pollution" \
   --arg marketplace_exists "$marketplace_exists" \
-  --arg changelog_exists "$changelog_exists" \
-  --argjson changelog_versions "$changelog_versions" \
+  --argjson release_tag_count "$release_tag_count" \
   --arg license_top "$license_top" \
   --arg license_in_plugin "$license_in_plugin" \
   --arg license_in_marketplace "$license_in_marketplace" \
@@ -531,9 +532,8 @@ jq -n \
     },
     dim9_distribution: {
       "9.1_marketplace_exists": $marketplace_exists,
-      "9.2_changelog": {
-        exists: $changelog_exists,
-        version_count: $changelog_versions
+      "9.2_versioning": {
+        release_tag_count: $release_tag_count
       },
       "9.3_license": {
         license_top_line: $license_top,

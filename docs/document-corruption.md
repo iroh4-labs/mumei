@@ -76,7 +76,7 @@ The following table maps each corruption pattern to a concrete countermeasure an
 | Phantom completion (`[x]` without an implementation) | `post-edit-guard.sh` cross-checks the diff against `_Files:_` and blocks | `hooks/post-edit-guard.sh` |
 | LLM reviewer waters down a verbose detector finding | HIGH detector findings pin the verdict to `MAJOR_ISSUES`; security-reviewer is skipped | `skills/plan/SKILL.md` Stage 0-1, `hooks/pre-review-detector.sh` |
 | Auto-commit silently advances side effects | mumei **never commits**. Wave completion prompts the user to commit | `skills/plan/SKILL.md` Don'ts |
-| Coverage Check missing/hallucinated entries silently pass | `coverage-validator` returning **MAJOR_ISSUES** triggers a hook-level deny on phase transition | `hooks/pre-edit-guard.sh` (P2/P3), `agents/coverage-validator.md` |
+| Spec missing / hallucinated requirements silently pass | `requirements-reviewer` returning **MAJOR_ISSUES** triggers an auto-fix iteration loop (max 3) before the single user approval gate, blocking phase transition until verdict=PASS | `hooks/pre-edit-guard.sh` (P2/P3), `agents/requirements-reviewer.md` |
 
 Every entry is a design decision to **not do something**, not to add another action. That is kuroko. The hook is just a wall; the plugin never speaks unsolicited to the user or the agent. Verdicts are returned as JSON; reasons are fact form. Error messages do not say "do this next"; they only say "this invariant has been violated."
 
@@ -89,7 +89,7 @@ Designs mumei **deliberately did not adopt** because they would each become a co
 - **Auto-fix on review failure**: when a reviewer returns a finding, mumei does not offer to "let the agent fix it". Fixes are user-initiated only. Reason: auto-fix re-fixes the reviewer's interpretation a second time, amplifying any misreading.
 - **Skill rebuilding prior-session context**: at session start, no skill summarizes previous conversation and injects it. Past sessions are ground-truth only via state.json + spec files. Summaries introduce drift.
 - **Automatic phase advancement**: the system does not flip `phase=review` the moment all tasks become `[x]`. The user must re-invoke `/mumei:plan` to advance, preventing accidental transitions.
-- **Spec auto-update**: even when an implementation reveals the spec is outdated, the agent does not rewrite `requirements.md` on its own. Spec changes route through the coverage-validator with explicit user confirmation.
+- **Spec auto-update**: even when an implementation reveals the spec is outdated, the agent does not rewrite `requirements.md` on its own. Spec changes route through the spec-reviewer iteration loop with explicit user confirmation at the Phase 3.5 approval gate.
 - **Telemetry / usage tracking**: mumei measures no usage. It writes nothing to `~/.claude/`. State exists only under `.mumei/specs/<feature>/`.
 - **Cross-project memory persistence**: subagents are configured `memory: project` so that learned patterns stay inside `.claude/agent-memory/<name>/` of the current repo. Reusing one project's review heuristics for an unrelated project would import the wrong invariants and produce false-confidence findings.
 - **Hook-level translation of user input**: hooks never reformat / "normalize" user-typed reasons or messages. The deny `additionalContext` is verbatim from the hook code; nothing is rewritten on the fly. Translating loses the audit trail that lets the user reproduce the trigger.

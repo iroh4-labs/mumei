@@ -8,7 +8,7 @@
 `mumei` is a Claude Code plugin that physically enforces a spec-driven development workflow:
 
 ```
-brainstorm → plan (with Coverage Check) → implement (Wave gate) → review (4-stage independent + per-issue validation) → done
+brainstorm → plan (3 spec reviewers + single approval gate) → implement (Wave gate) → review (4-stage independent + per-issue validation) → done
 ```
 
 It does not rely on prompt-level instructions ("you must run tests") that the agent can ignore. It uses Claude Code Hooks to deny tool calls that violate the workflow at the OS boundary.
@@ -34,7 +34,7 @@ AI coding agents skip steps. They mark tasks complete without writing tests. The
 - **The user works with Claude Code, not with mumei.** mumei stays out of the prompt, out of the conversation, out of the way.
 - **It only acts at the OS boundary.** When the agent is about to skip a phase, commit a broken Wave, or push a `MAJOR_ISSUES` verdict, a Hook silently denies the action with a one-line factual reason. No nagging, no banners, no opinions.
 - **It does nothing for projects that have not opted in.** Without `.mumei/current` set, every Hook is a no-op. mumei never interrupts work it was not invited to.
-- **The existing gates (Wave commits, Coverage Check, fresh-context reviewers, file-based state) are not just convenience features.** They are structural countermeasures against the degradation patterns documented in research like Microsoft Research's [DELEGATE-52](./docs/document-corruption.md) — frontier LLMs corrupt 25% of document content over 20 delegated edits, and agentic harnesses don't help. mumei's "strict workflow" is the kuroko's hand catching a fall the actor never sees.
+- **The existing gates (Wave commits, spec reviewers, fresh-context implementation reviewers, file-based state) are not just convenience features.** They are structural countermeasures against the degradation patterns documented in research like Microsoft Research's [DELEGATE-52](./docs/document-corruption.md) — frontier LLMs corrupt 25% of document content over 20 delegated edits, and agentic harnesses don't help. mumei's "strict workflow" is the kuroko's hand catching a fall the actor never sees.
 
 mumei is judged by what it prevents, not by what it does.
 
@@ -64,12 +64,13 @@ Up to 5 questions × 3 rounds. Output saved to `.mumei/scratch/user-auth.md`. Us
 
 Walks through:
 
-- **Phase 1**: requirements draft (User Story + EARS-format acceptance criteria + assumptions + open questions).
-- **Phase 1.5 — Coverage Check**: extracts conversation requirements, validates against the draft. Blocks downstream phases if anything the user said is missing from the spec, or if the spec invented requirements with no source.
-- **Phase 2**: design draft (architecture diagram, data model, components, trade-offs, Wave plan).
-- **Phase 3**: tasks draft (Wave > Task hierarchy with `_Files:_`, `_Depends:_`, `_Requirements:_` meta).
+- **Phase 1.1 — Clarification**: a brainstorm-style question loop (max 3 rounds × 5 questions). When `.mumei/scratch/<feature>.md` exists, only the residual gaps are queried.
+- **Phase 1.2/1.3 — Requirements draft + reviewer**: User Story + EARS-format acceptance criteria + assumptions. The `requirements-reviewer` agent (fresh context) audits the draft against the conversation/scratch for coverage gaps, hallucinated ACs, and structural defects, and the orchestrator iterates `draft → reviewer` automatically up to 3 times.
+- **Phase 2 — Design draft + reviewer**: architecture diagram, data model, components, trade-offs, Wave plan. `design-reviewer` audits requirements vs design coverage and structural quality. Same 3-iteration auto-loop.
+- **Phase 3 — Tasks draft + reviewer**: Wave > Task hierarchy with `_Files:_`, `_Depends:_`, `_Requirements:_` meta. `tasks-reviewer` validates Wave Plan coverage, REQ-N.M traceability, and that every `_Files:_` path either exists or is gitignored.
+- **Phase 3.5 — User approval gate**: a single approval gate (the only one). After the three spec reviewers all return PASS, the user reviews the whole package and approves once before phase advances to `implement`.
 
-Each phase is gated. You cannot draft `design.md` while `requirements.md` has unresolved `[NEEDS CLARIFICATION]` markers, etc.
+Phase entry is hook-gated. You cannot draft `design.md` while `requirements.md` has unresolved `[NEEDS CLARIFICATION]` markers, etc.
 
 ### 4. Implement Wave by Wave
 
@@ -164,7 +165,7 @@ This creates `.mumei/` and proposes additions to your `CLAUDE.md` (with diff pre
 
 ### Other install paths
 
-- **Pin a specific version**: marketplace plugins follow git refs of the marketplace repo. Pin a tag with `/plugin marketplace add hir4ta/mumei#v0.1.1`.
+- **Pin a specific version**: marketplace plugins follow git refs of the marketplace repo. Pin a tag with `/plugin marketplace add hir4ta/mumei#v0.1.9`.
 - **Local development clone**: if you cloned mumei locally and want to test edits without going through GitHub, start Claude Code with `claude --plugin-dir /path/to/your/clone-of-mumei`. This bypasses the marketplace cache.
 - **Uninstall**: `/plugin uninstall mumei@mumei` (the `.mumei/` directory in your project is left intact).
 
@@ -190,8 +191,11 @@ your-project/
 │   │       ├── design.md
 │   │       ├── tasks.md
 │   │       ├── state.json
-│   │       ├── coverage-check.json
-│   │       └── reviews/
+│   │       ├── spec-reviews/                 # spec-reviewer verdicts (Phase 1.3 / 2.2 / 3.2)
+│   │       │   ├── 2026-05-03T10-00-00-requirements.json
+│   │       │   ├── 2026-05-03T10-15-00-design.json
+│   │       │   └── 2026-05-03T10-30-00-tasks.json
+│   │       └── reviews/                      # Phase 5 implementation review
 │   │           └── 2026-05-03T15-45-00.json
 │   ├── archive/
 │   │   └── 2026-04/
@@ -272,7 +276,9 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 | W2 | implement | PreToolUse(Bash) | `git commit` while current Wave has `[ ]` tasks |
 | R1 | review | Stop | Session ending with all tasks done but review skipped |
 | R2 | review | PreToolUse(Bash) | `git push` while latest review verdict is `MAJOR_ISSUES` |
+| R3 | done | Stop | `phase=done` reached but feature still listed in `.mumei/current` (archive pending) |
 | X1 | any | PostToolUse(Bash) | Bash modified files outside scope (advisory only) |
+| X2 | any | PostToolUse(Edit\|Write) | `.mumei/specs/*/tasks.md` format violation: missing `_Files:_`/`_Depends:_`/`_Requirements:_` meta, bad REQ-N.M syntax, or non-existent `_Files:_` path (advisory only) |
 
 ## Escape hatch
 
@@ -323,7 +329,7 @@ Use sparingly. The point of mumei is to make skipping painful. If you reach for 
 
 ## Status
 
-Pre-release (v0.1.6). Expect breaking changes until v1.0.
+Pre-release (v0.1.9). Expect breaking changes until v1.0.
 
 ## License
 

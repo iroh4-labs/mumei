@@ -177,31 +177,31 @@ How effectively the hooks block the failure modes they target.
 - `for f in agents/{spec-compliance,code-quality,security,adversarial}-reviewer.md agents/issue-validator.md; do grep -q 'Detector findings\|detector findings' "$f"; done` passes for every file.
 - `bats tests/lib/detectors.bats tests/hooks/pre-review-detector.bats tests/integration/wave3-dogfood.bats` is all green.
 
-## Dimension 3 — Spec Quality Gate (the heart of mumei: Coverage Check)
+## Dimension 3 — Spec Quality Gate (the heart of mumei: three spec reviewers)
 
-How effectively spec quality is auto-detected (mumei's core function).
+How effectively spec quality is auto-detected (mumei's core function). Since 0.1.9, the two-agent Coverage Check pipeline was replaced by three independent reviewer agents (`requirements-reviewer`, `design-reviewer`, `tasks-reviewer`) with a `draft → reviewer` auto-iteration loop (max 3) per spec.
 
-### 3.1 Coverage Check — missing detection
+### 3.1 Missing-requirement detection
 
 | Level | Descriptor |
 |---|---|
-| **E** | A dogfood case where a conversational requirement was deliberately dropped from the spec triggers `coverage-validator` with `missing >= 1`, blocks the next phase via the hook, and is captured in bats / manual tests. |
+| **E** | A dogfood case where a conversational requirement was deliberately dropped from the spec triggers `requirements-reviewer` with `missing_count >= 1` and the orchestrator iterates the draft. The flow is captured in bats / manual tests. |
 | **G** | The above scenario is verified once. |
 | **F** | No verification case yet, but the agent prompt encodes the logic. |
-| **P** | The missing-detection logic is not even reflected in the agent prompt. |
+| **P** | The missing-detection logic is not reflected in the agent prompt. |
 
-**External Anchor**: `agents/coverage-validator.md` explicitly states `missing >= 1 → MAJOR_ISSUES`, OR the dogfood archive contains a `coverage-check.json` with `missing_count > 0`.
+**External Anchor**: `agents/requirements-reviewer.md` explicitly states `ANY missing item → at least MAJOR_ISSUES`, OR the dogfood archive contains a `spec-reviews/*-requirements.json` with `stats.missing_count > 0`.
 
-### 3.2 Hallucinated detection
+### 3.2 Hallucinated-AC detection
 
 | Level | Descriptor |
 |---|---|
-| **E** | An AC not present in the conversation, written into the spec, gets caught by `coverage-validator` as `hallucinated >= 1` and triggers a user-confirmation request. |
+| **E** | An AC not present in the conversation, written into the spec, gets caught by `requirements-reviewer` as `hallucinated_count >= 1` and triggers a user-confirmation request (or auto-fix via `suggested_fix`). |
 | **G** | Detection logic is in place but no test case yet. |
 | **F** | The output schema lists a `hallucinated` category, but the heuristic is not documented. |
-| **P** | The validator has no notion of `hallucinated`. |
+| **P** | The reviewer has no notion of hallucination. |
 
-**External Anchor**: `agents/coverage-validator.md` enumerates the `hallucinated` decision criteria as a bulleted list.
+**External Anchor**: `agents/requirements-reviewer.md` enumerates the `hallucination` decision criteria as a bulleted list (best-practice assumption / `assistant_proposed` / genuine hallucination), AND lists `hallucinated_count` in the output schema's `stats`.
 
 ### 3.3 EARS adherence
 
@@ -571,14 +571,16 @@ How consistently mumei behaves as a backstage support layer for Claude Code.
 
 ### 9.2 Versioning
 
+mumei intentionally has no `CHANGELOG.md`. Per-release notes are reconstructed from `git log v<prev>..v<curr>` (one-line conventional commits), and the canonical history is the set of annotated `v*` tags. The rubric reflects this: tag count is the version-history anchor.
+
 | Level | Descriptor |
 |---|---|
-| **E** | Semantic versioning, CHANGELOG.md ([Keep a Changelog](https://keepachangelog.com/) format) with Added / Changed / Fixed sections per release, git tags. |
-| **G** | semver + CHANGELOG present; no tags. |
-| **F** | A version number exists but no changelog. |
+| **E** | Semantic versioning is followed; every release is an annotated `v<MAJOR>.<MINOR>.<PATCH>` git tag pointing at a `chore: release v<...>` commit; `plugin.json` `version` matches the latest tag. |
+| **G** | Semver + tags present; tags are lightweight (not annotated) or `plugin.json` lags behind by one version. |
+| **F** | Version numbers exist but no git tags (or only some releases tagged). |
 | **P** | No version management. |
 
-**External Anchor**: `test -f CHANGELOG.md && grep -c "^## \[" CHANGELOG.md` ≥ 2.
+**External Anchor**: `git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | wc -l` ≥ 2 AND `git describe --tags --abbrev=0` matches `jq -r '.version' .claude-plugin/plugin.json` (prefixed with `v`).
 
 ### 9.3 License
 
@@ -608,7 +610,7 @@ How consistently mumei behaves as a backstage support layer for Claude Code.
 
 | Level | Descriptor |
 |---|---|
-| **E** | The DELEGATE-52 finding (frontier models still degrade ~25% over 20 delegations) is captured in `docs/document-corruption.md`. The mumei structural responses (Wave gating, fresh-context reviewers, persistent state.json, Coverage Check) are explained as the countermeasures. |
+| **E** | The DELEGATE-52 finding (frontier models still degrade ~25% over 20 delegations) is captured in `docs/document-corruption.md`. The mumei structural responses (Wave gating, fresh-context reviewers, persistent state.json, three spec reviewers with auto-iteration) are explained as the countermeasures. |
 | **G** | The paper is documented; countermeasure description is partial. |
 | **F** | The paper's existence is acknowledged but no structured response is described. |
 | **P** | No premise of LLM degradation. |

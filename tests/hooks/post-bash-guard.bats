@@ -39,7 +39,6 @@ _init_feature_implement() {
   "id": "REQ-1",
   "slug": "foo",
   "phase": "implement",
-  "approvals": {"requirements":"approved","design":"approved","tasks":"approved"},
   "current_wave": 1,
   "created_at": "2026-01-01T00:00:00Z",
   "updated_at": "2026-01-01T00:00:00Z"
