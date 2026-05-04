@@ -35,12 +35,25 @@ exists_file() { [[ -f "$1" ]] && echo true || echo false; }
 # ---------- Dim 1: Plugin Hygiene ----------
 forbidden_fm_count=$(grep -lE '^(hooks|mcpServers|permissionMode):' agents/*.md 2>/dev/null | wc -l | tr -d ' ')
 
-# JP chars in dist (excluding HTML comments + fenced code blocks; hooks/*.sh allows JP comments per convention)
+# JP chars in dist (distributed artifacts only; excludes HTML comments,
+# fenced code blocks, and gitignored paths so that local-only files
+# such as skills/self-evaluate/results/* do not skew the metric).
 jp_in_dist=$(python3 - <<'PY' 2>/dev/null || echo 0
-import re, os, sys
+import os, re, subprocess
 jp = re.compile(r'[぀-ゟ゠-ヿ一-鿿]')
 total = 0
 targets = ['agents', 'skills', 'README.md', '.claude-plugin']
+
+def is_gitignored(path):
+    try:
+        rc = subprocess.call(
+            ['git', 'check-ignore', '-q', path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return rc == 0
+    except Exception:
+        return False
+
 for t in targets:
     if os.path.isfile(t):
         files = [t]
@@ -51,6 +64,8 @@ for t in targets:
                 if f.endswith(('.md', '.json')):
                     files.append(os.path.join(d, f))
     for p in files:
+        if is_gitignored(p):
+            continue
         try:
             with open(p) as fh:
                 c = fh.read()
