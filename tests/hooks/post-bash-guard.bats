@@ -142,6 +142,47 @@ EOF
   [[ "$listed" != *$'\n.mumei/'* ]]
 }
 
+# ─── T1-2: gitignored awareness ──────────────────────────────
+
+@test "no warning when modified file is gitignored" {
+  _init_feature_implement
+  echo 'tmp/' > .gitignore
+  git add .gitignore && git commit -q -m gi
+  mkdir -p tmp
+  echo "log" > tmp/scratch.log
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"echo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "no warning when ?? <dir>/ resolves to a gitignored file" {
+  _init_feature_implement
+  # Gitignore an entire directory pattern; subsequent untracked files
+  # inside it should be reported by `git status --porcelain` as
+  # `?? cache/` (directory granularity), and the resolution loop
+  # should classify the first file inside as gitignored → skip.
+  echo 'cache/' > .gitignore
+  git add .gitignore && git commit -q -m gi
+  mkdir -p cache
+  echo "x" > cache/a.txt
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"echo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "warning emitted when ?? <dir>/ resolves to a non-gitignored file" {
+  _init_feature_implement
+  # No gitignore for the new directory: the resolved first file is
+  # non-gitignored and not listed in any _Files: meta, so the warning
+  # must surface (proves ?? <dir>/ resolution actually fires).
+  mkdir -p new_pkg
+  echo "x" > new_pkg/index.ts
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"echo"}}'
+  [ "$status" -eq 0 ]
+  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$ctx" == *"new_pkg/index.ts"* ]]
+}
+
 # ─── MUMEI_BYPASS escape hatch ───────────────────────────────
 
 @test "MUMEI_BYPASS=1 short-circuits even with out-of-scope changes" {

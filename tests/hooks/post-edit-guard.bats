@@ -115,6 +115,55 @@ EOF
   [[ "$reason" == *"Phantom"* ]]
 }
 
+# ─── T1-2: gitignored awareness ──────────────────────────────
+
+@test "allows [x] toggle when _Files: path is gitignored" {
+  _init_feature_with_tasks
+  # Add a gitignore rule, then point _Files: at a path it covers.
+  echo 'scratch/' > .gitignore
+  git add .gitignore && git commit -q -m gi
+  sed -i.bak 's|_Files: src/a.ts_|_Files: scratch/foo.txt_|' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  mkdir -p scratch && echo gen > scratch/foo.txt
+  # Mark 1.1 complete; src/a.ts was never modified (would be phantom
+  # without T1-2). gitignored skip should override.
+  sed -i.bak 's/- \[ \] 1\.1/- [x] 1.1/' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".mumei/specs/REQ-1-foo/tasks.md"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  # Stderr carries the masking warning so a real bug is debuggable.
+  [[ "$stderr" == *"skipping gitignored"* ]]
+}
+
+@test "allows [x] toggle when _Files: mixes tracked-changed and gitignored paths" {
+  _init_feature_with_tasks
+  echo 'scratch/' > .gitignore
+  git add .gitignore && git commit -q -m gi
+  sed -i.bak 's|_Files: src/a.ts_|_Files: src/a.ts, scratch/x.txt_|' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  mkdir -p src && echo impl > src/a.ts
+  sed -i.bak 's/- \[ \] 1\.1/- [x] 1.1/' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".mumei/specs/REQ-1-foo/tasks.md"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "allows [x] toggle when every _Files: path is gitignored" {
+  _init_feature_with_tasks
+  echo 'scratch/' > .gitignore
+  git add .gitignore && git commit -q -m gi
+  sed -i.bak 's|_Files: src/a.ts_|_Files: scratch/x.txt, scratch/y.txt_|' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  sed -i.bak 's/- \[ \] 1\.1/- [x] 1.1/' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".mumei/specs/REQ-1-foo/tasks.md"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  [[ "$stderr" == *"skipping gitignored"* ]]
+}
+
 # ─── MUMEI_BYPASS escape hatch ───────────────────────────────
 
 @test "MUMEI_BYPASS=1 short-circuits even on phantom completion" {

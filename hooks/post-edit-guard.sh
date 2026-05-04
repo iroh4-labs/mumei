@@ -26,6 +26,8 @@ source "${PLUGIN_ROOT}/hooks/_lib/log.sh"
 source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/safe-grep.sh"
 
 INPUT="$(cat)"
 FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')"
@@ -78,6 +80,14 @@ while IFS= read -r task_id; do
     [[ -n "$f" ]] || continue
     # Skip tasks.md itself
     [[ "$f" == "$TASKS_FILE" ]] && continue
+    # Skip gitignored paths: they are intentionally untracked, so a
+    # missing diff entry is expected and must not trigger phantom
+    # detection. Stderr-log so a real masking case can be diagnosed.
+    if mumei_path_is_gitignored "$f"; then
+      mumei_log_warn "post-edit-guard: skipping gitignored _Files: path: $f"
+      has_implementation=1
+      break
+    fi
     # Was this file changed (HEAD vs worktree, staged included)?
     if git diff --name-only HEAD 2>/dev/null | grep -qFx "$f"; then
       has_implementation=1
