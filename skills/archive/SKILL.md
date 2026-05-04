@@ -61,6 +61,20 @@ fi
 # Move (the directory move + git history serves as the audit trail)
 git mv ".mumei/specs/${feature}" "${target_dir}/${feature}" 2>/dev/null \
   || mv ".mumei/specs/${feature}" "${target_dir}/${feature}"
+
+# Move the brainstorm scratch file alongside the spec, if present.
+# init/SKILL.md tracks .mumei/scratch/ as "the source of design decisions";
+# leaving it behind after archive splits the audit trail. No-op when the
+# feature was created without /mumei:brainstorm (e.g. direct /mumei:plan
+# invocation). The destination filename is fixed to scratch.md because the
+# parent directory already encodes the feature slug.
+slug="$(mumei_state_get "$feature" '.slug' 2>/dev/null || true)"
+scratch_src=".mumei/scratch/${slug}.md"
+if [[ -n "$slug" && -f "$scratch_src" ]]; then
+  scratch_dst="${target_dir}/${feature}/scratch.md"
+  git mv "$scratch_src" "$scratch_dst" 2>/dev/null \
+    || mv "$scratch_src" "$scratch_dst"
+fi
 ```
 
 ## After archiving
