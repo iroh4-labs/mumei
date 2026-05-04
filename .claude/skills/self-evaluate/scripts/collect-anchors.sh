@@ -3,7 +3,7 @@
 # JSON object on stdout for downstream evaluator subagents.
 #
 # Usage:
-#   bash skills/self-evaluate/scripts/collect-anchors.sh
+#   bash .claude/skills/self-evaluate/scripts/collect-anchors.sh
 #   - cwd must be the mumei repository root.
 #   - Output is a single JSON object.
 #
@@ -20,7 +20,7 @@ set -u
 # Resolve the plugin root from this script's own location so the
 # anchor harvest works regardless of cwd or whether `git` is reachable
 # (matters under bats / CI runners that may cd away from the repo).
-# Layout: <PLUGIN_ROOT>/skills/self-evaluate/scripts/collect-anchors.sh
+# Layout: <PLUGIN_ROOT>/.claude/skills/self-evaluate/scripts/collect-anchors.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
 ROOT="$PLUGIN_ROOT"
@@ -49,7 +49,7 @@ forbidden_fm_count=$(grep -lE '^(hooks|mcpServers|permissionMode):' agents/*.md 
 
 # JP chars in dist (distributed artifacts only; excludes HTML comments,
 # fenced code blocks, and gitignored paths so that local-only files
-# such as skills/self-evaluate/results/* do not skew the metric).
+# such as .claude/skills/self-evaluate/results/* do not skew the metric).
 jp_in_dist=$(python3 - <<'PY' 2>/dev/null || echo 0
 import os, re, subprocess
 jp = re.compile(r'[぀-ゟ゠-ヿ一-鿿]')
@@ -170,8 +170,8 @@ decisions_retracted_count=$(mumei_safe_grep_count '~~|採用しない|撤回' do
 harness_url_count=$(mumei_safe_grep_count 'https://' docs/harness-engineering.md)
 corruption_url_count=$(mumei_safe_grep_count 'https://' docs/document-corruption.md)
 
-rubric_exists=$(exists_file skills/self-evaluate/rubric.md)
-rubric_anchor_count=$(mumei_safe_grep_count 'External Anchor' skills/self-evaluate/rubric.md)
+rubric_exists=$(exists_file .claude/skills/self-evaluate/rubric.md)
+rubric_anchor_count=$(mumei_safe_grep_count 'External Anchor' .claude/skills/self-evaluate/rubric.md)
 
 # ---------- Dim 7: Tests & CI ----------
 bats_file_count=$(find tests -name '*.bats' 2>/dev/null | wc -l | tr -d ' ')

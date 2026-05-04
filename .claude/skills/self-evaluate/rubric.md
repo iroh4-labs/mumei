@@ -37,7 +37,7 @@
 ### Naming convention for evaluation result documents
 
 ```
-skills/self-evaluate/results/YYYY-MM-DD.md
+.claude/skills/self-evaluate/results/YYYY-MM-DD.md
 ```
 
 This file (the rubric itself) holds no scores. Scores live in separate result files for time-series tracking. (`results/` is gitignored — solo-developer stance.)
@@ -429,7 +429,7 @@ How consistently mumei behaves as a backstage support layer for Claude Code.
 | **F** | Only a simple checklist; no descriptors. |
 | **P** | No self-evaluation framework. |
 
-**External Anchor**: `test -f skills/self-evaluate/rubric.md` succeeds; `grep -c "External Anchor" skills/self-evaluate/rubric.md` ≥ the number of dimensions.
+**External Anchor**: `test -f .claude/skills/self-evaluate/rubric.md` succeeds; `grep -c "External Anchor" .claude/skills/self-evaluate/rubric.md` ≥ the number of dimensions.
 
 ## Dimension 7 — Tests & CI
 
@@ -663,14 +663,14 @@ mumei intentionally has no `CHANGELOG.md`. Per-release notes are reconstructed f
 
 ## Evaluation result template (for separate result files)
 
-When running an evaluation, create a new file `skills/self-evaluate/results/YYYY-MM-DD.md` and use the following template:
+When running an evaluation, create a new file `.claude/skills/self-evaluate/results/YYYY-MM-DD.md` and use the following template:
 
 ```markdown
 # mumei evaluation result — YYYY-MM-DD
 
 Evaluator: <name>
 Target: mumei v<version> @ <git sha>
-Rubric version: skills/self-evaluate/rubric.md @ <git sha>
+Rubric version: .claude/skills/self-evaluate/rubric.md @ <git sha>
 
 ## Anchor measurements
 

@@ -10,7 +10,7 @@ argument-hint: "[--no-subagents to score directly in the main session]"
 <!--
 Role: Orchestrator for mumei's own self-evaluation.
 Inputs: none (the repo root is assumed; the optional argument controls subagent dispatch).
-Outputs: skills/self-evaluate/results/YYYY-MM-DD.md
+Outputs: .claude/skills/self-evaluate/results/YYYY-MM-DD.md
 Principles:
   - Subagent fan-out gives each evaluator a fresh context → reduces proximity bias.
   - Anchor numbers are harvested mechanically and pinned to each evaluator → leaves no room for subjective fudging.
@@ -56,12 +56,12 @@ You are an evaluator for the mumei plugin. **You are running in a fresh context 
 # Hard constraints (bias reduction)
 
 - Do **not** read `docs/mumei-decisions.md`, `docs/harness-engineering.md`, `CLAUDE.md`, or `.claude/rules/*.md`. These contain mumei's design intent; reading them inflates self-affirmation bias.
-- Your scoring evidence is exactly three things: (a) the descriptors in `skills/self-evaluate/rubric.md`, (b) the anchor JSON passed to you, and (c) the distributed artifacts (`agents/`, `skills/`, `hooks/`, `README.md`, `README.ja.md`, `.claude-plugin/`).
+- Your scoring evidence is exactly three things: (a) the descriptors in `.claude/skills/self-evaluate/rubric.md`, (b) the anchor JSON passed to you, and (c) the distributed artifacts (`agents/`, `skills/`, `hooks/`, `README.md`, `README.ja.md`, `.claude-plugin/`).
 - If you feel the urge to read anything else to "understand the intent," STOP. That urge is the bias signal.
 
 # Your assignment
 
-Score the following dimensions in `skills/self-evaluate/rubric.md`:
+Score the following dimensions in `.claude/skills/self-evaluate/rubric.md`:
 
 <DIM_RANGE>
 
@@ -148,6 +148,6 @@ Always append the following block to the result file:
 
 ## Result location
 
-`skills/self-evaluate/results/YYYY-MM-DD.md`
+`.claude/skills/self-evaluate/results/YYYY-MM-DD.md`
 
 The `results/` directory is gitignored (solo-developer stance); evaluation history accumulates locally over time.

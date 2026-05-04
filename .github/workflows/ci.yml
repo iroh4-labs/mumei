@@ -59,11 +59,10 @@ jobs:
       # ─────────────────────────────────────────
       # JSON validation
       # ─────────────────────────────────────────
-      - name: jq empty (manifest, hooks, schemas)
+      - name: jq empty (manifest, hooks)
         run: |
           jq empty .claude-plugin/plugin.json
           jq empty hooks/hooks.json
-          jq empty skills/state/schemas/state.schema.json
 
       # ─────────────────────────────────────────
       # 配布物 frontmatter check

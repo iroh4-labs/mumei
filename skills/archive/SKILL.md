@@ -58,18 +58,28 @@ if [[ -e "${target_dir}/${feature}" ]]; then
   exit 1
 fi
 
-# Move (the directory move + git history serves as the audit trail)
+# Capture the brainstorm scratch path BEFORE moving the spec dir.
+# mumei_state_get resolves .mumei/specs/<feature>/state.json (a hard-coded
+# path); once the spec dir is moved the lookup would return empty and
+# silently no-op the entire scratch block. Read the slug first so the
+# scratch move below has a valid source path to work with.
+slug="$(mumei_state_get "$feature" '.slug' 2>/dev/null || true)"
+scratch_src=".mumei/scratch/${slug}.md"
+
+# Move the spec directory (the move + git history serves as the audit
+# trail). Refuse to continue if both git mv and the bare mv fallback
+# fail — without an explicit guard the scratch block would still run on
+# a half-archived feature, violating REQ-4.4.
 git mv ".mumei/specs/${feature}" "${target_dir}/${feature}" 2>/dev/null \
-  || mv ".mumei/specs/${feature}" "${target_dir}/${feature}"
+  || mv ".mumei/specs/${feature}" "${target_dir}/${feature}" \
+  || { echo "spec move failed: ${feature}" >&2; exit 1; }
 
 # Move the brainstorm scratch file alongside the spec, if present.
 # init/SKILL.md tracks .mumei/scratch/ as "the source of design decisions";
 # leaving it behind after archive splits the audit trail. No-op when the
-# feature was created without /mumei:brainstorm (e.g. direct /mumei:plan
-# invocation). The destination filename is fixed to scratch.md because the
-# parent directory already encodes the feature slug.
-slug="$(mumei_state_get "$feature" '.slug' 2>/dev/null || true)"
-scratch_src=".mumei/scratch/${slug}.md"
+# feature was created without /mumei:brainstorm (slug empty) or no
+# scratch file exists for the slug. Destination filename is fixed to
+# scratch.md because the parent directory already encodes the slug.
 if [[ -n "$slug" && -f "$scratch_src" ]]; then
   scratch_dst="${target_dir}/${feature}/scratch.md"
   git mv "$scratch_src" "$scratch_dst" 2>/dev/null \
