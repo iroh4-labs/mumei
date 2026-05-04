@@ -53,7 +53,6 @@ AI coding agents skip steps. They mark tasks complete without writing tests. The
 | `/mumei:init` | One-time per-project setup. Creates `.mumei/`, proposes additions to `CLAUDE.md` with diff preview. |
 | `/mumei:brainstorm <feature>` | Optional pre-spec Q&A loop (max 3 rounds × 5 questions). Output saved to `.mumei/scratch/<feature>.md`. |
 | `/mumei:plan <feature>` | Drives the full lifecycle: clarification → requirements → design → tasks (each auto-reviewed up to 3 times) → single user approval → Wave-by-Wave implementation → 4-stage review with per-issue validation. |
-| `/mumei:refine <feature>` | Targeted revision of an existing spec section without restarting the whole brainstorm flow. |
 | `/mumei:archive <feature>` | Moves a `done` feature to `.mumei/archive/<YYYY-MM>/<feature>/`. Carries `scratch/<feature>.md` along as `scratch.md`. |
 
 ## Philosophy: why "mumei" (無名)
@@ -285,7 +284,7 @@ mumei operates **entirely locally** with one narrow exception (npm registry prob
 
 | Item | Description |
 |---|---|
-| **External Communication** | One outbound request only: `hallucinated-package-check` queries `https://registry.npmjs.org/` to verify cited npm packages exist. Disable with `MUMEI_BYPASS=1`. |
+| **External Communication** | One outbound request only: `hallucinated-package-check` queries `https://registry.npmjs.org/` to verify cited npm packages exist. |
 | **Telemetry** | None. No analytics, no error reporting, no usage tracking. |
 | **Data Storage** | All state under project-local `.mumei/`. Nothing written to `~/.claude/` or any global location. |
 | **Conversation History** | Not stored by mumei. mumei is a quality-gate plugin, not a memory plugin. |
