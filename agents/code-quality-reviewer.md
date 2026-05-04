@@ -145,6 +145,12 @@ Do NOT use Write or Edit on any other file — not on source code, not on test f
 - `kiss_compliance` (0-5): inverse of premature abstraction count. 5 = no unjustified abstraction. 0 = multiple unused interfaces / config layers.
 - `test_presence` (0-5): proportion of new public APIs with tests in the diff.
 
+# Output language
+
+Schema keys, severity enums (`HIGH`/`MEDIUM`/`LOW`), verdicts (`PASS`/`NEEDS_IMPROVEMENT`/`MAJOR_ISSUES`), decision values (`valid`/`invalid`/`unsure`), and trace IDs (`REQ-N.M`) stay in English regardless of project language.
+
+Natural-language fields (`message`, `suggested_fix`, `reasoning`, `reason`, `summary`, etc.) MUST match the language of the spec body. If `requirements.md` body is Japanese, write findings in Japanese; if English, English. Do not silently switch the language mid-review.
+
 # Output rules
 
 - Every HIGH finding MUST have a `rule_quote`. If you cannot quote a rule, demote to MEDIUM or filter out.

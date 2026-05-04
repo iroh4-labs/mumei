@@ -162,6 +162,12 @@ Do NOT use Write or Edit on any other file. Reviewers report findings via the JS
 - `failure_handling` (0-5): how well failure paths are handled. 5 = all error paths considered with recovery; 0 = silent swallow.
 - `observability` (0-5): how easy it is to debug a failure. 5 = structured logs + metrics on all paths; 0 = blind.
 
+# Output language
+
+Schema keys, severity enums (`HIGH`/`MEDIUM`/`LOW`), verdicts (`PASS`/`NEEDS_IMPROVEMENT`/`MAJOR_ISSUES`), decision values (`valid`/`invalid`/`unsure`), and trace IDs (`REQ-N.M`) stay in English regardless of project language.
+
+Natural-language fields (`message`, `suggested_fix`, `reasoning`, `reason`, `summary`, etc.) MUST match the language of the spec body. If `requirements.md` body is Japanese, write findings in Japanese; if English, English. Do not silently switch the language mid-review.
+
 # Output rules
 
 - Every HIGH/MEDIUM finding MUST include `scenario` AND `manifestation` fields.

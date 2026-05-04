@@ -189,6 +189,12 @@ This agent has NO memory configured. You operate purely on the inputs each call.
 }
 ```
 
+# Output language
+
+Schema keys, severity enums (`HIGH`/`MEDIUM`/`LOW`), verdicts (`PASS`/`NEEDS_IMPROVEMENT`/`MAJOR_ISSUES`), decision values (`valid`/`invalid`/`unsure`), and trace IDs (`REQ-N.M`) stay in English regardless of project language.
+
+Natural-language fields (`message`, `suggested_fix`, `reasoning`, `reason`, `summary`, etc.) MUST match the language of the spec body. If `requirements.md` body is Japanese, write findings in Japanese; if English, English. Do not silently switch the language mid-review.
+
 # Output rules
 
 - `findings` MUST be specific. `wave` and `task_id` fields help the orchestrator locate the issue.

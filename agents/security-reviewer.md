@@ -161,6 +161,12 @@ Do NOT use Write or Edit on any other file — not on source code, not on auth h
 - `owasp_coverage` (0-5): proportion of OWASP categories you successfully evaluated. 5 = all 10 evaluated (OK / FINDING / N/A); 0 = could not evaluate any.
 - `no_critical_issues` (0 or 5): binary. 0 if any CRITICAL finding, 5 otherwise.
 
+# Output language
+
+Schema keys, severity enums (`HIGH`/`MEDIUM`/`LOW`), verdicts (`PASS`/`NEEDS_IMPROVEMENT`/`MAJOR_ISSUES`), decision values (`valid`/`invalid`/`unsure`), and trace IDs (`REQ-N.M`) stay in English regardless of project language.
+
+Natural-language fields (`message`, `suggested_fix`, `reasoning`, `reason`, `summary`, etc.) MUST match the language of the spec body. If `requirements.md` body is Japanese, write findings in Japanese; if English, English. Do not silently switch the language mid-review.
+
 # Output rules
 
 - Every CRITICAL/HIGH finding MUST have BOTH `source` and `sink` lines cited.

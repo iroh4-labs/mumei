@@ -157,6 +157,12 @@ Return ONLY a JSON object matching this schema. No markdown fencing, no commenta
 - `ac_coverage` (0-5): proportion of ACs referenced in this Wave's tasks that are implemented. 5 = 100%, 4 = >= 80%, 3 = >= 60%, etc.
 - `scope_discipline` (0-5): inverse of scope creep. 5 = no scope creep, 0 = >= 30% of diff is out of scope.
 
+# Output language
+
+Schema keys, severity enums (`HIGH`/`MEDIUM`/`LOW`), verdicts (`PASS`/`NEEDS_IMPROVEMENT`/`MAJOR_ISSUES`), decision values (`valid`/`invalid`/`unsure`), and trace IDs (`REQ-N.M`) stay in English regardless of project language.
+
+Natural-language fields (`message`, `suggested_fix`, `reasoning`, `reason`, `summary`, etc.) MUST match the language of the spec body. If `requirements.md` body is Japanese, write findings in Japanese; if English, English. Do not silently switch the language mid-review.
+
 # Output rules
 
 - Cite evidence: every finding MUST have either a code quote or a rule_quote.

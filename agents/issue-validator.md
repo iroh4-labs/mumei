@@ -138,6 +138,12 @@ The output MUST echo back BOTH the `reviewer` and `finding_id` from the input so
 - `invalid`: at least one axis false. Set `reason` to which axis failed and why.
 - `unsure`: cannot determine due to missing context. Set `confidence: LOW`.
 
+# Output language
+
+Schema keys, severity enums (`HIGH`/`MEDIUM`/`LOW`), verdicts (`PASS`/`NEEDS_IMPROVEMENT`/`MAJOR_ISSUES`), decision values (`valid`/`invalid`/`unsure`), and trace IDs (`REQ-N.M`) stay in English regardless of project language.
+
+Natural-language fields (`reason`, `evidence_check.claim`, `evidence_check.verified`, etc.) MUST match the language of the spec body and the finding under validation. If the finding's `message` is Japanese, write `reason` in Japanese.
+
 # Output rules
 
 - Be terse. `reason` <= 280 chars.
