@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.7] - 2026-05-04
+## [0.1.8] - 2026-05-04
+
+Internal-quality release. No user-facing API or behaviour change. Delivered as feature `REQ-3-self-eval-fixes` to push Dim 8 (Code Quality) and Dim 10 (AI-Specific) self-evaluation scores from 2.71 / 2.80 to 3.71 / 3.80 (≥ 3.5 floor).
+
+### Added
+
+- **`docs/document-corruption.md`** (151 lines, English). New distributed document explaining the kuroko (黒衣) philosophy, primary sources from Anthropic engineering blog (7 URLs with per-source mumei-takeaway), the structural countermeasures table mapping each corruption pattern to its implementation site, anti-patterns deliberately rejected, locally-runnable verification commands, and the trade-offs of the opt-in stance. Resolves the previously broken `./docs/document-corruption.md` link from `README.md`. `.gitignore` gained an `!/docs/document-corruption.md` exception so the file ships with the plugin.
+- **`tests/lib/atomic_write.bats`** (4 cases). Verifies `mumei_state_write_full` atomic write contract: normal write replaces the target file with a different inode; missing target gets created; invalid JSON leaves the original file untouched and same-inode; invalid JSON does not create the target when none existed. Bats total grew from 134 to 138.
+
+### Changed
+
+- **`agents/adversarial-reviewer.md` Output rules** gained the `message fact-form, <= 280 chars` directive matching the wording level of `spec-compliance` / `security` / `code-quality` reviewers, with explicit examples of imperative phrasing to avoid (closes a verbosity-suppression gap surfaced by self-evaluation 10.4).
+- **`hooks/_lib/detectors.sh::mumei_detector_aggregate`** (171 lines) was split into four internal helpers — `_mumei_detector_collect_semgrep`, `_mumei_detector_collect_osv`, `_mumei_detector_collect_hpc`, `_mumei_detector_assemble_report` — plus a 22-line orchestrator. Output JSON contract is unchanged. No function in `hooks/_lib/*.sh` or `hooks/*.sh` now exceeds 100 lines (max is 66, down from 170).
+- **`.github/workflows/ci.yml`** gained a `verify mumei_ prefix on bash functions` step. The check is awk-based and recognises three function-definition syntaxes (`name()`, `name ()`, `function name`), failing the workflow when any function in `hooks/_lib/*.sh` or `hooks/*.sh` lacks a `mumei_` / `_mumei_` prefix. `tests/` is excluded.
+- **`hooks/pre-bash-guard.sh` and `hooks/pre-edit-guard.sh`** function helpers renamed to the `mumei_` prefix: `deny` → `mumei_deny`, `is_git_commit` → `mumei_is_git_commit`, `is_git_push` → `mumei_is_git_push`, `is_meta_path` → `mumei_is_meta_path`. Behaviour and call signatures are identical.
+- **`hooks/_lib/detectors.sh`** lines 343 and 349: `jq -r '.status'` and `jq -r '.name'` gained `// ""` null-safety fallbacks for the hallucinated-package-check collector path.
+
+### Internal
+
+- **Self-evaluation `collect-anchors.sh` corrections.** The `jq_unsafe` metric is now awk-based and merges multi-line jq filters onto a single logical line before checking for `// fallback`, eliminating the false positives that previously counted internal fallbacks inside multi-line jq scripts as unsafe (14/21 → 0/21 reported, matching the actual count of two genuinely unsafe sites that this release also fixed). The `stdout_pollution` metric now excludes `echo`/`printf` calls captured by `$(...)` command substitution by counting unmatched `$(` before the call site (5 → 0 reported, matching the actual count). A latent `grep -c … || echo 0` bug in `corruption_mumei_section` (which produced `0\n0` and broke the script) was fixed by routing through the existing `safe_grep_count` helper.
+
+
 
 ### Added
 
