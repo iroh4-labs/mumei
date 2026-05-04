@@ -91,8 +91,13 @@ Designs mumei **deliberately did not adopt** because they would each become a co
 - **Automatic phase advancement**: the system does not flip `phase=review` the moment all tasks become `[x]`. The user must re-invoke `/mumei:plan` to advance, preventing accidental transitions.
 - **Spec auto-update**: even when an implementation reveals the spec is outdated, the agent does not rewrite `requirements.md` on its own. Spec changes route through the coverage-validator with explicit user confirmation.
 - **Telemetry / usage tracking**: mumei measures no usage. It writes nothing to `~/.claude/`. State exists only under `.mumei/specs/<feature>/`.
+- **Cross-project memory persistence**: subagents are configured `memory: project` so that learned patterns stay inside `.claude/agent-memory/<name>/` of the current repo. Reusing one project's review heuristics for an unrelated project would import the wrong invariants and produce false-confidence findings.
+- **Hook-level translation of user input**: hooks never reformat / "normalize" user-typed reasons or messages. The deny `additionalContext` is verbatim from the hook code; nothing is rewritten on the fly. Translating loses the audit trail that lets the user reproduce the trigger.
+- **Implicit model upgrades on a running session**: skills do not switch to a different Claude model based on heuristics about "this looks complex". Model selection is a user concern; the plugin must not change inference parameters without explicit user opt-in, since silent model swaps invalidate prior reasoning chains and break repeatability.
 
 This "do not" list shrinks the surface area but raises trust.
+
+The pattern: every item above could be implemented with reasonable engineering effort. Choosing not to is the design.
 
 ## Verifying these claims locally
 
@@ -134,6 +139,7 @@ The price paid for the opt-in / kuroko stance:
 - **Constraints on plugin growth**: the "abstract on the third repetition" rule keeps the bar high for adding new skills / agents. This is a safety device against the plugin itself growing complex enough to become a corruption source.
 - **Token economy is a side effect**: the core motivation is corruption suppression; token reduction is a consequence. Parallel reviewers + per-issue validators do create a 5-10x fan-out, but that fan-out buys back fresh context. Without fresh context, reviews degrade and themselves induce corruption — so the fan-out doubles as a safety device.
 - **Limited fit**: mumei targets teams or individuals who want a TDD / spec-driven workflow. It does not fit ad-hoc hack development. "Users it does not fit do not adopt it" is the natural state for an opt-in plugin.
+- **Bus factor risk**: kuroko depends on the user understanding their own workflow. There is no auto-recovery, no "let mumei figure it out" path. If the user is unavailable and a junior teammate cannot interpret a hook deny, the workflow stalls. The mitigation is documentation density (`docs/mumei-decisions.md`, this file, `README.md`) — not an alternative auto-mode.
 
 Surfacing these as **design features** lets users adopt mumei knowing what mumei does **not** do for them. Conversely, expectations like "mumei will fix things on its own" or "mumei will tidy up the state" never hold.
 
