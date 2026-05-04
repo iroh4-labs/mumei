@@ -1,29 +1,43 @@
 # mumei
 
-> Quality Enforcement Layer for Claude Code.
-> Stop the agent from skipping spec phases, Wave commits, and reviews — structurally.
+[![Version](https://img.shields.io/badge/version-0.1.10-blue)](https://github.com/hir4ta/mumei/releases)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![CI](https://github.com/hir4ta/mumei/actions/workflows/ci.yml/badge.svg)](https://github.com/hir4ta/mumei/actions/workflows/ci.yml)
+
+Quality Enforcement Layer for Claude Code.
+
+Hook-enforced spec phases, Wave commits, and reviews — at the OS boundary, not via prompt-level instructions the agent can ignore.
 
 [日本語版 README](./README.ja.md)
 
-`mumei` is a Claude Code plugin that physically enforces a spec-driven development workflow:
-
 ```
-brainstorm → plan (3 spec reviewers + single approval gate) → implement (Wave gate) → review (4-stage independent + per-issue validation) → done
+brainstorm → plan (3 spec reviewers + approval) → implement (Wave gate) → review (4-stage + per-issue validation) → done
 ```
 
-It does not rely on prompt-level instructions ("you must run tests") that the agent can ignore. It uses Claude Code Hooks to deny tool calls that violate the workflow at the OS boundary.
+## Features
+
+- **Hook-enforced phases**: Cannot edit `src/` while spec is incomplete, cannot `git commit` with `[ ]` tasks remaining, cannot `git push` while review verdict is `MAJOR_ISSUES`.
+- **3 spec reviewers**: Independent `requirements` / `design` / `tasks` reviewers on fresh contexts, auto-iterating draft → reviewer up to 3 times. Catches missing requirements and hallucinated acceptance criteria before code is written.
+- **Wave-based commits**: 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` meta to block phantom completion (marking `[x]` without an actual implementation).
+- **4-stage review pipeline**: `spec-compliance` / `code-quality` / `security` / `adversarial` reviewers, plus a per-issue validator on a fresh context (memory: local, read-only) that filters false positives before findings reach the user.
+- **Deterministic security ground-truth**: `semgrep` + `osv-scanner` + `hallucinated-package-check` (npm registry probe) run before LLM reviewers. HIGH findings pin the verdict to `MAJOR_ISSUES` so the LLM cannot downgrade a real CVE.
+- **Kuroko (黒衣) stance**: Zero side effects on projects that have not opted in. No `.mumei/current` = every Hook is a no-op. No telemetry, no writes outside `.mumei/`, no auto-commit, no auto-fix.
 
 ## Why
 
 AI coding agents skip steps. They mark tasks complete without writing tests. They commit with failing tests. They invent requirements that the user never asked for. They claim a feature is done before review runs.
 
-`mumei` blocks those moves at the tool-call layer:
+`mumei` blocks those moves at the tool-call layer — not by prompting "you must run tests" (which the agent can ignore), but by denying the tool call at the OS boundary.
 
-- Cannot edit `src/` while a feature's spec is incomplete.
-- Cannot `git commit` while a Wave has incomplete tasks.
-- Cannot `git push` while the latest review verdict is `MAJOR_ISSUES`.
-- Cannot mark a task `[x]` without an actual implementation diff.
-- Cannot end a session with all tasks done but review skipped.
+## Commands
+
+| Command | Description |
+|---|---|
+| `/mumei:init` | One-time per-project setup. Creates `.mumei/`, proposes additions to `CLAUDE.md` with diff preview. |
+| `/mumei:brainstorm <feature>` | Optional pre-spec Q&A loop (max 3 rounds × 5 questions). Output saved to `.mumei/scratch/<feature>.md`. |
+| `/mumei:plan <feature>` | Drives the full lifecycle: clarification → requirements → design → tasks (each auto-reviewed up to 3 times) → single user approval → Wave-by-Wave implementation → 4-stage review with per-issue validation. |
+| `/mumei:refine <feature>` | Targeted revision of an existing spec section without restarting the whole brainstorm flow. |
+| `/mumei:archive <feature>` | Moves a `done` feature to `.mumei/archive/<YYYY-MM>/<feature>/`. Carries `scratch/<feature>.md` along as `scratch.md`. |
 
 ## Philosophy: why "mumei" (無名)
 
@@ -331,6 +345,21 @@ There is no other escape hatch — no `--no-verify` flag, no `mumei skip` comman
 
 Use sparingly. The point of mumei is to make skipping painful. If you reach for `MUMEI_BYPASS=1` often, fix the workflow, not the gate.
 
+## Security and Privacy
+
+mumei operates **entirely locally** with one narrow exception (npm registry probe during review).
+
+| Item | Description |
+|---|---|
+| **External Communication** | One outbound request only: `hallucinated-package-check` queries `https://registry.npmjs.org/` to verify cited npm packages exist. Disable with `MUMEI_BYPASS=1`. |
+| **Telemetry** | None. No analytics, no error reporting, no usage tracking. |
+| **Data Storage** | All state under project-local `.mumei/`. Nothing written to `~/.claude/` or any global location. |
+| **Conversation History** | Not stored by mumei. mumei is a quality-gate plugin, not a memory plugin. |
+| **Tools Used** | `bash`, `jq`, `git` (required); `semgrep`, `osv-scanner` (required for review phase). All locally executable. |
+| **Code** | Open source — every hook and agent is auditable. |
+
+Full policy: [PRIVACY.md](./PRIVACY.md)
+
 ## What `mumei` is NOT
 
 - Not a CI/CD tool. Hooks run inside Claude Code only.
@@ -341,7 +370,7 @@ Use sparingly. The point of mumei is to make skipping painful. If you reach for 
 
 ## Status
 
-Pre-release (v0.1.9). Expect breaking changes until v1.0.
+Pre-release (v0.1.10). Expect breaking changes until v1.0.
 
 ## License
 

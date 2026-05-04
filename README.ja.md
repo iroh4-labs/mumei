@@ -1,27 +1,43 @@
 # mumei
 
-> Claude Code のための Quality Enforcement Layer。
-> エージェントが spec phase / Wave commit / レビューをスキップするのを構造的に防ぐ。
+[![Version](https://img.shields.io/badge/version-0.1.10-blue)](https://github.com/hir4ta/mumei/releases)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![CI](https://github.com/hir4ta/mumei/actions/workflows/ci.yml/badge.svg)](https://github.com/hir4ta/mumei/actions/workflows/ci.yml)
 
-`mumei` は Claude Code plugin で、spec-driven 開発フローを物理強制する:
+Claude Code のための Quality Enforcement Layer。
+
+エージェントが無視できるプロンプトレベルの指示ではなく、Hook で spec phase / Wave commit / review を OS 境界で物理強制する。
+
+[English README](./README.md)
 
 ```
-brainstorm → plan (3 spec reviewer + 単一の承認 gate) → implement (Wave gate) → review (4-stage independent + per-issue validation) → done
+brainstorm → plan (3 spec reviewer + 承認 gate) → implement (Wave gate) → review (4-stage + per-issue validation) → done
 ```
 
-「テストを必ず実行せよ」のようなプロンプトレベルの指示には頼らない (エージェントは無視できるため)。Claude Code Hook を使って、ワークフローに違反する tool 呼び出しを OS 境界で deny する。
+## Features
+
+- **Hook で物理強制される phase**: spec が未完成のまま `src/` を編集できない、`[ ]` task が残ったまま `git commit` できない、verdict が `MAJOR_ISSUES` のまま `git push` できない。
+- **3 spec reviewer**: 独立した `requirements` / `design` / `tasks` reviewer が fresh context で動作し、最大 3 回 draft → reviewer を auto-iterate。コードを書く前に「会話で出た要件の欠け」「ハルシネーションした acceptance criteria」を捕捉する。
+- **Wave 単位の commit**: 1 Wave = 1 commit。Hook が diff を各 task の `_Files:_` メタと cross-check し、phantom completion (実装 diff なしで `[x]`) を block する。
+- **4-stage review pipeline**: `spec-compliance` / `code-quality` / `security` / `adversarial` の 4 reviewer に加えて、各 finding を fresh context で再検証する per-issue validator (memory: local, read-only) が偽陽性を user に届く前に filter する。
+- **決定論的 security ground-truth**: `semgrep` + `osv-scanner` + `hallucinated-package-check` (npm registry probe) が LLM reviewer の前に走る。HIGH finding は verdict を `MAJOR_ISSUES` に固定し、LLM が本物の CVE を downgrade できないようにする。
+- **黒子 (kuroko) スタンス**: opt-in していないプロジェクトには副作用ゼロ。`.mumei/current` がなければ Hook はすべて no-op。テレメトリなし、`.mumei/` 外への書き込みなし、auto-commit なし、auto-fix なし。
 
 ## なぜ
 
 AI コーディングエージェントはステップを飛ばす。テストを書かずに task を完了マークする。test red のまま commit する。ユーザーが頼んでいない要件を発明する。レビューが終わる前に「機能完成」と宣言する。
 
-`mumei` はこれらの動きを tool 呼び出し層で block する:
+`mumei` はこれらの動きを tool 呼び出し層で block する — 「テストを必ず実行せよ」と prompt するのではなく (エージェントは無視できる)、tool 呼び出し自体を OS 境界で deny する。
 
-- spec が未完成のまま `src/` を編集できない。
-- Wave 内に未完了 task があるまま `git commit` できない。
-- 直近のレビュー verdict が `MAJOR_ISSUES` のまま `git push` できない。
-- 実装の diff なしで task を `[x]` にできない。
-- すべての task が完了しているのに、レビューを実行せずに session を終わらせられない。
+## Commands
+
+| コマンド | 説明 |
+|---|---|
+| `/mumei:init` | プロジェクトごとの一回限りセットアップ。`.mumei/` を作成し、`CLAUDE.md` への追加を diff preview 付きで提案。 |
+| `/mumei:brainstorm <feature>` | spec 作成前の Q&A loop (最大 3 round × 5 質問)。出力は `.mumei/scratch/<feature>.md` に保存。任意。 |
+| `/mumei:plan <feature>` | フル lifecycle を駆動: clarification → requirements → design → tasks (各々最大 3 回 auto-review) → 単一 user 承認 → Wave by Wave 実装 → 4-stage review + per-issue validation。 |
+| `/mumei:refine <feature>` | 既存 spec の特定セクションだけを修正したい時に使う。brainstorm からやり直さない。 |
+| `/mumei:archive <feature>` | `done` の feature を `.mumei/archive/<YYYY-MM>/<feature>/` に移動。`scratch/<feature>.md` も `scratch.md` として持ち越す。 |
 
 ## 設計思想: なぜ「mumei (無名)」なのか
 
@@ -330,6 +346,21 @@ unset MUMEI_BYPASS  # 元に戻す
 
 慎重に使うこと。mumei の存在意義は「スキップを面倒にする」こと。`MUMEI_BYPASS=1` を頻繁に使うことになったら、gate ではなくワークフロー側を直すべき。
 
+## Security and Privacy
+
+mumei は **完全にローカルで動作する** (review phase の npm registry probe 1 件のみ例外)。
+
+| 項目 | 内容 |
+|---|---|
+| **外部通信** | review phase の `hallucinated-package-check` が `https://registry.npmjs.org/` を probe する 1 件のみ。`MUMEI_BYPASS=1` で無効化可能。 |
+| **テレメトリ** | なし。analytics、エラー通知、利用状況追跡なし。 |
+| **データ保存先** | 全状態は project-local の `.mumei/` 配下。`~/.claude/` などグローバル位置への書き込みなし。 |
+| **会話履歴** | mumei は保存しない。mumei は quality gate plugin であって memory plugin ではない。 |
+| **使用ツール** | `bash`, `jq`, `git` (必須)、`semgrep`, `osv-scanner` (review phase で必須)。すべてローカル実行。 |
+| **コード** | オープンソース — すべての hook と agent が監査可能。 |
+
+詳細: [PRIVACY.md](./PRIVACY.md)
+
 ## `mumei` が **しない** こと
 
 - CI/CD ツールではない。Hook は Claude Code 内でのみ動く。
@@ -340,7 +371,7 @@ unset MUMEI_BYPASS  # 元に戻す
 
 ## Status
 
-Pre-release (v0.1.9)。v1.0 までは破壊的変更がありうる。
+Pre-release (v0.1.10)。v1.0 までは破壊的変更がありうる。
 
 ## License
 
