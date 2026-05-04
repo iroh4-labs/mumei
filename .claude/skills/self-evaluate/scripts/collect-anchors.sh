@@ -22,7 +22,16 @@ set -u
 # (matters under bats / CI runners that may cd away from the repo).
 # Layout: <PLUGIN_ROOT>/.claude/skills/self-evaluate/scripts/collect-anchors.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "${SCRIPT_DIR}/../../../.." && pwd)}"
+# Sanity check: after the dev-side relocation to .claude/skills/self-evaluate/
+# the script lives 4 levels deep (.claude/skills/self-evaluate/scripts/),
+# so ../../../.. must resolve to a directory that contains the canonical
+# distributed dirs (agents/, skills/, hooks/). Fail fast if not, so a future
+# rename does not silently regress to an empty anchor dump.
+if [[ ! -d "${PLUGIN_ROOT}/agents" || ! -d "${PLUGIN_ROOT}/skills" || ! -d "${PLUGIN_ROOT}/hooks" ]]; then
+  echo "collect-anchors: PLUGIN_ROOT misresolved (got: ${PLUGIN_ROOT})" >&2
+  exit 1
+fi
 ROOT="$PLUGIN_ROOT"
 cd "$ROOT"
 
