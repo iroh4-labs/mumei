@@ -17,12 +17,17 @@
 
 set -u
 
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# Resolve the plugin root from this script's own location so the
+# anchor harvest works regardless of cwd or whether `git` is reachable
+# (matters under bats / CI runners that may cd away from the repo).
+# Layout: <PLUGIN_ROOT>/skills/self-evaluate/scripts/collect-anchors.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+ROOT="$PLUGIN_ROOT"
 cd "$ROOT"
 
 # Load the shared safe-grep library: defines mumei_safe_grep_count
 # (null-safe count across files) and mumei_path_is_gitignored.
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$ROOT}"
 if ! declare -F mumei_safe_grep_count >/dev/null 2>&1; then
   # shellcheck disable=SC1091
   source "${PLUGIN_ROOT}/hooks/_lib/safe-grep.sh"
