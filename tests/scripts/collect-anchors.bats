@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for skills/self-evaluate/scripts/collect-anchors.sh.
+# Tests for .claude/skills/self-evaluate/scripts/collect-anchors.sh.
 #
 # Strategy: run collect-anchors against the actual mumei repository
 # content (not a synthetic fixture) and assert on the resulting JSON.
@@ -23,7 +23,7 @@ setup() {
   cd "$CLAUDE_PLUGIN_ROOT" || return 1
   TMPOUT="$(mktemp -t mumei-anchors.XXXXXX)"
   export TMPOUT
-  bash skills/self-evaluate/scripts/collect-anchors.sh > "$TMPOUT" 2>/dev/null
+  bash .claude/skills/self-evaluate/scripts/collect-anchors.sh > "$TMPOUT" 2>/dev/null
 }
 
 teardown() {

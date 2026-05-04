@@ -30,11 +30,6 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "state.schema.json is valid JSON" {
-  run jq empty skills/state/schemas/state.schema.json
-  [ "$status" -eq 0 ]
-}
-
 # ─── plugin.json minimum fields ──────────────────────────────
 
 @test "plugin.json has a name field" {
