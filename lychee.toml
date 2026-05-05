@@ -1,0 +1,37 @@
+# lychee link checker config
+# Reference: https://lychee.cli.rs/usage/config/
+
+# Max number of redirects to follow before failing.
+max_redirects = 5
+
+# Per-link request retries before flagging as broken.
+max_retries = 2
+
+# Timeout per link (seconds). Defaults to 20.
+timeout = 20
+
+# Accept these HTTP status codes as success in addition to 200/204.
+# 403: rate-limited public archives (some readme links).
+# 429: rate limit; we already retry, treat as transient.
+# 206: partial content (some CDNs).
+accept = ["200", "204", "206", "403", "429"]
+
+# Skip checking these patterns. Anchor links inside the same file are usually
+# noise for a CI gate; URLs only.
+exclude_path = [
+  ".mumei/",
+  "docs/",
+  "node_modules/",
+  ".git/",
+]
+
+# Local-only file:// or relative anchor checks. Set false to focus on http(s).
+include_fragments = false
+
+# Localhost links cannot be reached from CI runners.
+exclude_loopback = true
+
+# GitHub Actions cache: lychee re-uses the cache across runs to avoid hammering
+# external services on every push. The cache is keyed on the URL set.
+cache = true
+max_cache_age = "1d"
