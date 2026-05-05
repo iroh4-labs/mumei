@@ -157,6 +157,24 @@ gh ssh-key list
 After setup, `git tag -s` (used by the bundled `release` skill) produces a
 verifiable tag. End users can verify with `git tag -v <tag>`.
 
+## Maintainer-only — social preview image
+
+The repo's social preview image (shown when the repo is shared on X / Slack /
+HN) is set via the GitHub web UI (the API does not expose a write endpoint
+for repository social preview):
+
+1. Prepare a 1280×640 PNG. Keep it minimal: project name, one-line tagline,
+   and (optionally) the kuroko motif. Avoid screenshots that age fast.
+2. Go to **Settings → General → Social preview** of the repo
+   (`https://github.com/hir4ta/mumei/settings`).
+3. Click **Upload an image** and select the PNG.
+4. Verify on the repo home page (`https://github.com/hir4ta/mumei`) — the
+   image now appears at the top of the page when shared externally.
+
+Replace the image when the design language or scope of the project changes
+materially. Do not commit the source PSD / source PNG into the repo;
+artwork lives in the maintainer's design folder, not in the source tree.
+
 ## Reporting bugs
 
 Use the **Bug report** template under

@@ -10,8 +10,19 @@ Hook-enforced spec phases, Wave commits, and reviews — at the OS boundary, not
 
 [日本語版 README](./README.ja.md)
 
-```text
-brainstorm → plan (3 spec reviewers + approval) → implement (Wave gate) → review (4-stage + per-issue validation) → done
+```mermaid
+flowchart LR
+  B["/mumei:brainstorm<br/>(optional)"] --> P
+  P["/mumei:plan<br/>requirements / design / tasks<br/>each auto-iter ≤ 3 ×<br/>3 spec reviewers"] --> A{"single user<br/>approval gate"}
+  A -->|approve| I["implement<br/>Wave 1 → N<br/>Hook-gated commits<br/>(W1 / W2 / I3 / I4)"]
+  I --> R["review (Phase 5)<br/>Stage 0: detectors<br/>Stage 1: 3 reviewers ‖<br/>Stage 2: adversarial<br/>Stage 4: per-issue validator ‖"]
+  R -->|verdict PASS| D["phase=done<br/>/mumei:archive"]
+  R -->|MAJOR_ISSUES| I
+
+  classDef gate fill:#fff3cd,stroke:#856404
+  classDef done fill:#d4edda,stroke:#155724
+  class A gate
+  class D done
 ```
 
 ## Contents

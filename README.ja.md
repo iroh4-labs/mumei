@@ -10,8 +10,19 @@ Claude Code のための Quality Enforcement Layer です。
 
 [English README](./README.md)
 
-```text
-brainstorm → plan (3 spec reviewer + 承認 gate) → implement (Wave gate) → review (4-stage + per-issue validation) → done
+```mermaid
+flowchart LR
+  B["/mumei:brainstorm<br/>(任意)"] --> P
+  P["/mumei:plan<br/>requirements / design / tasks<br/>各々 auto-iter ≤ 3 回<br/>3 spec reviewer"] --> A{"単一の<br/>user 承認 gate"}
+  A -->|approve| I["implement<br/>Wave 1 → N<br/>Hook で commit を gate<br/>(W1 / W2 / I3 / I4)"]
+  I --> R["review (Phase 5)<br/>Stage 0: detectors<br/>Stage 1: 3 reviewer ‖<br/>Stage 2: adversarial<br/>Stage 4: per-issue validator ‖"]
+  R -->|verdict PASS| D["phase=done<br/>/mumei:archive"]
+  R -->|MAJOR_ISSUES| I
+
+  classDef gate fill:#fff3cd,stroke:#856404
+  classDef done fill:#d4edda,stroke:#155724
+  class A gate
+  class D done
 ```
 
 ## 目次
