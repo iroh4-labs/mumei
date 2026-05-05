@@ -139,6 +139,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # semgrep self-scan (REQ-5.14): dogfood SAST against the mumei codebase.
+      # advisory at this stage (`|| true`) so baseline findings don't block CI;
+      # promote to required-status once the baseline is clean. Reference:
+      # https://semgrep.dev/docs/semgrep-ci/sample-ci-configs
+      - name: semgrep self-scan (advisory)
+        run: |
+          set +e  # advisory: do not fail the lint-extra job on findings
+          docker run --rm -v "${PWD}:/src" -w /src semgrep/semgrep \
+            semgrep scan --config=auto --error --quiet
+          rc=$?
+          if [[ $rc -ne 0 ]]; then
+            echo "::warning::semgrep self-scan reported findings (advisory; not blocking)"
+          fi
+          exit 0
+
       # shellharden has no first-party pre-commit hook; install the release
       # binary and run it as a CI-only check. shellcheck (which IS in
       # pre-commit) catches bugs; shellharden enforces quoting — complementary.
