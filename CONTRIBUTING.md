@@ -28,9 +28,9 @@ on the next tool invocation (Hook reload may need `/reload-plugins` in some
 versions of Claude Code).
 
 The repository is split into **distributable artifacts** (English-only, shipped to
-plugin users) and **dev-only files** (Japanese, gitignored). See
-[CLAUDE.md](./CLAUDE.md) for the boundary rules and language conventions you
-must follow when editing each side.
+plugin users) and **dev-only files** (Japanese, gitignored). The boundary rules
+and language conventions live in the project-local `CLAUDE.md` (also gitignored)
+that the maintainer keeps in sync with this guide.
 
 ## Required tooling
 
