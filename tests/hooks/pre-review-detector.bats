@@ -205,21 +205,3 @@ SH
   echo "$output" | grep -q "semgrep"
 }
 
-@test "user-side malformed package.json is a SKIP, not a crash (rc=0)" {
-  _init_test_feature
-  _build_stubs
-  # Malformed JSON in package.json should NOT propagate to FAILED_DETECTORS;
-  # treat it like 'no package.json' — return 0 with skipped:true entry.
-  printf '%s' '{not valid json' > package.json
-  run env PATH="$STUB_DIR:$PATH" bash "$CLAUDE_PLUGIN_ROOT/hooks/pre-review-detector.sh"
-  _restore_path
-  [ "$status" -eq 0 ]
-  local summary
-  summary="$(echo "$output" | sed -n '/^{/,/^}/p')"
-  echo "$summary" | jq -e '.detectors_ran == true'
-  echo "$summary" | jq -e '.failed_detectors == []'
-  # The detectors.json should mark hpc as skipped, not failed.
-  local report_path
-  report_path="$(echo "$summary" | jq -r '.report_path')"
-  jq -e '.detectors_skipped | map(.name) | contains(["hallucinated-package-check"])' < "$report_path"
-}

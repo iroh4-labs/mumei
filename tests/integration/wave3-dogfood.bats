@@ -42,12 +42,12 @@ setup() {
 {
   "feature": "test",
   "ran_at": "2026-05-03T00:00:00Z",
-  "detectors_run": ["semgrep", "osv-scanner", "hallucinated-package-check"],
+  "detectors_run": ["semgrep", "osv-scanner"],
   "detectors_skipped": [],
   "findings": {
     "HIGH": [
-      {"source": "hallucinated-package-check", "severity": "HIGH",
-       "package": {"name": "fake-pkg"}, "message": "404"}
+      {"source": "semgrep", "severity": "HIGH", "rule_id": "ci.error",
+       "location": {"file": "src/a.js", "line": 10}, "message": "danger"}
     ],
     "MEDIUM": [],
     "LOW": []
@@ -117,7 +117,6 @@ JSON
   grep -q "Skip rule for detector findings" "$agent"
   grep -q '"semgrep"' "$agent"
   grep -q '"osv-scanner"' "$agent"
-  grep -q '"hallucinated-package-check"' "$agent"
 }
 
 @test "issue-validator skip rule produces decision=valid with high confidence" {

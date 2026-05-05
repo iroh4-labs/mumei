@@ -37,7 +37,7 @@ brainstorm → plan (3 spec reviewers + approval) → implement (Wave gate) → 
 - **3 spec reviewers**: Independent `requirements` / `design` / `tasks` reviewers on fresh contexts, auto-iterating draft → reviewer up to 3 times. Catches missing requirements and hallucinated acceptance criteria before code is written.
 - **Wave-based commits**: 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` meta to block phantom completion (marking `[x]` without an actual implementation).
 - **4-stage review pipeline**: `spec-compliance` / `code-quality` / `security` / `adversarial` reviewers, plus a per-issue validator on a fresh context (memory: local, read-only) that filters false positives before findings reach the user.
-- **Deterministic security ground-truth**: `semgrep` + `osv-scanner` + `hallucinated-package-check` (npm registry probe) run before LLM reviewers. HIGH findings pin the verdict to `MAJOR_ISSUES` so the LLM cannot downgrade a real CVE.
+- **Deterministic security ground-truth**: `semgrep` + `osv-scanner` run before LLM reviewers. HIGH findings pin the verdict to `MAJOR_ISSUES` so the LLM cannot downgrade a real CVE.
 - **Kuroko (黒衣) stance**: Zero side effects on projects that have not opted in. No `.mumei/current` = every Hook is a no-op. No telemetry, no writes outside `.mumei/`, no auto-commit, no auto-fix.
 
 ## Why
@@ -161,8 +161,7 @@ only when needed.
 
 | Variable | Default | Effect |
 |---|---|---|
-| `MUMEI_DETECTOR_TIMEOUT` | `600` | Per-detector wall-clock timeout in seconds (`semgrep` / `osv-scanner` / `hallucinated-package-check`). Raise for very large repos; lower in CI when a hung detector is worse than a missed scan. |
-| `MUMEI_DETECTOR_HPC_MAX_PACKAGES` | `200` | Max number of npm packages probed by `hallucinated-package-check`. Above this, the probe is skipped with a warning recorded in the detector report (no hard fail). Guards against accidental DoS on `registry.npmjs.org`. |
+| `MUMEI_DETECTOR_TIMEOUT` | `600` | Per-detector wall-clock timeout in seconds (`semgrep` / `osv-scanner`). Raise for very large repos; lower in CI when a hung detector is worse than a missed scan. |
 
 ## Installation
 
@@ -280,11 +279,11 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 
 ## Security and Privacy
 
-mumei operates **entirely locally** with one narrow exception (npm registry probe during review).
+mumei operates **entirely locally**. mumei itself makes no outbound requests; the third-party `osv-scanner` it invokes does query `osv.dev` for CVE data on its own (see [PRIVACY.md](./PRIVACY.md)).
 
 | Item | Description |
 |---|---|
-| **External Communication** | One outbound request only: `hallucinated-package-check` queries `https://registry.npmjs.org/` to verify cited npm packages exist. |
+| **External Communication** | None initiated by mumei. `osv-scanner` (third-party) queries `osv.dev` for CVE data; mumei does not control its network behavior. |
 | **Telemetry** | None. No analytics, no error reporting, no usage tracking. |
 | **Data Storage** | All state under project-local `.mumei/`. Nothing written to `~/.claude/` or any global location. |
 | **Conversation History** | Not stored by mumei. mumei is a quality-gate plugin, not a memory plugin. |

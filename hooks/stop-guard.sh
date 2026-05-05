@@ -137,7 +137,7 @@ fi
 DETECTORS_FILE="$(jq -r '.detector_report // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
 if [[ -z "$DETECTORS_FILE" || ! -f "$DETECTORS_FILE" ]]; then
   REASON="Review ${REVIEW_NAME} has no resolvable detector_report — Stage 0 (deterministic detector run) was skipped. Re-run /mumei:plan review."
-  CONTEXT="The review JSON must include a top-level \"detector_report\" field whose value is a readable path to a detectors.json from hooks/pre-review-detector.sh. Either the field is missing, empty, or points to a file that no longer exists. Detectors (semgrep, osv-scanner, hallucinated-package-check) provide ground-truth findings that LLM reviewers cannot replace. Set MUMEI_BYPASS=1 to skip (not recommended)."
+  CONTEXT="The review JSON must include a top-level \"detector_report\" field whose value is a readable path to a detectors.json from hooks/pre-review-detector.sh. Either the field is missing, empty, or points to a file that no longer exists. Detectors (semgrep, osv-scanner) provide ground-truth findings that LLM reviewers cannot replace. Set MUMEI_BYPASS=1 to skip (not recommended)."
   jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
     decision: "block",
     reason: $r,

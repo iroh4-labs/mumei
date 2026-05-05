@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Deterministic detector runners for the review pipeline.
-# Wraps semgrep / osv-scanner / hallucinated-package-check (npm) and
-# emits a severity-classified JSON suitable for reviewer prompt injection.
-# Dependencies: jq, curl, semgrep (external), osv-scanner (external)
+# Wraps semgrep / osv-scanner and emits a severity-classified JSON
+# suitable for reviewer prompt injection.
+# Dependencies: jq, semgrep (external), osv-scanner (external)
 
 set -u
 
@@ -11,10 +11,6 @@ if ! declare -F mumei_log_info >/dev/null 2>&1; then
   # shellcheck disable=SC1091
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
-
-# Maximum number of npm packages to query against the registry per run.
-# Above this, hpc emits a single warning entry instead of N HEAD requests.
-MUMEI_DETECTOR_HPC_MAX_PACKAGES="${MUMEI_DETECTOR_HPC_MAX_PACKAGES:-200}"
 
 # Per-detector timeout in seconds. semgrep on large repos can take minutes.
 MUMEI_DETECTOR_TIMEOUT="${MUMEI_DETECTOR_TIMEOUT:-600}"
@@ -40,7 +36,7 @@ mumei_detector_check_binaries() {
 # Translate a raw severity from a specific detector to mumei's
 # HIGH / MEDIUM / LOW vocabulary. Echoes the normalized severity on stdout.
 # Args: <source> <raw_severity>
-#   source = "semgrep" | "osv-scanner" | "hallucinated-package-check"
+#   source = "semgrep" | "osv-scanner"
 mumei_detector_normalize_severity() {
   local source="$1"
   local raw="$2"
@@ -67,14 +63,6 @@ mumei_detector_normalize_severity() {
       else
         printf '%s' "MEDIUM"
       fi
-      ;;
-    hallucinated-package-check)
-      # missing = HIGH, unknown = MEDIUM. Caller passes the status string.
-      case "$raw" in
-        missing) printf '%s' "HIGH" ;;
-        unknown) printf '%s' "MEDIUM" ;;
-        *) printf '%s' "LOW" ;;
-      esac
       ;;
     *)
       printf '%s' "MEDIUM"
@@ -170,80 +158,6 @@ mumei_detector_run_osv() {
   return 0
 }
 
-# Probe each npm dependency against the registry and classify each as
-# present (200) / missing (404) / unknown (5xx, network error).
-# If package.json is absent or the dep count exceeds
-# MUMEI_DETECTOR_HPC_MAX_PACKAGES, writes a skip / warning to <errors_path>
-# and returns 0.
-# Args: <output_path> <errors_path>
-mumei_detector_run_hpc() {
-  local output_path="$1"
-  local errors_path="$2"
-  if [[ ! -f package.json ]]; then
-    jq -n --arg detector "hallucinated-package-check" --arg message "no package.json in cwd" \
-      '{detector: $detector, message: $message, skipped: true}' \
-      >> "$errors_path"
-    printf '%s' '{"results":[]}' > "$output_path"
-    return 0
-  fi
-  if ! jq empty < package.json 2>/dev/null; then
-    # Treat malformed package.json the same as "no package.json" — a
-    # user-side input issue, NOT a detector crash. The skipped:true marker
-    # signals to the orchestrator that this detector did not run, but the
-    # review pipeline can continue (returns 0).
-    jq -n --arg detector "hallucinated-package-check" --arg message "package.json is not valid JSON; skipping" \
-      '{detector: $detector, message: $message, skipped: true}' \
-      >> "$errors_path"
-    printf '%s' '{"results":[]}' > "$output_path"
-    return 0
-  fi
-  # Collect dep names from dependencies + devDependencies. The values are
-  # version specifiers we don't need; only the keys are queried.
-  local names_file
-  names_file="$(mktemp -t mumei-hpc-names.XXXXXX)"
-  jq -r '
-    [(.dependencies // {}) , (.devDependencies // {})]
-    | map(keys) | flatten | unique | .[]
-  ' < package.json > "$names_file" 2>/dev/null
-
-  local count
-  count="$(wc -l < "$names_file" | tr -d ' ')"
-  if (( count > MUMEI_DETECTOR_HPC_MAX_PACKAGES )); then
-    jq -n \
-      --arg detector "hallucinated-package-check" \
-      --arg message "package count ${count} exceeds limit ${MUMEI_DETECTOR_HPC_MAX_PACKAGES}; skipping registry probe" \
-      '{detector: $detector, message: $message, skipped: true}' \
-      >> "$errors_path"
-    printf '%s' '{"results":[]}' > "$output_path"
-    rm -f "$names_file"
-    return 0
-  fi
-
-  # Probe each name against the npm registry. We query the per-package metadata
-  # endpoint with HEAD; 200 = present, 404 = missing, anything else = unknown.
-  local results_tmp
-  results_tmp="$(mktemp -t mumei-hpc-results.XXXXXX)"
-  printf '[]' > "$results_tmp"
-  local name url code pkg_status results
-  while IFS= read -r name; do
-    [[ -n "$name" ]] || continue
-    # Encode forward-slash for scoped packages (@scope/name -> @scope%2Fname).
-    url="https://registry.npmjs.org/${name//\//%2F}"
-    code="$(curl -s -o /dev/null -m 10 -w "%{http_code}" -I "$url" 2>/dev/null || echo "000")"
-    case "$code" in
-      200) continue ;;
-      404) pkg_status="missing" ;;
-      *)   pkg_status="unknown" ;;
-    esac
-    results="$(jq --arg n "$name" --arg s "$pkg_status" --arg c "$code" \
-      '. + [{name: $n, status: $s, http_code: $c}]' < "$results_tmp")"
-    printf '%s' "$results" > "$results_tmp"
-  done < "$names_file"
-  mv "$results_tmp" "$output_path"
-  rm -f "$names_file"
-  return 0
-}
-
 # Append semgrep findings to the shared findings array.
 # Args: <semgrep_json> <findings_tmp>
 _mumei_detector_collect_semgrep() {
@@ -326,40 +240,6 @@ _mumei_detector_collect_osv() {
   done
 }
 
-# Append hallucinated-package-check findings to the shared findings array.
-# Args: <hpc_json> <findings_tmp>
-_mumei_detector_collect_hpc() {
-  local hpc_json="$1"
-  local findings_tmp="$2"
-
-  [[ -s "$hpc_json" ]] || return 0
-  jq -e 'type == "array"' < "$hpc_json" >/dev/null 2>&1 || return 0
-
-  local hpc_count k entry st norm finding
-  hpc_count="$(jq 'length' < "$hpc_json")"
-  for ((k = 0; k < hpc_count; k++)); do
-    entry="$(jq -c ".[$k]" < "$hpc_json")"
-    st="$(printf '%s' "$entry" | jq -r '.status // ""')"
-    norm="$(mumei_detector_normalize_severity hallucinated-package-check "$st")"
-    finding="$(jq -n \
-      --arg src "hallucinated-package-check" \
-      --arg sev "$norm" \
-      --arg raw "$st" \
-      --arg name "$(printf '%s' "$entry" | jq -r '.name // ""')" \
-      --arg code "$(printf '%s' "$entry" | jq -r '.http_code // ""')" \
-      '{
-        source: $src,
-        severity: $sev,
-        raw_severity: $raw,
-        location: { file: "package.json" },
-        message: ("npm registry returned " + $code + " for " + $name),
-        package: { name: $name, status: $raw }
-      }')"
-    jq --argjson f "$finding" '. + [$f]' < "$findings_tmp" > "${findings_tmp}.new"
-    mv "${findings_tmp}.new" "$findings_tmp"
-  done
-}
-
 # Compose the final report from the findings array + errors stream and write it
 # atomically to <final_path>. Returns 1 on jq failure.
 # Args: <feature> <findings_tmp> <errors_json> <final_path>
@@ -379,7 +259,7 @@ _mumei_detector_assemble_report() {
   local skipped_arr ran_arr errors_only
   skipped_arr="$(printf '%s' "$errors_arr" | jq '[.[] | select(.skipped == true) | {name: .detector, reason: .message}]')"
   ran_arr="$(printf '%s' "$errors_arr" | jq '
-    ["semgrep", "osv-scanner", "hallucinated-package-check"]
+    ["semgrep", "osv-scanner"]
     - [.[] | select(.skipped == true) | .detector]
   ')"
   errors_only="$(printf '%s' "$errors_arr" | jq '[.[] | select(.skipped != true) | {detector: .detector, message: .message}]')"
@@ -421,16 +301,15 @@ _mumei_detector_assemble_report() {
   return 0
 }
 
-# Merge the three per-detector JSON outputs into a single severity-classified
+# Merge the per-detector JSON outputs into a single severity-classified
 # report and atomically write it to <final_path>.
-# Args: <semgrep_json> <osv_json> <hpc_json> <errors_json> <final_path> <feature>
+# Args: <semgrep_json> <osv_json> <errors_json> <final_path> <feature>
 mumei_detector_aggregate() {
   local semgrep_json="$1"
   local osv_json="$2"
-  local hpc_json="$3"
-  local errors_json="$4"
-  local final_path="$5"
-  local feature="$6"
+  local errors_json="$3"
+  local final_path="$4"
+  local feature="$5"
 
   # Build a flat findings array via per-detector helpers.
   local findings_tmp
@@ -439,7 +318,6 @@ mumei_detector_aggregate() {
 
   _mumei_detector_collect_semgrep "$semgrep_json" "$findings_tmp"
   _mumei_detector_collect_osv     "$osv_json"     "$findings_tmp"
-  _mumei_detector_collect_hpc     "$hpc_json"     "$findings_tmp"
 
   if ! _mumei_detector_assemble_report "$feature" "$findings_tmp" "$errors_json" "$final_path"; then
     rm -f "$findings_tmp"
@@ -449,14 +327,16 @@ mumei_detector_aggregate() {
   return 0
 }
 
-# Self-test entry point. Builds an isolated tmpdir with a fixture
-# package.json and runs the binary check + aggregate path. Verifies the
-# output JSON is structurally valid. Used by `bash detectors.sh --self-test`.
+# Self-test entry point. Builds an isolated tmpdir with a synthetic
+# semgrep finding and runs the aggregate path. Verifies the output JSON
+# is structurally valid and the HIGH bucket carries the seeded finding.
+# Used by `bash detectors.sh --self-test`.
 _mumei_detector_self_test() {
   # The self-test exercises:
-  # 1. binary check (tolerates osv-scanner missing for dev environments)
-  # 2. severity normalizer with all expected inputs
-  # 3. one full aggregate cycle in an isolated tmpdir
+  # 1. severity normalizer with all expected inputs
+  # 2. one full aggregate cycle in an isolated tmpdir, using a synthetic
+  #    semgrep ERROR result so HIGH detection can be asserted without
+  #    requiring the real semgrep binary.
   local rc=0
   mumei_log_info "self-test: starting"
 
@@ -469,8 +349,6 @@ _mumei_detector_self_test() {
     "osv-scanner:5.0=MEDIUM"
     "osv-scanner:2.0=LOW"
     "osv-scanner:=MEDIUM"
-    "hallucinated-package-check:missing=HIGH"
-    "hallucinated-package-check:unknown=MEDIUM"
   )
   local case src raw expect actual
   for case in "${cases[@]}"; do
@@ -488,24 +366,22 @@ _mumei_detector_self_test() {
   # 2. aggregate cycle in tmpdir
   local tmpdir
   tmpdir="$(mktemp -d -t mumei-detector-selftest.XXXXXX)"
-  cat > "${tmpdir}/package.json" <<'JSON'
-{
-  "name": "mumei-selftest",
-  "dependencies": {
-    "this-package-definitely-does-not-exist-mumei-test-xyz": "^1.0.0"
-  }
-}
-JSON
   local sg="${tmpdir}/sg.json"
   local osv="${tmpdir}/osv.json"
-  local hpc="${tmpdir}/hpc.json"
   local err="${tmpdir}/err.json"
   local final="${tmpdir}/final.json"
 
-  printf '%s' '{"results":[]}' > "$sg"
+  cat > "$sg" <<'JSON'
+{
+  "results": [
+    { "check_id": "self-test.high", "path": "fixture.js", "start": {"line": 1},
+      "extra": { "severity": "ERROR", "message": "self-test fixture finding" } }
+  ]
+}
+JSON
   printf '%s' '{"results":[]}' > "$osv"
-  ( cd "$tmpdir" && mumei_detector_run_hpc "$hpc" "$err" ) || rc=1
-  mumei_detector_aggregate "$sg" "$osv" "$hpc" "$err" "$final" "self-test" || rc=1
+  : > "$err"
+  mumei_detector_aggregate "$sg" "$osv" "$err" "$final" "self-test" || rc=1
 
   if ! jq empty < "$final" 2>/dev/null; then
     mumei_log_error "self-test: final JSON is invalid"
@@ -515,7 +391,7 @@ JSON
   local high
   high="$(jq '.counts.HIGH' < "$final" 2>/dev/null || echo 0)"
   if (( high < 1 )); then
-    mumei_log_error "self-test: expected at least 1 HIGH finding (hallucinated package), got ${high}"
+    mumei_log_error "self-test: expected at least 1 HIGH finding (semgrep ERROR), got ${high}"
     rc=1
   fi
 

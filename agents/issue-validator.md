@@ -47,10 +47,10 @@ You also have read access to the project source.
 # Skip rule for detector findings
 
 Before evaluating the three axes, check the finding's `source` field. If
-it is one of `"semgrep"`, `"osv-scanner"`, `"hallucinated-package-check"`,
-or any value containing `"detector"`, this finding came from a
-deterministic detector and is ground truth. Do NOT analyze it. Echo
-back this verdict immediately and stop:
+it is one of `"semgrep"`, `"osv-scanner"`, or any value containing
+`"detector"`, this finding came from a deterministic detector and is
+ground truth. Do NOT analyze it. Echo back this verdict immediately and
+stop:
 
 ```json
 {

@@ -31,8 +31,8 @@ You will receive:
 
 When the orchestrator injects a `<detector_findings ground_truth="true">`
 block in your prompt, every entry inside is a verified true positive
-emitted by a deterministic detector (semgrep, osv-scanner, or
-hallucinated-package-check). Treat them as facts:
+emitted by a deterministic detector (semgrep or osv-scanner). Treat them
+as facts:
 
 - Do NOT validate, dispute, or downgrade their severity.
 - Do NOT duplicate any entry already listed in the block.

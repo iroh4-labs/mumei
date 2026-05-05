@@ -395,9 +395,8 @@ Any other exit code (e.g. unexpected signal not handled by the script's
 trap) MUST be treated as `rc == 2` — STOP and surface to the user.
 
 Note: a detector's *binary running successfully but reporting "skipped"*
-(e.g. no `package-lock.json` for osv-scanner, no `package.json` for the
-hpc check, malformed user-side JSON) is NOT a failure — it lands in
-`detectors_skipped` in the report and `rc` stays 0. Only crashed
+(e.g. no `package-lock.json` for osv-scanner) is NOT a failure — it lands
+in `detectors_skipped` in the report and `rc` stays 0. Only crashed
 binaries (rc ≥ 2 from the binary itself) escalate to `rc == 2`.
 
 Read `high_count` from the captured stdout. Stage 1 branches on it.
@@ -505,10 +504,10 @@ verify Stage 0 ran:
 (security-reviewer was skipped), read `.findings.HIGH` from the detector
 report and prepend each entry to `findings_surfaced` before writing the
 review JSON. Preserve each entry's `source` field (`"semgrep"` /
-`"osv-scanner"` / `"hallucinated-package-check"`) so the issue-validator's
-detector-skip rule still applies on any future iteration. Without this
-step the verdict is correctly `MAJOR_ISSUES` but the user sees no
-findings explaining why — the review JSON appears clean.
+`"osv-scanner"`) so the issue-validator's detector-skip rule still
+applies on any future iteration. Without this step the verdict is
+correctly `MAJOR_ISSUES` but the user sees no findings explaining why —
+the review JSON appears clean.
 
 ```json
 {

@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
-# Tests for hooks/_lib/detectors.sh — semgrep / osv-scanner / hpc runners
+# Tests for hooks/_lib/detectors.sh — semgrep / osv-scanner runners
 # and the severity-classified aggregator.
-# Network-dependent paths (real semgrep / osv-scanner / npm registry)
-# are exercised via the self-test only; unit tests stub their inputs.
+# Network-dependent paths (real semgrep / osv-scanner) are exercised
+# via the self-test only; unit tests stub their inputs.
 
 bats_require_minimum_version 1.5.0
 
@@ -63,16 +63,6 @@ setup() {
   [ "$output" = "MEDIUM" ]
 }
 
-@test "normalize_severity: hpc missing maps to HIGH" {
-  run mumei_detector_normalize_severity hallucinated-package-check missing
-  [ "$output" = "HIGH" ]
-}
-
-@test "normalize_severity: hpc unknown maps to MEDIUM" {
-  run mumei_detector_normalize_severity hallucinated-package-check unknown
-  [ "$output" = "MEDIUM" ]
-}
-
 # ─── mumei_detector_check_binaries ────────────────────────────
 
 @test "check_binaries: returns missing list when PATH is empty" {
@@ -110,40 +100,6 @@ setup() {
   jq -e '.results == []' < "$out"
 }
 
-# ─── mumei_detector_run_hpc ───────────────────────────────────
-
-@test "run_hpc: skips when package.json is absent" {
-  out="$(mktemp)"
-  err="$(mktemp)"
-  run mumei_detector_run_hpc "$out" "$err"
-  [ "$status" -eq 0 ]
-  jq -e '.skipped == true' < "$err"
-}
-
-@test "run_hpc: skips on malformed package.json (user input, not a crash)" {
-  printf '%s' "{not json" > package.json
-  out="$(mktemp)"
-  err="$(mktemp)"
-  run mumei_detector_run_hpc "$out" "$err"
-  # Malformed user-side package.json is a SKIP (rc=0), not a hard fail —
-  # otherwise a typo in package.json would block the entire review pipeline.
-  [ "$status" -eq 0 ]
-  jq -e '.skipped == true' < "$err"
-  jq -e '.message | contains("not valid JSON")' < "$err"
-}
-
-@test "run_hpc: skips when dep count exceeds limit" {
-  cat > package.json <<'JSON'
-{ "dependencies": { "a": "1", "b": "1", "c": "1" } }
-JSON
-  out="$(mktemp)"
-  err="$(mktemp)"
-  MUMEI_DETECTOR_HPC_MAX_PACKAGES=1 run mumei_detector_run_hpc "$out" "$err"
-  [ "$status" -eq 0 ]
-  jq -e '.skipped == true' < "$err"
-  jq -e '.message | contains("exceeds limit")' < "$err"
-}
-
 # ─── mumei_detector_aggregate ─────────────────────────────────
 
 @test "aggregate: classifies HIGH/LOW from synthetic semgrep findings" {
@@ -158,10 +114,9 @@ JSON
 }
 JSON
   printf '%s' '{"results":[]}' > osv.json
-  printf '%s' '[]' > hpc.json
   : > err.json
   final="$(mktemp)"
-  run mumei_detector_aggregate sg.json osv.json hpc.json err.json "$final" "test-feat"
+  run mumei_detector_aggregate sg.json osv.json err.json "$final" "test-feat"
   [ "$status" -eq 0 ]
   [ "$(jq '.counts.HIGH' < "$final")" = "1" ]
   [ "$(jq '.counts.LOW'  < "$final")" = "1" ]
@@ -169,31 +124,15 @@ JSON
   [ "$(jq -r '.findings.HIGH[0].rule_id' < "$final")" = "ci.error" ]
 }
 
-@test "aggregate: includes hallucinated package in HIGH bucket" {
-  printf '%s' '{"results":[]}' > sg.json
-  printf '%s' '{"results":[]}' > osv.json
-  cat > hpc.json <<'JSON'
-[ { "name": "fake-pkg", "status": "missing", "http_code": "404" } ]
-JSON
-  : > err.json
-  final="$(mktemp)"
-  run mumei_detector_aggregate sg.json osv.json hpc.json err.json "$final" "test-feat"
-  [ "$status" -eq 0 ]
-  [ "$(jq '.counts.HIGH' < "$final")" = "1" ]
-  [ "$(jq -r '.findings.HIGH[0].source' < "$final")" = "hallucinated-package-check" ]
-  [ "$(jq -r '.findings.HIGH[0].package.name' < "$final")" = "fake-pkg" ]
-}
-
 @test "aggregate: tracks skipped detectors via errors stream" {
   printf '%s' '{"results":[]}' > sg.json
   printf '%s' '{"results":[]}' > osv.json
-  printf '%s' '[]' > hpc.json
   jq -n '{detector:"osv-scanner", message:"no lockfile", skipped:true}' > err.json
   final="$(mktemp)"
-  run mumei_detector_aggregate sg.json osv.json hpc.json err.json "$final" "test-feat"
+  run mumei_detector_aggregate sg.json osv.json err.json "$final" "test-feat"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.detectors_skipped[0].name' < "$final")" = "osv-scanner" ]
-  [ "$(jq -r '.detectors_run | join(",")' < "$final")" = "semgrep,hallucinated-package-check" ]
+  [ "$(jq -r '.detectors_run | join(",")' < "$final")" = "semgrep" ]
 }
 
 # ─── self-test entry point ────────────────────────────────────

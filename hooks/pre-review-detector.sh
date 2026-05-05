@@ -94,13 +94,12 @@ trap '_mumei_detector_on_signal SIGINT' INT
 trap '_mumei_detector_on_signal SIGTERM' TERM
 SG_OUT="${WORK_DIR}/semgrep.json"
 OSV_OUT="${WORK_DIR}/osv.json"
-HPC_OUT="${WORK_DIR}/hpc.json"
 ERR_OUT="${WORK_DIR}/errors.ndjson"
 : > "$ERR_OUT"
 
-# Track detectors that crashed (binary rc>=2). Skips (no lockfile, malformed
-# user-side JSON) are NOT failures — those land in the report's
-# detectors_skipped list and the run_* function returns 0.
+# Track detectors that crashed (binary rc>=2). Skips (no lockfile) are
+# NOT failures — those land in the report's detectors_skipped list and
+# the run_* function returns 0.
 # Only true binary crashes propagate here. Fall-through to aggregate so the
 # partial report is still written for triage, but exit 2 at the end so the
 # orchestrator does not silently treat the run as ground truth.
@@ -112,11 +111,8 @@ mumei_detector_run_semgrep "$SG_OUT" "$ERR_OUT" || FAILED_DETECTORS+=("semgrep")
 mumei_log_info "running osv-scanner..."
 mumei_detector_run_osv "$OSV_OUT" "$ERR_OUT" || FAILED_DETECTORS+=("osv-scanner")
 
-mumei_log_info "running hallucinated-package-check..."
-mumei_detector_run_hpc "$HPC_OUT" "$ERR_OUT" || FAILED_DETECTORS+=("hallucinated-package-check")
-
 mumei_log_info "aggregating findings..."
-if ! mumei_detector_aggregate "$SG_OUT" "$OSV_OUT" "$HPC_OUT" "$ERR_OUT" "$FINAL_PATH" "$FEATURE"; then
+if ! mumei_detector_aggregate "$SG_OUT" "$OSV_OUT" "$ERR_OUT" "$FINAL_PATH" "$FEATURE"; then
   mumei_log_error "aggregate failed"
   rm -rf "$WORK_DIR"
   exit 2
