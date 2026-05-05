@@ -59,13 +59,16 @@ Example — English body:
 
 ```markdown
 ## User Story
+
 As a registered user, I want to log in with email and password, so that I can access my data.
 
 ## Acceptance Criteria
+
 - REQ-1.1 [CONFIRMED] WHEN the user submits valid credentials, the system SHALL issue a session cookie.
 - REQ-1.2 [CONFIRMED] IF five consecutive logins fail, then the system SHALL lock the account for 15 minutes.
 
 ## Out of Scope
+
 - MFA is deferred to v2.
 ```
 
@@ -121,6 +124,7 @@ Approach:
 3. Use `AskUserQuestion` (multiple-choice where possible, 1-4 questions per call). Cap is **3 rounds × 5 questions = 15 questions max**. Track count.
 
 4. Stop early if:
+
    - All ambiguities resolve.
    - The user signals closure ("ok", "proceed", "make spec", etc.).
    - Cap reached → ask the user "continue clarifying or proceed to draft?"
@@ -135,23 +139,29 @@ Generate `.mumei/specs/<feature>/requirements.md` using the template:
 # <feature> Requirements
 
 ## User Story
+
 As a <role>, I want <feature>, so that <benefit>.
 
 ## Acceptance Criteria
+
 - REQ-N.1 [CONFIRMED] WHEN <trigger>, the system SHALL <response>.
 - REQ-N.2 [CONFIRMED] WHILE <state>, the system SHALL <response>.
-...
+  ...
 
 ## Out of Scope
+
 - ...
 
 ## Assumptions
+
 - ...
 
 ## Open Questions
+
 - [ ] ...
 
 ## Related
+
 - design: design.md
 - tasks: tasks.md
 ```
@@ -162,7 +172,7 @@ Tag each AC with `[CONFIRMED]`, `[ASSUMPTION]`, or `[NEEDS CLARIFICATION: ...]`.
 
 Launch the reviewer:
 
-```
+```text
 Task(subagent_type: "requirements-reviewer",
      prompt: "Review .mumei/specs/<feature>/requirements.md against transcript and scratch. Feature: <feature>. Transcript: <transcript_path>. Scratch: <scratch_files_list>.")
 ```
@@ -194,35 +204,43 @@ Generate `.mumei/specs/<feature>/design.md`:
 # <feature> Design
 
 ## Overview
+
 <1-3 lines>
 
 ## Architecture
+
 \`\`\`mermaid
 graph LR
-  A[Client] --> B[Service]
-  B --> C[(DB)]
+A[Client] --> B[Service]
+B --> C[(DB)]
 \`\`\`
 
 ## Data Model
+
 \`\`\`ts
 interface ...
 \`\`\`
 
 ## Components
+
 - **<A>**: <responsibility>
 
 ## Trade-offs / Alternatives
+
 - Adopted: <choice>
 - Rejected: <choice + reason>
 
 ## Risks
+
 - <risk + mitigation>
 
 ## Wave Plan
+
 - Wave 1: <goal>
 - Wave 2: <goal>
 
 ## Related
+
 - requirements: requirements.md
 ```
 
@@ -236,7 +254,7 @@ Do **NOT** ask the user any questions in this phase. If you encounter ambiguity 
 
 Launch the reviewer:
 
-```
+```text
 Task(subagent_type: "design-reviewer",
      prompt: "Review .mumei/specs/<feature>/design.md against requirements.md. Feature: <feature>.")
 ```
@@ -260,6 +278,7 @@ Generate `.mumei/specs/<feature>/tasks.md` from the design's Wave Plan:
 # <feature> Implementation Plan
 
 ## Wave 1: <name>
+
 **Goal**: <1 line>
 **Verify**: <executable command or observation>
 
@@ -273,6 +292,7 @@ Generate `.mumei/specs/<feature>/tasks.md` from the design's Wave Plan:
   - _Requirements: REQ-N.2, REQ-N.3_
 
 ## Wave 2: <name>
+
 ...
 ```
 
@@ -282,7 +302,7 @@ Each task MUST have `_Files:_`, `_Depends:_`, `_Requirements:_`. Each Wave MUST 
 
 Launch the reviewer:
 
-```
+```text
 Task(subagent_type: "tasks-reviewer",
      prompt: "Review .mumei/specs/<feature>/tasks.md against design.md and requirements.md. Feature: <feature>.")
 ```
@@ -311,8 +331,8 @@ mumei_state_set "$feature" '.phase' '"implement"'
 mumei_state_set "$feature" '.current_wave' '1'
 ```
 
-5. On `Edit a section`: ask which section, edit it, re-run that section's reviewer, then re-present.
-6. On `Reject`: leave state as-is (`phase=plan`); the user can resume later by re-invoking `/mumei:plan <feature>`.
+1. On `Edit a section`: ask which section, edit it, re-run that section's reviewer, then re-present.
+2. On `Reject`: leave state as-is (`phase=plan`); the user can resume later by re-invoking `/mumei:plan <feature>`.
 
 This is the single user approval gate. There is no per-spec approval before this point.
 
@@ -384,8 +404,8 @@ Branch on the captured signals in this priority order. Always check
    - No active feature in `.mumei/current` or spec directory missing.
    - Run interrupted by signal (Ctrl-C / SIGTERM); the JSON includes
      `interrupted: true` and a `signal` field. Re-run when ready.
-   In every `rc == 2` case the LLM reviewers cannot replace the detector
-   ground truth; user must fix the underlying cause or set `MUMEI_BYPASS=1`.
+     In every `rc == 2` case the LLM reviewers cannot replace the detector
+     ground truth; user must fix the underlying cause or set `MUMEI_BYPASS=1`.
 3. **`rc == 0` AND `bypassed != true`** — clean run. The invariant
    `detectors_ran == true` AND `failed_detectors == []` MUST hold; if not,
    treat as `rc == 2` (defense-in-depth). Read `high_count` and proceed
@@ -394,7 +414,7 @@ Branch on the captured signals in this priority order. Always check
 Any other exit code (e.g. unexpected signal not handled by the script's
 trap) MUST be treated as `rc == 2` — STOP and surface to the user.
 
-Note: a detector's *binary running successfully but reporting "skipped"*
+Note: a detector's _binary running successfully but reporting "skipped"_
 (e.g. no `package-lock.json` for osv-scanner) is NOT a failure — it lands
 in `detectors_skipped` in the report and `rc` stays 0. Only crashed
 binaries (rc ≥ 2 from the binary itself) escalate to `rc == 2`.
@@ -406,6 +426,7 @@ Read `high_count` from the captured stdout. Stage 1 branches on it.
 Branch on `high_count` from Stage 0:
 
 - **`high_count == 0`** (the common case) — launch all 3 reviewers in parallel:
+
   - `Task(subagent_type: "spec-compliance-reviewer", ...)`
   - `Task(subagent_type: "code-quality-reviewer", ...)`
   - `Task(subagent_type: "security-reviewer", ...)`
@@ -413,6 +434,7 @@ Branch on `high_count` from Stage 0:
 - **`high_count > 0`** — skip `security-reviewer`. Detector findings are
   ground truth for the security category, so duplicating the work in an LLM
   reviewer wastes tokens and risks the LLM downgrading them. Launch only:
+
   - `Task(subagent_type: "spec-compliance-reviewer", ...)`
   - `Task(subagent_type: "code-quality-reviewer", ...)`
 
@@ -420,6 +442,7 @@ Branch on `high_count` from Stage 0:
   remaining reviewers report.
 
 Pass each reviewer:
+
 - The active feature slug
 - The git diff for the Wave under review (or for the whole feature if reviewing at end)
 - Read access to spec files
@@ -428,7 +451,7 @@ Pass each reviewer:
   contains the JSON array from `.findings.HIGH` of the detectors report.
   Build the prompt inline:
 
-  ```
+  ```text
   <detector_findings ground_truth="true">
   [JSON array of HIGH findings, copied verbatim from the report]
   </detector_findings>

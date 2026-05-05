@@ -108,6 +108,74 @@ jobs:
           [[ -f .claude-plugin/plugin.json ]] || { echo "FAIL: plugin.json missing"; exit 1; }
 
   # ─────────────────────────────────────────
+  # CI-only checks (REQ-5 Wave 3): things developers should NOT have to run
+  # on every local commit because they hit the network or pull a release
+  # binary on demand. The format / lint / test suite that runs on every
+  # commit lives in `.pre-commit-config.yaml`; CONTRIBUTING.md instructs
+  # contributors to `pre-commit install` so commits are gated locally
+  # (the global no `--no-verify` rule prevents bypass). Duplicating those
+  # hooks in CI would be redundant; instead we cover the gaps here.
+  # ─────────────────────────────────────────
+  lint-extra:
+    runs-on: ubuntu-latest
+    # Minimum permissions per GitHub hardening guide
+    # (https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication).
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      # lychee is heavy and rate-limit-sensitive; keep it out of pre-commit
+      # (developer commits should not hammer external sites) but gate CI on it.
+      - name: lychee (link check)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --accept 200,206,403,429
+            './**/*.md'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # semgrep self-scan (REQ-5.14): dogfood SAST against the mumei codebase.
+      # advisory at this stage (`|| true`) so baseline findings don't block CI;
+      # promote to required-status once the baseline is clean. Reference:
+      # https://semgrep.dev/docs/semgrep-ci/sample-ci-configs
+      - name: semgrep self-scan (advisory)
+        run: |
+          set +e  # advisory: do not fail the lint-extra job on findings
+          docker run --rm -v "${PWD}:/src" -w /src semgrep/semgrep \
+            semgrep scan --config=auto --error --quiet
+          rc=$?
+          if [[ $rc -ne 0 ]]; then
+            echo "::warning::semgrep self-scan reported findings (advisory; not blocking)"
+          fi
+          exit 0
+
+      # shellharden has no first-party pre-commit hook; install the release
+      # binary and run it as a CI-only check. shellcheck (which IS in
+      # pre-commit) catches bugs; shellharden enforces quoting — complementary.
+      - name: shellharden (quoting hardening)
+        run: |
+          set -e
+          mkdir -p /tmp/shellharden
+          curl -sLo /tmp/shellharden/sh.tar.gz \
+            "https://github.com/anordal/shellharden/releases/download/v4.3.1/shellharden-x86_64-unknown-linux-gnu.tar.gz"
+          tar -xzf /tmp/shellharden/sh.tar.gz -C /tmp/shellharden
+          chmod +x /tmp/shellharden/shellharden
+          # NOTE: hooks/_lib/detectors.sh is excluded — shellharden v4.3.1 parser
+          # raises "Unexpected end of file" on it (see follow-up tracked in
+          # memory/req6-language-convention-fix.md). All other shell sources are
+          # still gated.
+          shopt -s extglob
+          /tmp/shellharden/shellharden --check \
+            hooks/_lib/!(detectors).sh \
+            hooks/*.sh \
+            scripts/*.sh
+
+  # ─────────────────────────────────────────
   # bats による hook / _lib の単体テスト。
   # macos-latest と ubuntu-latest の matrix で BSD/GNU 差を検出する。
   # bats のバージョンは pin して両 OS 間の挙動差を抑える。

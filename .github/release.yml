@@ -1,0 +1,13 @@
+# Auto-generated release notes config for `gh release create --generate-notes`.
+# Reference: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+#
+# GitHub's release.yml schema only supports label-based grouping, NOT regex on
+# commit subjects. mumei does not run a label-bot, so the only meaningful entry
+# is the dependabot author exclude. PRs are listed in chronological order under
+# "Other changes" by default; release notes consumers can read Conventional
+# Commits prefixes directly in the subject lines.
+
+changelog:
+  exclude:
+    authors:
+      - "dependabot[bot]"

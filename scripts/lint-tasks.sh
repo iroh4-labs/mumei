@@ -43,7 +43,7 @@ FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.
 [[ -n "$FILE_PATH" ]] || exit 0
 
 # Normalize against CLAUDE_PROJECT_DIR if absolute.
-if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR"* ]]; then
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
@@ -84,13 +84,13 @@ while IFS= read -r task_id; do
   [[ -z "$files" ]] && missing+=("_Files:_")
   [[ -z "$depends" ]] && missing+=("_Depends:_")
   [[ -z "$requirements" ]] && missing+=("_Requirements:_")
-  if (( ${#missing[@]} > 0 )); then
+  if ((${#missing[@]} > 0)); then
     VIOLATIONS+="Task ${task_id}: missing meta (${missing[*]})"$'\n'
   fi
 
   # 2 & 3. Validate each _Requirements:_ token
   if [[ -n "$requirements" ]]; then
-    IFS=',' read -ra req_arr <<< "$requirements"
+    IFS=',' read -ra req_arr <<<"$requirements"
     for req in "${req_arr[@]}"; do
       req="$(echo "$req" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
       [[ -n "$req" ]] || continue
@@ -106,7 +106,7 @@ while IFS= read -r task_id; do
 
   # 4. Validate each _Files:_ path
   if [[ -n "$files" ]]; then
-    IFS=',' read -ra file_arr <<< "$files"
+    IFS=',' read -ra file_arr <<<"$files"
     for f in "${file_arr[@]}"; do
       f="$(echo "$f" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
       [[ -n "$f" ]] || continue
@@ -124,7 +124,7 @@ done < <(mumei_tasks_list_ids "$FEATURE" 2>/dev/null)
 
 [[ -n "$VIOLATIONS" ]] || exit 0
 
-CONTEXT=$'tasks.md format violations detected (advisory — not blocking):\n\n'"${VIOLATIONS}"$'\nFix the violations or, if intentional, update the tasks meta accordingly.'
+CONTEXT=$'tasks.md format violations detected (advisory — not blocking):\n\n'"$VIOLATIONS"$'\nFix the violations or, if intentional, update the tasks meta accordingly.'
 jq -n --arg c "$CONTEXT" '{
   hookSpecificOutput: {
     hookEventName: "PostToolUse",

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Security vulnerability"
+    url: "https://github.com/hir4ta/mumei/security/advisories/new"
+    about: "Do not open a public issue for security reports. Use GitHub Security Advisories (private channel)."
+  - name: "Documentation"
+    url: "https://github.com/hir4ta/mumei#readme"
+    about: "README, PRIVACY policy, and Hook rules reference."
+  - name: "Design rationale"
+    url: "https://github.com/hir4ta/mumei/blob/main/docs/document-corruption.md"
+    about: "kuroko stance, structural countermeasures, and why mumei refuses certain features."

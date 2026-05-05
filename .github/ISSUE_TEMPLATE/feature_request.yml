@@ -1,0 +1,80 @@
+name: "Feature request"
+description: "Propose a new mumei feature, Hook rule, agent, skill, or detector."
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature. mumei follows a strict KISS / kuroko
+        stance — proposals are weighed against current pain (have you hit it
+        in real use?) and against [`docs/mumei-decisions.md`](https://github.com/hir4ta/mumei/blob/main/docs/mumei-decisions.md)
+        Non-goals. Read those before filing if you can.
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: "Use case"
+      description: |
+        What are you trying to do? Describe the workflow, not the solution.
+        "I want to plan a feature with multiple parallel implementers" is a
+        use case; "add a `--parallel` flag to /mumei:plan" is a solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: pain
+    attributes:
+      label: "Real-world pain"
+      description: |
+        How often have you hit this? On which projects? What is the workaround
+        you currently use? Features without a recurring pain are usually
+        deferred (see decisions.md FC1-FC16).
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Proposed behavior"
+      description: |
+        What should mumei do? Describe the observable effect from the user's
+        perspective. If you can, sketch the API / Hook / file output.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives considered"
+      description: |
+        What else did you consider? Why is this proposal better? List at least
+        one alternative — even "do nothing" counts.
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: "Out of scope"
+      description: |
+        What does this proposal explicitly NOT include? Useful for keeping the
+        discussion focused.
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: "How critical is this to you?"
+      options:
+        - "Blocker — I cannot use mumei without it"
+        - "Major — recurring friction, working around it"
+        - "Nice to have — would improve a specific scenario"
+        - "Speculative — not blocking me, just interested"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: "Pre-flight checklist"
+      options:
+        - label: "I read [`docs/mumei-decisions.md`](https://github.com/hir4ta/mumei/blob/main/docs/mumei-decisions.md) Non-goals and confirmed this is not explicitly excluded."
+          required: false
+        - label: "I searched existing issues and did not find a duplicate."
+          required: true

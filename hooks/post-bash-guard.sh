@@ -70,8 +70,8 @@ while IFS= read -r entry; do
   if mumei_path_is_gitignored "$entry"; then
     continue
   fi
-  CHANGED_FILES+="${entry}"$'\n'
-done <<< "$RAW_FILES"
+  CHANGED_FILES+="$entry"$'\n'
+done <<<"$RAW_FILES"
 
 [[ -n "$CHANGED_FILES" ]] || exit 0
 
@@ -83,10 +83,10 @@ while IFS= read -r f; do
   if [[ -z "$owners" ]]; then
     OUT_OF_SCOPE+="${f}\n"
   fi
-done <<< "$CHANGED_FILES"
+done <<<"$CHANGED_FILES"
 
 if [[ -n "$OUT_OF_SCOPE" ]]; then
-  CONTEXT=$'The following files were modified via Bash but are NOT listed in any task\'s _Files: meta in .mumei/specs/'"${FEATURE}"$'/tasks.md:\n\n'"${OUT_OF_SCOPE}"$'\nIf these changes are intentional, add the files to the appropriate task\'s _Files: line. Otherwise revert them.'
+  CONTEXT=$'The following files were modified via Bash but are NOT listed in any task\'s _Files: meta in .mumei/specs/'"$FEATURE"$'/tasks.md:\n\n'"$OUT_OF_SCOPE"$'\nIf these changes are intentional, add the files to the appropriate task\'s _Files: line. Otherwise revert them.'
   jq -n --arg c "$CONTEXT" '{
     hookSpecificOutput: {
       hookEventName: "PostToolUse",

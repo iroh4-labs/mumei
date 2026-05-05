@@ -92,8 +92,8 @@ fi
 Tell the user:
 
 > Archived `<feature>` to `.mumei/archive/<YYYY-MM>/<feature>/`. Commit the move:
-> 
-> ```
+>
+> ```bash
 > git add -A && git commit -m "archive: move <feature> to <YYYY-MM>"
 > ```
 

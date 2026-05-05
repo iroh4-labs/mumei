@@ -1,0 +1,51 @@
+# typos config
+# Reference: https://github.com/crate-ci/typos/blob/master/docs/reference.md
+
+[default]
+# Files that may contain non-English content or technical jargon that triggers
+# false positives. mumei's review agents quote OWASP IDs, CVE IDs, and many
+# library names — those should not be checked.
+extend-ignore-re = [
+  # CVE / advisory IDs
+  "CVE-[0-9]{4}-[0-9]+",
+  "GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}",
+  # SHA1 / SHA256 / commit hashes (lowercase hex >= 7 chars)
+  "[0-9a-f]{7,64}",
+]
+
+[default.extend-words]
+# Project / vendor names that look like typos to typos.
+mumei = "mumei"
+kuroko = "kuroko"
+Anthropic = "Anthropic"
+shellharden = "shellharden"
+shfmt = "shfmt"
+markdownlint = "markdownlint"
+osv = "osv"
+semgrep = "semgrep"
+gitleaks = "gitleaks"
+actionlint = "actionlint"
+lychee = "lychee"
+bats = "bats"
+EARS = "EARS"
+SHALL = "SHALL"
+SLSA = "SLSA"
+GHSA = "GHSA"
+SAST = "SAST"
+# Trade-off heuristics in spec docs
+DRY = "DRY"
+KISS = "KISS"
+SOLID = "SOLID"
+YAGNI = "YAGNI"
+
+[files]
+# Skip development-only / generated paths.
+extend-exclude = [
+  ".mumei/",
+  "docs/",
+  "examples/",
+  "node_modules/",
+  ".git/",
+  "CODE_OF_CONDUCT.md",
+  "tests/integration/wave3-dogfood.bats",
+]

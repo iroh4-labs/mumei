@@ -35,13 +35,13 @@ Run up to **3 rounds of 5 questions each** (15 total cap). Each round:
 
 Aim to cover all five in this round. Use multiple-choice for speed:
 
-| # | Axis | Example phrasing |
-|---|---|---|
-| Q1 | **Goal / JTBD** | "What problem does this solve? A) End-user authentication for SaaS B) Internal tool C) Prototype D) Other" |
-| Q2 | **Scope (MoSCoW Won't)** | "Which of the following are EXPLICITLY out of scope for v1?" |
-| Q3 | **Existing constraints** | "Which auth library/framework, if any?" |
-| Q4 | **Critical edge case** | "Which failure modes matter most?" |
-| Q5 | **Done definition** | "What is 'done'? A) Functions in dev B) Tests pass C) Deployed to staging D) Other" |
+| #   | Axis                     | Example phrasing                                                                                           |
+| --- | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Q1  | **Goal / JTBD**          | "What problem does this solve? A) End-user authentication for SaaS B) Internal tool C) Prototype D) Other" |
+| Q2  | **Scope (MoSCoW Won't)** | "Which of the following are EXPLICITLY out of scope for v1?"                                               |
+| Q3  | **Existing constraints** | "Which auth library/framework, if any?"                                                                    |
+| Q4  | **Critical edge case**   | "Which failure modes matter most?"                                                                         |
+| Q5  | **Done definition**      | "What is 'done'? A) Functions in dev B) Tests pass C) Deployed to staging D) Other"                        |
 
 ### Round 2 — Drill remaining unclear axes
 
@@ -81,43 +81,54 @@ Generated: <ISO date>
 Rounds: N/3 | Questions: M/15 | Status: PASS|NEEDS_IMPROVEMENT|MAJOR_ISSUES
 
 ## Goal (JTBD)
+
 <1-2 sentences>
 Confidence: [CONFIRMED] | [ASSUMPTION] | [NEEDS CLARIFICATION: ...]
 
 ## Scope
+
 - Must: ...
 - Should: ...
 - Won't: ...
-Confidence: [CONFIRMED]
+  Confidence: [CONFIRMED]
 
 ## Constraints
+
 - Existing stack: ... [CONFIRMED]
 - Non-functional: ... [ASSUMPTION]
 - Limits: ... [NEEDS CLARIFICATION]
 
 ## User Stories (draft)
+
 ### US-1: <title>
+
 As a <role>, I want to <action>, so that <benefit>.
 Confidence: [CONFIRMED]
 
 #### Acceptance Criteria (EARS, draft)
+
 - [Event] WHEN ..., the system SHALL ...
 - [Unwanted] IF ..., then the system SHALL ...
 
 ## Rejected Alternatives
+
 - <option A>: <reason for rejection, 1 line>
 - <option B>: <reason>
 
 ## Open Questions
+
 - [ ] <question to defer to design phase>
 
 ## Confidence Distribution
+
 [CONFIRMED]: N items / [ASSUMPTION]: N items / [NEEDS CLARIFICATION]: N items
 
 ## Interview Record
-| Round | Q | A | Confidence change |
-|---|---|---|---|
-| 1 | Goal? | (A) SaaS auth | [NEEDS CLARIFICATION] → [CONFIRMED] |
+
+| Round | Q     | A             | Confidence change                   |
+| ----- | ----- | ------------- | ----------------------------------- |
+| 1     | Goal? | (A) SaaS auth | [NEEDS CLARIFICATION] → [CONFIRMED] |
+
 ...
 ```
 
