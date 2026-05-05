@@ -113,12 +113,24 @@ mumei_is_meta_path() {
     # directory does not exist on disk (canonicalisation requires existence).
     local canon_root
     canon_root="$(cd "$proj_root" 2>/dev/null && pwd -P || echo "$proj_root")"
-    # For the input path, resolve the parent directory only — the file itself
-    # may not exist yet (Edit can create it).
-    local p_dir p_base canon_p
+    # For the input path, the parent dir may not exist yet (Edit/Write can
+    # create files in brand-new subdirectories). Walk up to the first
+    # existing ancestor, canonicalise that, then re-append the missing tail
+    # plus the basename. Without this walk, canon_root resolves symlinks
+    # while canon_p stays literal — they then fail to share a prefix and
+    # the in-project file is silently misclassified as meta.
+    local p_dir p_base
     p_dir="$(dirname "$p")"
     p_base="$(basename "$p")"
-    canon_p="$(cd "$p_dir" 2>/dev/null && pwd -P || echo "$p_dir")/$p_base"
+    local anc="$p_dir"
+    local tail=""
+    while [[ ! -d "$anc" && "$anc" != "/" && -n "$anc" ]]; do
+      tail="/$(basename "$anc")$tail"
+      anc="$(dirname "$anc")"
+    done
+    local canon_anc canon_p
+    canon_anc="$(cd "$anc" 2>/dev/null && pwd -P || echo "$anc")"
+    canon_p="${canon_anc}${tail}/${p_base}"
     case "$canon_p" in
     "$canon_root" | "$canon_root"/*) ;; # inside project, fall through
     *) return 0 ;;                      # outside project, meta
