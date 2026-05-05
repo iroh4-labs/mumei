@@ -111,7 +111,7 @@ if mumei_is_git_push "$COMMAND"; then
   if [[ -d "$REVIEW_DIR" ]]; then
     # Review file names are ISO 8601 timestamps, so alphabetical order = chronological.
     # `find ... | sort | tail -n1` picks the newest while avoiding shellcheck SC2012.
-    LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
+    LATEST_REVIEW="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
     if [[ -n "$LATEST_REVIEW" ]] && [[ -f "$LATEST_REVIEW" ]]; then
       VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
       if [[ "$VERDICT" == "MAJOR_ISSUES" ]]; then

@@ -81,7 +81,7 @@ if [[ ! -d "$REVIEW_DIR" ]]; then
 else
   # Review file names are ISO 8601 timestamps, so alphabetical = chronological.
   # Exclude detector reports (<ts>-detectors.json) so we pin the actual review.
-  LATEST_REVIEW="$(find "${REVIEW_DIR}" -maxdepth 1 -type f -name '*.json' \
+  LATEST_REVIEW="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name '*.json' \
     ! -name '*-detectors.json' 2>/dev/null | sort | tail -n1)"
   if [[ -z "$LATEST_REVIEW" ]]; then
     NEEDS_REVIEW=1

@@ -34,7 +34,7 @@ FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')"
 [[ -n "$FILE_PATH" ]] || exit 0
 
 # Normalize the file path
-if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR"* ]]; then
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 

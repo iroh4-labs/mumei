@@ -43,7 +43,7 @@ FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.
 [[ -n "$FILE_PATH" ]] || exit 0
 
 # Normalize against CLAUDE_PROJECT_DIR if absolute.
-if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "${CLAUDE_PROJECT_DIR}"* ]]; then
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR"* ]]; then
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
@@ -124,7 +124,7 @@ done < <(mumei_tasks_list_ids "$FEATURE" 2>/dev/null)
 
 [[ -n "$VIOLATIONS" ]] || exit 0
 
-CONTEXT=$'tasks.md format violations detected (advisory — not blocking):\n\n'"${VIOLATIONS}"$'\nFix the violations or, if intentional, update the tasks meta accordingly.'
+CONTEXT=$'tasks.md format violations detected (advisory — not blocking):\n\n'"$VIOLATIONS"$'\nFix the violations or, if intentional, update the tasks meta accordingly.'
 jq -n --arg c "$CONTEXT" '{
   hookSpecificOutput: {
     hookEventName: "PostToolUse",
