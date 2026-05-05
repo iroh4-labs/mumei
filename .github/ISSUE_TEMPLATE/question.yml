@@ -1,0 +1,48 @@
+name: "Question"
+description: "Ask a question about mumei usage, behavior, or design."
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your question. Before opening, please skim:
+        - [README.md](https://github.com/hir4ta/mumei#readme) — install, workflow, Hook rules.
+        - [PRIVACY.md](https://github.com/hir4ta/mumei/blob/main/PRIVACY.md) — network egress, telemetry policy.
+        - [`docs/document-corruption.md`](https://github.com/hir4ta/mumei/blob/main/docs/document-corruption.md) — kuroko stance, design rationale.
+
+        If your question is about a defect, use the **Bug report** template.
+        If it is a feature proposal, use the **Feature request** template.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: "Your question"
+      description: "What do you want to understand?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Context"
+      description: |
+        What were you doing when the question came up? What did you try? What
+        did you expect vs observe?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Question area"
+      options:
+        - "Installation / setup"
+        - "Workflow (brainstorm / plan / implement / review / done)"
+        - "Hook behavior"
+        - "Reviewer agents (4-stage pipeline / per-issue validator)"
+        - "Detector integration (semgrep / osv-scanner)"
+        - "Plugin development / contributing"
+        - "Other"
+    validations:
+      required: true

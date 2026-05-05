@@ -1,0 +1,132 @@
+name: "Bug report"
+description: "Report a defect in a mumei hook, agent, skill, or detector."
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report. Please fill out as many fields as you can.
+        For **security vulnerabilities**, do NOT open a public issue — use
+        [GitHub Security Advisories](https://github.com/hir4ta/mumei/security/advisories/new)
+        instead (see [SECURITY.md](https://github.com/hir4ta/mumei/blob/main/SECURITY.md)).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Affected component"
+      description: "Which part of mumei did you observe the bug in?"
+      options:
+        - "hook (pre-edit / pre-bash / post-edit / post-bash / stop / pre-review-detector)"
+        - "agent (requirements / design / tasks / spec-compliance / code-quality / security / adversarial / issue-validator)"
+        - "skill (plan / brainstorm / init / archive)"
+        - "detector (semgrep / osv-scanner)"
+        - "I don't know / multiple"
+    validations:
+      required: true
+
+  - type: input
+    id: claude_code_version
+    attributes:
+      label: "Claude Code version"
+      description: "Output of `claude --version`."
+      placeholder: "e.g., 2.1.116"
+    validations:
+      required: true
+
+  - type: input
+    id: mumei_version
+    attributes:
+      label: "mumei version"
+      description: "From `.claude-plugin/plugin.json` `version` field, or `/plugin list` output."
+      placeholder: "e.g., 0.1.13"
+    validations:
+      required: true
+
+  - type: input
+    id: bash_version
+    attributes:
+      label: "bash version (first line of `bash --version`)"
+      placeholder: "e.g., GNU bash, version 5.2.21(1)-release (aarch64-apple-darwin23.2.0)"
+    validations:
+      required: true
+
+  - type: input
+    id: semgrep_version
+    attributes:
+      label: "semgrep version"
+      description: "Output of `semgrep --version`. Skip if you have not installed it."
+      placeholder: "e.g., 1.95.0"
+
+  - type: input
+    id: osv_scanner_version
+    attributes:
+      label: "osv-scanner version"
+      description: "Output of `osv-scanner --version`. Skip if you have not installed it."
+      placeholder: "e.g., 1.9.1"
+
+  - type: input
+    id: os
+    attributes:
+      label: "Operating system"
+      placeholder: "e.g., macOS 15.2 / Ubuntu 24.04 / WSL2 Debian 12"
+    validations:
+      required: true
+
+  - type: textarea
+    id: state_json
+    attributes:
+      label: "`.mumei/specs/<feature>/state.json` (paste contents)"
+      description: |
+        For the active feature where the bug occurred. Redact `slug` if
+        sensitive. Skip if the bug occurred outside an active feature.
+      render: "json"
+
+  - type: textarea
+    id: tasks_md
+    attributes:
+      label: "`.mumei/specs/<feature>/tasks.md` (paste relevant Wave / task)"
+      description: "Only the parts relevant to the bug. Redact freely."
+      render: "markdown"
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: "Minimal reproduction"
+      description: |
+        The exact command sequence (or Claude Code conversation excerpt) that
+        triggers the bug. Use a fresh `.mumei/` if possible to rule out state
+        contamination.
+      render: "shell"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected vs observed behavior"
+      description: |
+        What you expected to happen, and what actually happened. Include the
+        full Hook deny `additionalContext` if a Hook fired.
+    validations:
+      required: true
+
+  - type: textarea
+    id: bypass
+    attributes:
+      label: "Did `MUMEI_BYPASS=1` change the behavior?"
+      description: |
+        If you tried bypassing, note the result. Helps distinguish Hook bugs
+        from underlying logic bugs.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: "Pre-flight checklist"
+      options:
+        - label: "I confirmed this is not a security vulnerability (those go to GitHub Security Advisories)."
+          required: true
+        - label: "I searched existing issues and did not find a duplicate."
+          required: true
+        - label: "I am running the latest mumei release."
+          required: false
