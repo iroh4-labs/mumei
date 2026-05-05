@@ -145,12 +145,13 @@ jobs:
       - name: shellharden (quoting hardening)
         run: |
           set -e
+          # The release tarball is flat (a single `shellharden` binary, no subdir).
+          # Verified at v4.3.1 by inspecting the upstream archive contents.
+          mkdir -p /tmp/shellharden
           curl -sL "https://github.com/anordal/shellharden/releases/download/v4.3.1/shellharden-x86_64-unknown-linux-gnu.tar.gz" \
-            -o /tmp/shellharden.tar.gz
-          mkdir -p /tmp/shellharden && tar -xzf /tmp/shellharden.tar.gz -C /tmp/shellharden
-          shellharden_bin="$(find /tmp/shellharden -type f -name shellharden | head -n1)"
-          chmod +x "$shellharden_bin"
-          "$shellharden_bin" --check hooks/_lib/*.sh hooks/*.sh scripts/*.sh
+            | tar -xz -C /tmp/shellharden
+          chmod +x /tmp/shellharden/shellharden
+          /tmp/shellharden/shellharden --check hooks/_lib/*.sh hooks/*.sh scripts/*.sh
 
   # ─────────────────────────────────────────
   # bats による hook / _lib の単体テスト。
