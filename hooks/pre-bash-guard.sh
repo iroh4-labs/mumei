@@ -92,16 +92,13 @@ if mumei_is_git_commit "$COMMAND"; then
   fi
 
   if [[ -n "$TEST_CMD" ]]; then
-    # MUMEI_SKIP_TEST=1 skips the test runner (useful when CI runs tests separately)
-    if [[ "${MUMEI_SKIP_TEST:-0}" != "1" ]]; then
-      mumei_log_info "running tests before commit: ${TEST_CMD}"
-      if ! TEST_OUTPUT="$(eval "$TEST_CMD" 2>&1)"; then
-        # Truncate test output to the last 30 lines for the deny reason
-        TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
-        mumei_deny \
-          "Tests failing. Fix before committing." \
-          "Test command: ${TEST_CMD}\n\n${TEST_TAIL}"
-      fi
+    mumei_log_info "running tests before commit: ${TEST_CMD}"
+    if ! TEST_OUTPUT="$(eval "$TEST_CMD" 2>&1)"; then
+      # Truncate test output to the last 30 lines for the deny reason
+      TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
+      mumei_deny \
+        "Tests failing. Fix before committing." \
+        "Test command: ${TEST_CMD}\n\n${TEST_TAIL}"
     fi
   fi
 fi
