@@ -11,10 +11,10 @@ The latest published release is supported. mumei follows semantic versioning
 on the `0.x` track; older `0.x.y` releases receive no backports. Users on
 unsupported versions should upgrade before reporting an issue.
 
-| Version | Supported |
-|---|---|
-| Latest `0.x.y` (see [Releases](https://github.com/hir4ta/mumei/releases)) | Yes |
-| Older `0.x.y` | No |
+| Version                                                                   | Supported |
+| ------------------------------------------------------------------------- | --------- |
+| Latest `0.x.y` (see [Releases](https://github.com/hir4ta/mumei/releases)) | Yes       |
+| Older `0.x.y`                                                             | No        |
 
 ## Reporting a vulnerability
 
@@ -41,11 +41,11 @@ reports. Reports through those channels may be missed.
 
 mumei is a single-maintainer project. Best-effort response times:
 
-| Phase | Target |
-|---|---|
-| Acknowledgment of report | 7 days |
-| Initial triage (severity, scope) | 14 days |
-| Fix and disclosure | depends on severity, typically 30–90 days |
+| Phase                            | Target                                    |
+| -------------------------------- | ----------------------------------------- |
+| Acknowledgment of report         | 7 days                                    |
+| Initial triage (severity, scope) | 14 days                                   |
+| Fix and disclosure               | depends on severity, typically 30–90 days |
 
 Critical issues (remote code execution, credential exposure, supply chain
 compromise) are prioritized over feature work.

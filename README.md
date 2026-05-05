@@ -48,12 +48,12 @@ AI coding agents skip steps. They mark tasks complete without writing tests. The
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `/mumei:init` | One-time per-project setup. Creates `.mumei/`, proposes additions to `CLAUDE.md` with diff preview. |
-| `/mumei:brainstorm <feature>` | Optional pre-spec Q&A loop (max 3 rounds × 5 questions). Output saved to `.mumei/scratch/<feature>.md`. |
-| `/mumei:plan <feature>` | Drives the full lifecycle: clarification → requirements → design → tasks (each auto-reviewed up to 3 times) → single user approval → Wave-by-Wave implementation → 4-stage review with per-issue validation. |
-| `/mumei:archive <feature>` | Moves a `done` feature to `.mumei/archive/<YYYY-MM>/<feature>/`. Carries `scratch/<feature>.md` along as `scratch.md`. |
+| Command                       | Description                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/mumei:init`                 | One-time per-project setup. Creates `.mumei/`, proposes additions to `CLAUDE.md` with diff preview.                                                                                                          |
+| `/mumei:brainstorm <feature>` | Optional pre-spec Q&A loop (max 3 rounds × 5 questions). Output saved to `.mumei/scratch/<feature>.md`.                                                                                                      |
+| `/mumei:plan <feature>`       | Drives the full lifecycle: clarification → requirements → design → tasks (each auto-reviewed up to 3 times) → single user approval → Wave-by-Wave implementation → 4-stage review with per-issue validation. |
+| `/mumei:archive <feature>`    | Moves a `done` feature to `.mumei/archive/<YYYY-MM>/<feature>/`. Carries `scratch/<feature>.md` along as `scratch.md`.                                                                                       |
 
 ## Philosophy: why "mumei" (無名)
 
@@ -147,9 +147,9 @@ truth for security findings. These are **hard prerequisites** — the
 review-phase Hook fails closed when either is missing (set
 `MUMEI_BYPASS=1` to override, not recommended).
 
-| Tool | Purpose | Install |
-|---|---|---|
-| `semgrep` (≥ 1.50.0) | SAST, OWASP Top 10 patterns | `brew install semgrep` (macOS), `pip install semgrep` (Linux) |
+| Tool                    | Purpose                              | Install                                                                                                      |
+| ----------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `semgrep` (≥ 1.50.0)    | SAST, OWASP Top 10 patterns          | `brew install semgrep` (macOS), `pip install semgrep` (Linux)                                                |
 | `osv-scanner` (≥ 1.7.0) | CVE / dependency vulnerability check | `brew install osv-scanner` (macOS), [release binary](https://github.com/google/osv-scanner/releases) (Linux) |
 
 ### Detector tunables
@@ -159,9 +159,9 @@ the detector behaviour for edge cases (slow scans, oversized
 manifests). Defaults are appropriate for typical projects; override
 only when needed.
 
-| Variable | Default | Effect |
-|---|---|---|
-| `MUMEI_DETECTOR_TIMEOUT` | `600` | Per-detector wall-clock timeout in seconds (`semgrep` / `osv-scanner`). Raise for very large repos; lower in CI when a hung detector is worse than a missed scan. |
+| Variable                 | Default | Effect                                                                                                                                                            |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MUMEI_DETECTOR_TIMEOUT` | `600`   | Per-detector wall-clock timeout in seconds (`semgrep` / `osv-scanner`). Raise for very large repos; lower in CI when a hung detector is worse than a missed scan. |
 
 ## Installation
 
@@ -210,18 +210,22 @@ your-project/
 # User Auth Requirements
 
 ## User Story
+
 As a registered user, I want to log in with email and password, so that I can access my data.
 
 ## Acceptance Criteria
+
 - REQ-1.1 [CONFIRMED] WHEN the user submits valid credentials, the system SHALL issue a session cookie.
 - REQ-1.2 [CONFIRMED] IF 5 consecutive logins fail, then the system SHALL lock the account for 15 minutes.
 - REQ-1.3 [ASSUMPTION] WHILE the user is logged in, the system SHALL refresh the session every 30 minutes.
 - REQ-1.4 [NEEDS CLARIFICATION: which IdP?] WHERE SSO is enabled, the system SHALL delegate to the configured IdP.
 
 ## Out of Scope
+
 - MFA (deferred to v2)
 
 ## Assumptions
+
 - Bcrypt for password hashing (industry default)
 ```
 
@@ -237,6 +241,7 @@ Annotations:
 # User Auth Implementation Plan
 
 ## Wave 1: Setup
+
 **Goal**: Establish the user model and DB schema.
 **Verify**: `npm run db:migrate` succeeds.
 
@@ -250,6 +255,7 @@ Annotations:
   - _Requirements: REQ-1.1_
 
 ## Wave 2: Login flow
+
 **Goal**: Email/password login + session cookie.
 **Verify**: `npm test -- src/auth/login.test.ts` passes.
 
@@ -260,35 +266,35 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 
 ## Hook rules (full list)
 
-| ID | Phase | Hook | Trigger |
-|---|---|---|---|
-| P1 | plan | PreToolUse(Edit\|Write) | Editing `src/` while spec incomplete |
-| P2 | plan | PreToolUse(Write) | Creating `design.md` with `[NEEDS CLARIFICATION]` in `requirements.md` |
-| P3 | plan | PreToolUse(Write) | Creating `tasks.md` without `design.md` |
-| I1 | implement | PreToolUse(Edit\|Write) | Editing a file owned by a task whose deps are not complete |
-| I2 | implement | PreToolUse(Edit\|Write) | Editing a file not in any task's `_Files:_` (scope creep) |
-| I3 | implement | PreToolUse(Bash) | `git commit` with failing tests |
-| I4 | implement | PostToolUse(Edit) | Marking `[x]` without an implementation diff |
-| W1 | implement | PreToolUse(Edit\|Write) | Editing Wave N+1 file before Wave N is committed |
-| W2 | implement | PreToolUse(Bash) | `git commit` while current Wave has `[ ]` tasks |
-| R1 | review | Stop | Session ending with all tasks done but review skipped |
-| R2 | review | PreToolUse(Bash) | `git push` while latest review verdict is `MAJOR_ISSUES` |
-| R3 | done | Stop | `phase=done` reached but feature still listed in `.mumei/current` (archive pending) |
-| X1 | any | PostToolUse(Bash) | Bash modified files outside scope (advisory only) |
-| X2 | any | PostToolUse(Edit\|Write) | `.mumei/specs/*/tasks.md` format violation: missing `_Files:_`/`_Depends:_`/`_Requirements:_` meta, bad REQ-N.M syntax, or non-existent `_Files:_` path (advisory only) |
+| ID  | Phase     | Hook                     | Trigger                                                                                                                                                                 |
+| --- | --------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | plan      | PreToolUse(Edit\|Write)  | Editing `src/` while spec incomplete                                                                                                                                    |
+| P2  | plan      | PreToolUse(Write)        | Creating `design.md` with `[NEEDS CLARIFICATION]` in `requirements.md`                                                                                                  |
+| P3  | plan      | PreToolUse(Write)        | Creating `tasks.md` without `design.md`                                                                                                                                 |
+| I1  | implement | PreToolUse(Edit\|Write)  | Editing a file owned by a task whose deps are not complete                                                                                                              |
+| I2  | implement | PreToolUse(Edit\|Write)  | Editing a file not in any task's `_Files:_` (scope creep)                                                                                                               |
+| I3  | implement | PreToolUse(Bash)         | `git commit` with failing tests                                                                                                                                         |
+| I4  | implement | PostToolUse(Edit)        | Marking `[x]` without an implementation diff                                                                                                                            |
+| W1  | implement | PreToolUse(Edit\|Write)  | Editing Wave N+1 file before Wave N is committed                                                                                                                        |
+| W2  | implement | PreToolUse(Bash)         | `git commit` while current Wave has `[ ]` tasks                                                                                                                         |
+| R1  | review    | Stop                     | Session ending with all tasks done but review skipped                                                                                                                   |
+| R2  | review    | PreToolUse(Bash)         | `git push` while latest review verdict is `MAJOR_ISSUES`                                                                                                                |
+| R3  | done      | Stop                     | `phase=done` reached but feature still listed in `.mumei/current` (archive pending)                                                                                     |
+| X1  | any       | PostToolUse(Bash)        | Bash modified files outside scope (advisory only)                                                                                                                       |
+| X2  | any       | PostToolUse(Edit\|Write) | `.mumei/specs/*/tasks.md` format violation: missing `_Files:_`/`_Depends:_`/`_Requirements:_` meta, bad REQ-N.M syntax, or non-existent `_Files:_` path (advisory only) |
 
 ## Security and Privacy
 
 mumei operates **entirely locally**. mumei itself makes no outbound requests; the third-party `osv-scanner` it invokes does query `osv.dev` for CVE data on its own (see [PRIVACY.md](./PRIVACY.md)).
 
-| Item | Description |
-|---|---|
+| Item                       | Description                                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **External Communication** | None initiated by mumei. `osv-scanner` (third-party) queries `osv.dev` for CVE data; mumei does not control its network behavior. |
-| **Telemetry** | None. No analytics, no error reporting, no usage tracking. |
-| **Data Storage** | All state under project-local `.mumei/`. Nothing written to `~/.claude/` or any global location. |
-| **Conversation History** | Not stored by mumei. mumei is a quality-gate plugin, not a memory plugin. |
-| **Tools Used** | `bash`, `jq`, `git` (required); `semgrep`, `osv-scanner` (required for review phase). All locally executable. |
-| **Code** | Open source — every hook and agent is auditable. |
+| **Telemetry**              | None. No analytics, no error reporting, no usage tracking.                                                                        |
+| **Data Storage**           | All state under project-local `.mumei/`. Nothing written to `~/.claude/` or any global location.                                  |
+| **Conversation History**   | Not stored by mumei. mumei is a quality-gate plugin, not a memory plugin.                                                         |
+| **Tools Used**             | `bash`, `jq`, `git` (required); `semgrep`, `osv-scanner` (required for review phase). All locally executable.                     |
+| **Code**                   | Open source — every hook and agent is auditable.                                                                                  |
 
 Full policy: [PRIVACY.md](./PRIVACY.md)
 

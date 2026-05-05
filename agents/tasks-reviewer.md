@@ -86,6 +86,7 @@ A path in `_Files:_` does not exist on disk. Check via `test -e` or `ls`. Exclud
 ### Non-executable Verify clause
 
 A Wave's `**Verify**:` line is non-actionable: "the code looks good", "user is happy", "we'll see". Verify must be either:
+
 - An executable command (`bats tests/foo.bats`, `bash -n hooks/bar.sh`).
 - A concrete observation tied to a measurable outcome (`grep -c 'pattern' file equals 0`).
 

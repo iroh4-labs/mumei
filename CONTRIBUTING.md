@@ -34,15 +34,15 @@ must follow when editing each side.
 
 ## Required tooling
 
-| Tool | Purpose | Install |
-|---|---|---|
-| `bash` >= 4.0 | hook handlers + lib | preinstalled on macOS / Linux |
-| `jq` >= 1.6 | JSON manipulation | `brew install jq` / `apt install jq` |
-| `git` >= 2.30 | source control | preinstalled |
-| `bats-core` >= 1.5.0 | test runner | `brew install bats-core` / `npm i -g bats` |
-| `shellcheck` | shell lint | `brew install shellcheck` |
-| `semgrep` | review-phase SAST detector (optional for tests) | `brew install semgrep` |
-| `osv-scanner` | review-phase CVE detector (optional for tests) | `brew install osv-scanner` |
+| Tool                 | Purpose                                         | Install                                    |
+| -------------------- | ----------------------------------------------- | ------------------------------------------ |
+| `bash` >= 4.0        | hook handlers + lib                             | preinstalled on macOS / Linux              |
+| `jq` >= 1.6          | JSON manipulation                               | `brew install jq` / `apt install jq`       |
+| `git` >= 2.30        | source control                                  | preinstalled                               |
+| `bats-core` >= 1.5.0 | test runner                                     | `brew install bats-core` / `npm i -g bats` |
+| `shellcheck`         | shell lint                                      | `brew install shellcheck`                  |
+| `semgrep`            | review-phase SAST detector (optional for tests) | `brew install semgrep`                     |
+| `osv-scanner`        | review-phase CVE detector (optional for tests)  | `brew install osv-scanner`                 |
 
 ## Running the tests
 
@@ -61,6 +61,32 @@ bats tests/hooks/pre-edit-guard.bats
 
 The CI workflow (`.github/workflows/ci.yml`) runs the same suite on
 `ubuntu-latest` and `macos-latest`. PRs that break tests block the merge.
+
+## pre-commit hooks
+
+mumei runs the same lint suite (`prettier`, `markdownlint-cli2`, `typos`,
+`shfmt`, `shellcheck`, `actionlint`, `gitleaks`) locally via
+[pre-commit](https://pre-commit.com/) so CI failures are caught before push.
+
+Set up once per clone:
+
+```bash
+brew install pre-commit  # or: pip install pre-commit
+pre-commit install
+```
+
+After install, every `git commit` triggers the configured hooks against
+staged files. Manual run across the whole repo:
+
+```bash
+pre-commit run --all-files
+```
+
+Hook revisions are pinned in `.pre-commit-config.yaml`. Bump them with:
+
+```bash
+pre-commit autoupdate
+```
 
 ## Validate skill
 
