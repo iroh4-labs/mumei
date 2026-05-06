@@ -10,9 +10,6 @@ name: plugin-json-validate
 
 on:
   pull_request:
-    paths:
-      - ".claude-plugin/plugin.json"
-      - ".github/workflows/plugin-json-validate.yml"
 
 permissions:
   contents: read

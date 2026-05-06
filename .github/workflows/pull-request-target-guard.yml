@@ -10,8 +10,6 @@ name: pull-request-target-guard
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/**"
 
 permissions:
   contents: read

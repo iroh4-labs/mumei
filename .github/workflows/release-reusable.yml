@@ -55,22 +55,54 @@ jobs:
         uses: trufflesecurity/trufflehog@bc2cd3e45e3aa4a6c627bd0c424580f86dde1855 # v3.90.10
         with:
           path: ./
+          # Pin docker image tag (action invokes ghcr.io/.../trufflehog:${VERSION}).
+          version: "v3.90.10"
           extra_args: --results=verified
 
-      - name: Verify CodeQL + Scorecards latest runs passed
+      - name: Verify CodeQL + Scorecards passed for the tagged commit
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -u
-          for wf in codeql.yml scorecards.yml; do
-            latest="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${wf}/runs" \
-              --jq '.workflow_runs[0] | {status, conclusion}' 2>/dev/null)"
-            status="$(printf '%s' "$latest" | jq -r '.status // empty')"
-            concl="$(printf '%s' "$latest" | jq -r '.conclusion // empty')"
-            if [ "$status" != "completed" ] || [ "$concl" != "success" ]; then
-              echo "::error::${wf} latest run is not green (status=${status} conclusion=${concl}); release blocked until it passes"
+          # Resolve the tag to a commit SHA, then ask GitHub for the
+          # check-runs attached to that exact commit. This couples the
+          # gate to the code being released; unrelated PR runs / older
+          # main runs do not interfere.
+          tag_sha="$(git rev-list -n1 "${TAG}")"
+          if [ -z "$tag_sha" ]; then
+            echo "::error::cannot resolve ${TAG} to a commit SHA"
+            exit 1
+          fi
+
+          for check in "analyze (javascript-typescript)" "scorecard analysis"; do
+            err="$(mktemp)"
+            payload="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag_sha}/check-runs" \
+              --paginate --jq ".check_runs[] | select(.name == \"${check}\") | {status, conclusion}" 2>"$err")"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "::error::gh api failed for check '${check}' on ${tag_sha}: $(cat "$err")"
+              rm -f "$err"
               exit 1
             fi
+            rm -f "$err"
+
+            if [ -z "$payload" ]; then
+              echo "::error::no check-run named '${check}' has reported on ${tag_sha} yet; wait for codeql/scorecards to complete on this commit and retry"
+              exit 1
+            fi
+
+            # Walk every match (parallel matrix entries can produce
+            # multiple) and require all to be completed + success.
+            while IFS= read -r row; do
+              [ -n "$row" ] || continue
+              status="$(printf '%s' "$row" | jq -r '.status')"
+              concl="$(printf '%s' "$row" | jq -r '.conclusion // ""')"
+              if [ "$status" != "completed" ] || [ "$concl" != "success" ]; then
+                echo "::error::check '${check}' on ${tag_sha} is not green (status=${status} conclusion=${concl})"
+                exit 1
+              fi
+            done <<<"$payload"
           done
 
   validate-manifest:
@@ -283,7 +315,16 @@ jobs:
           # users following the verification commands see FAILED hashes
           # indistinguishable from a tampering signal.
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release edit "${TAG}" --notes-file release-notes.md
+            # Refuse to overwrite a draft (manual staging or a prior
+            # half-finished run). Without this guard, --clobber writes
+            # assets to the draft, the workflow exits 0, and consumers
+            # see no published release.
+            is_draft="$(gh release view "${TAG}" --json isDraft --jq .isDraft)"
+            if [ "$is_draft" = "true" ]; then
+              echo "::error::release ${TAG} exists as draft; refusing to overwrite. Resolve manually before retag."
+              exit 1
+            fi
+            gh release edit "${TAG}" --notes-file release-notes.md --draft=false
           else
             gh release create "${TAG}" --title "${TAG}" --notes-file release-notes.md
           fi

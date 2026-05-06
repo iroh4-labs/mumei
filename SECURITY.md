@@ -41,11 +41,11 @@ reports. Reports through those channels may be missed.
 
 mumei is a single-maintainer project. Best-effort response times:
 
-| Phase                            | Target                                    |
-| -------------------------------- | ----------------------------------------- |
-| Acknowledgment of report         | 7 days                                    |
-| Initial triage (severity, scope) | 14 days                                   |
-| Fix and disclosure               | depends on severity, typically 30–90 days |
+| Severity                                          | Acknowledgment | Initial triage | Fix + disclosure                  |
+| ------------------------------------------------- | -------------- | -------------- | --------------------------------- |
+| CRITICAL (RCE, credential exposure, supply chain) | 24 hours       | 72 hours       | Coordinated, target ≤ 30 days     |
+| HIGH                                              | 7 days         | 14 days        | Coordinated, target ≤ 90 days     |
+| MEDIUM / LOW                                      | 14 days        | 30 days        | Best-effort, next planned release |
 
 Critical issues (remote code execution, credential exposure, supply chain
 compromise) are prioritized over feature work.
