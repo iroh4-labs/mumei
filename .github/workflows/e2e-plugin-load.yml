@@ -19,6 +19,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write # required by claude-code-action@v1 for OIDC
 
 concurrency:
   group: e2e-plugin-load-${{ github.event.pull_request.number || github.run_id }}
