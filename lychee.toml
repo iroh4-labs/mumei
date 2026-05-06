@@ -25,6 +25,19 @@ exclude_path = [
   "docs/",
   "node_modules/",
   ".git/",
+  # Audit prompt files. URLs here are fetched by Claude at runtime via
+  # WebFetch (with its own retry/error handling); they do not need to be
+  # liveness-checked at commit time, and including them roughly doubles the
+  # external request load lychee makes per CI run.
+  ".github/audit-prompts/",
+]
+
+# Skip URLs that have a long history of flaky network errors in CI (not
+# 4xx / 5xx — those would be legitimate breakage). Connection reset by peer
+# from contributor-covenant.org has caused ~40% of recent CI failures
+# (see run history). Keep this list tight; prefer fixing upstream.
+exclude = [
+  "contributor-covenant\\.org",
 ]
 
 # Local-only file:// or relative anchor checks. Set false to focus on http(s).
