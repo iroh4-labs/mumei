@@ -64,29 +64,20 @@ git push origin main
 git reset --hard HEAD~1
 ```
 
-Both checks must succeed before treating Wave 7 as done.
+Both checks must succeed before treating the protection as applied.
 
-## REQ-8 additions: signed commits + release Environment
-
-The original protection above was authored for REQ-5. REQ-8 (security
-hardening) adds two further controls. They are recorded here rather
-than in a separate file so the maintainer has a single source of
-truth for branch / environment configuration.
-
-### `required_signatures` on `main`
+## `required_signatures` on `main`
 
 ```bash
 gh api -X PUT \
   "repos/hir4ta/mumei/branches/main/protection/required_signatures"
 ```
 
-This rejects unsigned commits at the merge gate. The maintainer signs
-commits via 1Password's `op-ssh-sign` helper; `git commit -S` (or
-`commit.gpgsign=true` in config) attaches the signature. External
-contributors must do the same — see CONTRIBUTING.md "Security
-requirements for contributors". The toggle is optional in the spec
-but recommended; setting it requires every maintainer-side commit to
-be signed, which the 1Password helper handles transparently.
+Rejects unsigned commits at the merge gate. The maintainer signs
+commits via 1Password's `op-ssh-sign` helper; `commit.gpgsign=true`
+in config attaches the signature transparently. External contributors
+follow the same rule (CONTRIBUTING.md "Security requirements for
+contributors").
 
 Verify:
 
@@ -96,12 +87,12 @@ gh api "repos/hir4ta/mumei/branches/main/protection/required_signatures" \
 # Expect: true
 ```
 
-### `release` Environment with `required_reviewers`
+## `release` Environment with `required_reviewers`
 
 Production-grade secrets used by the release pipeline (Sigstore OIDC
-identity, GHCR upload tokens once introduced, etc.) live behind a
-GitHub Environment named `release`. Workflows that need those secrets
-must declare `environment: release`, which gates the job on a manual
+identity, GHCR upload tokens once introduced) live behind a GitHub
+Environment named `release`. Workflows that need those secrets
+declare `environment: release`, which gates the job on a manual
 approval from a `required_reviewers` member.
 
 Apply (UI-only; the REST API for environments is `PUT
@@ -144,6 +135,6 @@ Expected output:
 }
 ```
 
-Once this exists, the release-reusable workflow (Wave 5) attaches
-`environment: release` to its signing job so the manual approval gate
-runs before any secret access.
+The release-reusable workflow attaches `environment: release` to its
+signing and publish jobs so the manual approval gate runs before any
+secret access.
