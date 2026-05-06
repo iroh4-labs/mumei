@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# Force every Node 20-based action (gitleaks-action v2.x today) onto
+# Node 24. The October 2026 Node 20 removal will otherwise fail these
+# actions; opting in early ensures CI behavior is invariant across
+# the runner change-over.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   lint:
     runs-on: ubuntu-latest

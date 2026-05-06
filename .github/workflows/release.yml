@@ -1,13 +1,21 @@
 name: release
 
 # Caller workflow: invoked when an annotated tag matching `v*` is
-# pushed. Delegates the entire pipeline to release-reusable.yml so
-# the high-privilege jobs (signing, SLSA provenance, GitHub release
-# upload) sit behind the `release` GitHub Environment with
-# required-reviewer approval.
+# pushed. Splits into two top-level jobs:
 #
-# All real logic lives in release-reusable.yml; this file's only job
-# is to translate a tag-push event into a workflow_call invocation.
+#   - `release`   delegates pre-flight + build + sign + sbom + publish
+#                 to release-reusable.yml. The high-privilege jobs in
+#                 that pipeline sit behind the `release` GitHub
+#                 Environment with required-reviewer approval.
+#
+#   - `provenance` calls the SLSA generator reusable workflow as a
+#                 sibling of `release`. Calling SLSA *inside*
+#                 release-reusable.yml (nested reusable workflows)
+#                 breaks artifact propagation between SLSA's own
+#                 generator and upload-assets jobs, so the standard
+#                 SLSA pattern — sibling-of-build at the top level —
+#                 is used here instead. SLSA writes the
+#                 `*.intoto.jsonl` provenance directly to the release.
 
 on:
   push:
@@ -16,6 +24,12 @@ on:
 
 permissions:
   contents: read
+
+# Force every Node 20-based action onto Node 24 ahead of the
+# October 2026 Node 20 removal. Covers gitleaks-action and
+# transitive Node 20 actions inside the SLSA reusable workflow.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   release:
@@ -27,3 +41,18 @@ jobs:
     with:
       tag: ${{ github.ref_name }}
     secrets: inherit
+
+  provenance:
+    needs: release
+    permissions:
+      actions: read
+      id-token: write # OIDC for SLSA keyless signing.
+      contents: write # Required to upload `.intoto.jsonl` to the release.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.release.outputs.hashes }}
+      # `upload-assets: true` writes the provenance file directly to
+      # the GitHub Release that the `release` job already created via
+      # `gh release create`. softprops/action-gh-release inside SLSA
+      # edits an existing release rather than failing on duplicate.
+      upload-assets: true

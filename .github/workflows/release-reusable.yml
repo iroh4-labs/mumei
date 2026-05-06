@@ -25,9 +25,21 @@ on:
         description: "The tag to release (e.g. v0.3.0)."
         required: true
         type: string
+    outputs:
+      hashes:
+        description: "base64-encoded sha256sum of the release tarball, in the SLSA generator subject format."
+        value: ${{ jobs.build.outputs.hashes }}
 
 permissions:
   contents: read
+
+# Force every Node 20-based action (gitleaks-action v2.x, transitive
+# softprops/action-gh-release in SLSA) onto Node 24. The October 2026
+# Node 20 removal will otherwise hard-fail these actions; opt in early
+# so the workflow's behavior is the same before and after the runner
+# change-over.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   preflight:
@@ -152,7 +164,7 @@ jobs:
     outputs:
       tarball: ${{ steps.archive.outputs.tarball }}
       hash: ${{ steps.archive.outputs.hash }}
-      base64-subjects: ${{ steps.archive.outputs.base64-subjects }}
+      hashes: ${{ steps.archive.outputs.hashes }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -170,9 +182,12 @@ jobs:
           hash="$(sha256sum "${tarball}" | awk '{print $1}')"
           echo "tarball=${tarball}" >>"$GITHUB_OUTPUT"
           echo "hash=${hash}" >>"$GITHUB_OUTPUT"
-          # SLSA generator expects base64-encoded "<hash>  <name>\n..." lines.
-          subjects="$(printf '%s  %s\n' "${hash}" "${tarball}" | base64 -w0)"
-          echo "base64-subjects=${subjects}" >>"$GITHUB_OUTPUT"
+          # SLSA generator expects the literal `sha256sum`-style output
+          # base64-encoded as a single line. Match the canonical SLSA
+          # `hashes=$(sha256sum *.tar.gz | base64 -w0)` shape exactly so
+          # the upstream secure-download / verification path matches.
+          hashes="$(sha256sum "${tarball}" | base64 -w0)"
+          echo "hashes=${hashes}" >>"$GITHUB_OUTPUT"
 
       - name: Upload tarball artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -237,37 +252,20 @@ jobs:
           path: ${{ needs.build.outputs.tarball }}.cosign.bundle
           retention-days: 1
 
-  provenance:
-    name: SLSA provenance
-    needs: build
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
-    with:
-      base64-subjects: ${{ needs.build.outputs.base64-subjects }}
-      # `upload-assets: true` lets SLSA write *.intoto.jsonl directly
-      # to the GitHub Release; we don't want to hand-roll the asset
-      # upload from the publish job.
-      upload-assets: true
-      upload-tag-name: ${{ inputs.tag }}
-      # `continue-on-error: true` because slsa-github-generator v2.1.0's
-      # `final` job evaluates SUCCESS via `steps.<name>.outcome != 'failure'`
-      # rather than `conclusion`. Internal helper steps (secure-builder
-      # checkout, download-prov) carry `continue-on-error: true` and can
-      # report outcome=failure even when their conclusion is success and
-      # the actual provenance upload happens. The strict-outcome check
-      # then exits 27 despite the artifact being on the release. Setting
-      # this input opt-in to "best-effort" so a transient sub-step
-      # outcome doesn't block our publish job which needs the provenance
-      # artifact already attached.
-      continue-on-error: true
+  # SLSA provenance lives in release.yml (the caller). Calling the
+  # SLSA reusable workflow from inside another reusable workflow
+  # (nested `uses:`) breaks artifact namespace propagation: the
+  # generator job's `provenance-name` output reaches its sibling
+  # upload-assets job as empty, secure-download-artifact then receives
+  # `UNTRUSTED_PATH=` and exits 1, so the upload silently produces a
+  # release without provenance even though every job's `conclusion`
+  # is success. Standard SLSA usage is sibling-of-build at the top
+  # level — release.yml follows that pattern instead.
 
   publish:
     name: publish release
     runs-on: ubuntu-latest
-    needs: [build, sbom, sign, provenance]
+    needs: [build, sbom, sign]
     permissions:
       contents: write
     environment: release
