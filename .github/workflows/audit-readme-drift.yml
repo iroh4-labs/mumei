@@ -30,6 +30,6 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/readme-drift.md
-          model: claude-sonnet-4-6
+          model: sonnet
           max_turns: "25"
           allowed_tools: "Read,Glob,Grep,Bash(gh issue:*),Bash(gh label:*)"

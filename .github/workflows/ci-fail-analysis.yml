@@ -53,6 +53,6 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/ci-fail-analysis.md
-          model: claude-sonnet-4-6
+          model: sonnet
           max_turns: "20"
           allowed_tools: "Read,Glob,Grep,Bash(gh run view:*),Bash(gh pr:*),Bash(gh issue:*),Bash(head:*),Bash(tail:*),Bash(grep:*)"
