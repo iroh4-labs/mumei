@@ -215,7 +215,7 @@ jobs:
       id-token: write
     environment: release
     steps:
-      - uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: tarball
 
@@ -247,7 +247,16 @@ jobs:
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
     with:
       base64-subjects: ${{ needs.build.outputs.base64-subjects }}
-      upload-assets: false
+      # `upload-assets: true` lets SLSA write the *.intoto.jsonl
+      # provenance file directly into the GitHub Release. The
+      # alternative (`false` + handle upload ourselves) trips the
+      # generator's `final` job, which evaluates SUCCESS as
+      # `generator.result == 'success' AND (upload-assets.result IN
+      # {success, skipped})`; when upload-assets is conditionally not
+      # created at all the comparison resolves to false and `final`
+      # exits 27. Keeping `true` is the documented happy path.
+      upload-assets: true
+      upload-tag-name: ${{ inputs.tag }}
 
   publish:
     name: publish release
@@ -262,24 +271,23 @@ jobs:
           ref: ${{ inputs.tag }}
 
       - name: Download tarball
-        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: tarball
 
       - name: Download SBOM
-        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: sbom
 
       - name: Download signature
-        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: signature
 
-      - name: Download SLSA provenance
-        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ${{ needs.provenance.outputs.provenance-name }}
+      # SLSA provenance is uploaded directly to the GitHub Release by
+      # the slsa-github-generator workflow (`upload-assets: true`),
+      # so we no longer need to re-download it here.
 
       - name: Compose release notes
         env:
@@ -333,12 +341,11 @@ jobs:
           else
             gh release create "${TAG}" --title "${TAG}" --notes-file release-notes.md
           fi
-          # SLSA generator emits provenance files matching `*.intoto.jsonl`.
-          # `./*.intoto.jsonl` form prevents shell from interpreting the
-          # match as a flag if no file is found.
+          # SLSA provenance (*.intoto.jsonl) is already attached by the
+          # slsa-github-generator workflow itself; this step uploads
+          # only the artifacts the generator does not handle.
           gh release upload "${TAG}" \
             "${TARBALL}" \
             "${TARBALL}.cosign.bundle" \
             "mumei-sbom.cdx.json" \
-            ./*.intoto.jsonl \
             --clobber
