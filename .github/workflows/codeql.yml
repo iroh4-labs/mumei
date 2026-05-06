@@ -3,8 +3,10 @@ name: codeql
 # CodeQL static analysis. mumei is implemented in bash, which CodeQL
 # does not support natively — `shellcheck` (run by ci.yml + pre-commit)
 # and `semgrep` (run as Stage 0 in /mumei:plan review) cover that gap.
-# This workflow scans for any JavaScript/TypeScript that lands in the
-# repo (currently zero, kept proactively for future tooling).
+# What CodeQL DOES analyze here is the project's GitHub Actions
+# workflows via the `actions` language, catching script-injection,
+# untrusted-input flows, and missing permission scopes that the
+# manual review of `.github/workflows/` could miss.
 
 on:
   pull_request:
@@ -29,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [javascript-typescript]
+        language: [actions]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
