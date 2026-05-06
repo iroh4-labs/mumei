@@ -20,6 +20,10 @@ mumei_specs_dir() {
   printf '%s' ".mumei/specs"
 }
 
+mumei_plans_dir() {
+  printf '%s' ".mumei/plans"
+}
+
 mumei_archive_dir() {
   printf '%s' ".mumei/archive"
 }
@@ -34,10 +38,53 @@ mumei_current_feature() {
   printf '%s' "$slug"
 }
 
-# Path to the given feature's state.json.
+# Path to the given feature's state.json (spec vehicle layout).
 mumei_state_path() {
   local feature="$1"
   printf '%s' ".mumei/specs/${feature}/state.json"
+}
+
+# Path to the given slug's plan-vehicle state.json.
+mumei_plan_state_path() {
+  local slug="$1"
+  printf '%s' ".mumei/plans/${slug}/state.json"
+}
+
+# Resolve the state.json path for a given key, trying spec vehicle first,
+# then plan vehicle. Returns the path on stdout, exit 1 if neither exists.
+# Used by hooks that need to read state without knowing the vehicle.
+mumei_state_resolve_path() {
+  local key="$1"
+  local spec_path plan_path
+  spec_path=".mumei/specs/${key}/state.json"
+  plan_path=".mumei/plans/${key}/state.json"
+  if [[ -f "$spec_path" ]]; then
+    printf '%s' "$spec_path"
+    return 0
+  fi
+  if [[ -f "$plan_path" ]]; then
+    printf '%s' "$plan_path"
+    return 0
+  fi
+  return 1
+}
+
+# Read a jq path from whichever state.json exists for the given key.
+# Example: mumei_state_read_any "fix-login" '.phase'
+mumei_state_read_any() {
+  local key="$1"
+  local jq_path="$2"
+  local sf
+  sf="$(mumei_state_resolve_path "$key")" || return 1
+  jq -r "${jq_path} // empty" "$sf"
+}
+
+# Return success (0) if the given key is a plan-vehicle feature
+# (i.e. .mumei/plans/<key>/state.json exists). Used by spec-only hooks
+# to early-exit when a plan vehicle is active.
+mumei_state_is_plan_vehicle() {
+  local key="$1"
+  [[ -f ".mumei/plans/${key}/state.json" ]]
 }
 
 # Check whether state.json exists. Exit 1 if missing.
@@ -158,4 +205,66 @@ mumei_state_init() {
       created_at: $now,
       updated_at: $now
     }' | mumei_state_write_full "$feature"
+}
+
+# Initialize a plan-vehicle state.json under .mumei/plans/<slug>/.
+# Skip if it already exists. plan_file_path is the absolute path of the
+# captured plan markdown (typically copied from ~/.claude/plans/<auto>.md
+# into .mumei/plans/<slug>/plan.md by the L-P1 hook).
+mumei_state_init_plan() {
+  local slug="$1"
+  local plan_file_path="$2"
+  local sf
+  sf=".mumei/plans/${slug}/state.json"
+  [[ -f "$sf" ]] && return 0
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  mkdir -p ".mumei/plans/${slug}"
+  local tmp
+  tmp="$(mktemp "${sf}.XXXXXX")"
+  jq -n \
+    --arg slug "$slug" \
+    --arg plan "$plan_file_path" \
+    --arg now "$now" \
+    '{
+      vehicle: "plan",
+      slug: $slug,
+      phase: "implement",
+      plan_file_path: $plan,
+      task_created_count: 0,
+      task_completed_count: 0,
+      pending_review: false,
+      review_runs: [],
+      created_at: $now,
+      updated_at: $now
+    }' >"$tmp"
+  if ! jq empty <"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    mumei_log_error "invalid JSON for plan-vehicle state.json (slug=${slug})"
+    return 1
+  fi
+  mv "$tmp" "$sf"
+}
+
+# Set a scalar value in a plan-vehicle state.json (atomic write).
+# Example: mumei_plan_state_set "fix-login" '.pending_review' 'true'
+mumei_plan_state_set() {
+  local slug="$1"
+  local jq_path="$2"
+  local json_value="$3"
+  local sf
+  sf=".mumei/plans/${slug}/state.json"
+  [[ -f "$sf" ]] || {
+    mumei_log_error "plan-vehicle state.json not found for ${slug}"
+    return 1
+  }
+  local tmp
+  tmp="$(mktemp "${sf}.XXXXXX")"
+  jq "${jq_path} = ${json_value} | .updated_at = (now | todateiso8601)" "$sf" >"$tmp"
+  if ! jq empty <"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    mumei_log_error "invalid JSON after set on plan-vehicle state.json (slug=${slug})"
+    return 1
+  fi
+  mv "$tmp" "$sf"
 }

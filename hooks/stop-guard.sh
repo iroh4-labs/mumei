@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Stop hook.
 # Rules covered:
-#   R1: session ending with every task complete but no review run -> block to force continuation
+#   R1: session ending with every spec-vehicle task complete but no review run -> block
+#   R3: spec-vehicle phase=done while .mumei/current still active -> block to prompt /mumei:archive
+#   L-R1 (plan vehicle): pending_review=true with no PASS review JSON -> block
+#   L-R3 (plan vehicle): phase=done while .mumei/current still active -> block to prompt /mumei:archive
 #
 # Design principles:
 #   - Loop prevention: if stop_hook_active=true, exit 0 immediately.
-#   - On block: emit decision: block + reason, so Claude runs /mumei:plan
-#     review on the next turn.
+#   - On block: emit decision: block + reason, so Claude runs /mumei:plan or
+#     /mumei:review on the next turn.
 #   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
 
 set -u
@@ -31,8 +34,62 @@ if [[ "$STOP_HOOK_ACTIVE" == "true" ]]; then
   exit 0
 fi
 
-FEATURE="$(mumei_current_feature 2>/dev/null || true)"
-if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
+KEY="$(mumei_current_feature 2>/dev/null || true)"
+if [[ -z "$KEY" ]]; then
+  exit 0
+fi
+
+# --- Plan vehicle branch (L-R1 / L-R3) ---
+# Trigger when .mumei/plans/<key>/state.json exists. The plan vehicle has
+# no Wave/task structure inside tasks.md; instead, all-tasks-completed is
+# signaled by pending_review=true (set by hooks/post-task-event.sh on the
+# Nth TaskCompleted that matches task_created_count).
+if mumei_state_is_plan_vehicle "$KEY"; then
+  PLAN_PHASE="$(mumei_state_read_any "$KEY" '.phase')"
+  PLAN_PENDING="$(mumei_state_read_any "$KEY" '.pending_review')"
+  PLAN_REVIEW_DIR=".mumei/plans/${KEY}/reviews"
+
+  # L-R3: phase=done but .mumei/current still active -> archive prompt
+  if [[ "$PLAN_PHASE" == "done" ]]; then
+    REASON="Feature ${KEY} (plan vehicle) reached phase=done but is still active in .mumei/current. Run /mumei:archive ${KEY} to move the spec, or clear .mumei/current."
+    CONTEXT="The archive skill (/mumei:archive) is user-invocable only; the orchestrator cannot run it. Either invoke /mumei:archive to move .mumei/plans/${KEY}/ to .mumei/archive/<YYYY-MM>/, or clear .mumei/current to dismiss this gate."
+    jq -n --arg r "$REASON" --arg c "$CONTEXT" '{decision: "block", reason: $r, systemMessage: $c}'
+    exit 0
+  fi
+
+  # L-R1: pending_review=true but no PASS review JSON yet -> block
+  if [[ "$PLAN_PENDING" == "true" ]]; then
+    NEEDS_REVIEW=0
+    if [[ ! -d "$PLAN_REVIEW_DIR" ]]; then
+      NEEDS_REVIEW=1
+    else
+      LATEST_REVIEW="$(find "$PLAN_REVIEW_DIR" -maxdepth 1 -type f -name '*.json' \
+        ! -name '*-detectors.json' 2>/dev/null | sort | tail -n1)"
+      if [[ -z "$LATEST_REVIEW" ]]; then
+        NEEDS_REVIEW=1
+      else
+        VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
+        if [[ "$VERDICT" != "PASS" ]]; then
+          NEEDS_REVIEW=1
+        fi
+      fi
+    fi
+
+    if [[ "$NEEDS_REVIEW" == "1" ]]; then
+      REASON="All planned tasks are complete for plan-vehicle feature ${KEY}, but no passing review exists. Run /mumei:review before ending the session."
+      CONTEXT="pending_review=true but .mumei/plans/${KEY}/reviews/ has no review JSON with verdict=PASS. /mumei:review runs Stage 0 detector + security-reviewer + adversarial-reviewer + per-issue validator on the current diff."
+      jq -n --arg r "$REASON" --arg c "$CONTEXT" '{decision: "block", reason: $r, systemMessage: $c}'
+      exit 0
+    fi
+  fi
+
+  # Plan vehicle handled; do not fall through to spec-vehicle logic.
+  exit 0
+fi
+
+# --- Spec vehicle branch (existing R1 + R3) ---
+FEATURE="$KEY"
+if ! mumei_state_exists "$FEATURE"; then
   exit 0
 fi
 

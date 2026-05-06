@@ -36,7 +36,15 @@ source "${PLUGIN_ROOT}/hooks/_lib/safe-grep.sh"
 cat >/dev/null
 
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
-if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
+[[ -n "$FEATURE" ]] || exit 0
+
+# REQ-9.36: X1/X3 are spec-only — Wave/current_wave concept is absent
+# in plan vehicle, and tasks.md _Files: meta is absent too.
+if mumei_state_is_plan_vehicle "$FEATURE"; then
+  exit 0
+fi
+
+if ! mumei_state_exists "$FEATURE"; then
   exit 0
 fi
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook.
 # Rules covered:
-#   I3: git commit while tests are red -> deny
-#   R2: git push while the review verdict is MAJOR_ISSUES -> deny
+#   I3: git commit while tests are red -> deny (vehicle-independent)
+#   R2: git push while the latest review verdict is MAJOR_ISSUES -> deny
+#       (checks both .mumei/specs/<key>/reviews/ and .mumei/plans/<key>/reviews/)
 #   W2: git commit while the current Wave still has unchecked [ ] tasks -> deny
+#       (spec vehicle only — plan vehicle has no Wave concept)
 #
 # Design principles:
 #   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
@@ -28,8 +30,19 @@ INPUT="$(cat)"
 COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 [[ -n "$COMMAND" ]] || exit 0
 
-FEATURE="$(mumei_current_feature 2>/dev/null || true)"
-if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
+KEY="$(mumei_current_feature 2>/dev/null || true)"
+[[ -n "$KEY" ]] || exit 0
+
+# Determine vehicle. spec vehicle uses .mumei/specs/<key>/state.json,
+# plan vehicle uses .mumei/plans/<key>/state.json. If neither exists,
+# this is not a mumei-active session and the hook is a no-op.
+IS_PLAN_VEHICLE=0
+FEATURE="$KEY"
+if mumei_state_exists "$FEATURE"; then
+  :
+elif mumei_state_is_plan_vehicle "$KEY"; then
+  IS_PLAN_VEHICLE=1
+else
   exit 0
 fi
 
@@ -57,20 +70,22 @@ mumei_is_git_push() {
   printf '%s' "$1" | grep -qE '(^|[[:space:];|&])git[[:space:]]+push([[:space:]]|$)'
 }
 
-# --- W2: git commit while the current Wave still has unchecked [ ] tasks ---
+# --- W2: git commit while the current Wave still has unchecked [ ] tasks (spec vehicle only) ---
 if mumei_is_git_commit "$COMMAND"; then
-  CURRENT_WAVE="$(mumei_state_get "$FEATURE" '.current_wave // 0')"
-  if [[ -n "$CURRENT_WAVE" ]] && [[ "$CURRENT_WAVE" -gt 0 ]]; then
-    if ! mumei_tasks_wave_complete "$FEATURE" "$CURRENT_WAVE"; then
-      INCOMPLETE_TASKS="$(mumei_tasks_list_ids "$FEATURE" | while IFS= read -r tid; do
-        wave="${tid%%.*}"
-        [[ "$wave" == "$CURRENT_WAVE" ]] || continue
-        st="$(mumei_tasks_status "$FEATURE" "$tid" 2>/dev/null || echo unknown)"
-        [[ "$st" == "incomplete" ]] && printf '%s ' "$tid"
-      done)"
-      mumei_deny \
-        "Wave ${CURRENT_WAVE} has incomplete tasks: ${INCOMPLETE_TASKS}. Complete or revert before committing." \
-        "Mark each task [x] in .mumei/specs/${FEATURE}/tasks.md after the implementation is done, or revert pending changes."
+  if [[ "$IS_PLAN_VEHICLE" == "0" ]]; then
+    CURRENT_WAVE="$(mumei_state_get "$FEATURE" '.current_wave // 0')"
+    if [[ -n "$CURRENT_WAVE" ]] && [[ "$CURRENT_WAVE" -gt 0 ]]; then
+      if ! mumei_tasks_wave_complete "$FEATURE" "$CURRENT_WAVE"; then
+        INCOMPLETE_TASKS="$(mumei_tasks_list_ids "$FEATURE" | while IFS= read -r tid; do
+          wave="${tid%%.*}"
+          [[ "$wave" == "$CURRENT_WAVE" ]] || continue
+          st="$(mumei_tasks_status "$FEATURE" "$tid" 2>/dev/null || echo unknown)"
+          [[ "$st" == "incomplete" ]] && printf '%s ' "$tid"
+        done)"
+        mumei_deny \
+          "Wave ${CURRENT_WAVE} has incomplete tasks: ${INCOMPLETE_TASKS}. Complete or revert before committing." \
+          "Mark each task [x] in .mumei/specs/${FEATURE}/tasks.md after the implementation is done, or revert pending changes."
+      fi
     fi
   fi
 
@@ -103,21 +118,33 @@ if mumei_is_git_commit "$COMMAND"; then
   fi
 fi
 
-# --- R2: git push while the review verdict is MAJOR_ISSUES ---
+# --- R2: git push while the latest review verdict is MAJOR_ISSUES ---
 if mumei_is_git_push "$COMMAND"; then
-  # Inspect the latest review record. Read .verdict from
-  # .mumei/specs/<feature>/reviews/<latest>.json.
-  REVIEW_DIR=".mumei/specs/${FEATURE}/reviews"
+  # Look at the latest review across both vehicles. spec vehicle reviews
+  # live under .mumei/specs/<feature>/reviews/, plan vehicle under
+  # .mumei/plans/<key>/reviews/. Either may be present depending on which
+  # vehicle the active feature is. Detector reports (<ts>-detectors.json)
+  # are excluded so the latest *review* (not the detector run) is selected.
+  if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
+    REVIEW_DIR=".mumei/plans/${KEY}/reviews"
+  else
+    REVIEW_DIR=".mumei/specs/${FEATURE}/reviews"
+  fi
   if [[ -d "$REVIEW_DIR" ]]; then
-    # Review file names are ISO 8601 timestamps, so alphabetical order = chronological.
-    # `find ... | sort | tail -n1` picks the newest while avoiding shellcheck SC2012.
-    LATEST_REVIEW="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n1)"
+    LATEST_REVIEW="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name '*.json' \
+      ! -name '*-detectors.json' 2>/dev/null | sort | tail -n1)"
     if [[ -n "$LATEST_REVIEW" ]] && [[ -f "$LATEST_REVIEW" ]]; then
       VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
       if [[ "$VERDICT" == "MAJOR_ISSUES" ]]; then
-        mumei_deny \
-          "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
-          "Latest review: ${LATEST_REVIEW}\nRun /mumei:plan to address findings and re-review."
+        if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
+          mumei_deny \
+            "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
+            "Latest review: ${LATEST_REVIEW}\nRun /mumei:review to re-evaluate after fixing."
+        else
+          mumei_deny \
+            "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
+            "Latest review: ${LATEST_REVIEW}\nRun /mumei:plan to address findings and re-review."
+        fi
       fi
     fi
   fi

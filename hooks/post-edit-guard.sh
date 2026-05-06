@@ -39,7 +39,15 @@ if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR
 fi
 
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
-if [[ -z "$FEATURE" ]] || ! mumei_state_exists "$FEATURE"; then
+[[ -n "$FEATURE" ]] || exit 0
+
+# REQ-9.36: I4 (phantom completion) is spec-only — plan vehicle does
+# not have a tasks.md to mark [x] in.
+if mumei_state_is_plan_vehicle "$FEATURE"; then
+  exit 0
+fi
+
+if ! mumei_state_exists "$FEATURE"; then
   exit 0
 fi
 
