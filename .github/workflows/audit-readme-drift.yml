@@ -1,0 +1,45 @@
+# Monthly audit of doc drift across README.md (English, user-facing),
+# CLAUDE.md (Japanese, dev-facing), docs/mumei-decisions.md, and the actual
+# implementation. Files an issue (label: doc-drift) only when there are
+# inconsistencies.
+name: audit-readme-drift
+
+on:
+  schedule:
+    # 1st of each month, 22:00 UTC (= 2nd 07:00 JST). Monthly cadence.
+    - cron: "0 22 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: audit-readme-drift
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compose prompt
+        id: prompt
+        run: |
+          {
+            echo 'value<<MUMEI_PROMPT_EOF'
+            cat .github/audit-prompts/readme-drift.md
+            echo 'MUMEI_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.prompt.outputs.value }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 25
+            --allowedTools "Read,Glob,Grep,Bash(gh issue:*),Bash(gh label:*)"

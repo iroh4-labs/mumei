@@ -1,0 +1,68 @@
+# Analyze a failed `ci` workflow run and post a helpful comment.
+# Triggered via workflow_run after the ci workflow concludes with failure.
+# - PR-triggered fails -> PR comment
+# - main-push fails    -> issue (label: ci-fail)
+name: ci-fail-analysis
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  analyze:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Determine PR number (if any)
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          PRS_JSON: ${{ toJson(github.event.workflow_run.pull_requests) }}
+        run: |
+          set -euo pipefail
+          # workflow_run carries pull_requests[] only for same-repo PRs;
+          # fork-PR runs have an empty array. We fall back to gh pr list
+          # by head branch as a best-effort.
+          pr_number=$(printf '%s' "$PRS_JSON" | jq -r '.[0].number // empty')
+          if [ -z "$pr_number" ]; then
+            pr_number=$(gh pr list \
+              --head "$HEAD_BRANCH" \
+              --state open \
+              --json number --jq '.[0].number // empty' 2>/dev/null || echo "")
+          fi
+          echo "number=${pr_number}" >> "$GITHUB_OUTPUT"
+
+      - name: Compose prompt
+        id: prompt
+        run: |
+          {
+            echo 'value<<MUMEI_PROMPT_EOF'
+            cat .github/audit-prompts/ci-fail-analysis.md
+            echo 'MUMEI_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.prompt.outputs.value }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 20
+            --allowedTools "Read,Glob,Grep,Bash(gh run view:*),Bash(gh pr:*),Bash(gh issue:*),Bash(head:*),Bash(tail:*),Bash(grep:*)"

@@ -1,0 +1,38 @@
+# One-shot label bootstrap. Run manually once after enabling the audit /
+# digest workflows. Idempotent (re-running just updates color and
+# description). Required because `gh issue create --label <name>` fails
+# when the label doesn't exist yet.
+name: bootstrap-labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          create() {
+            local name="$1" color="$2" desc="$3"
+            gh label create "$name" \
+              --color "$color" \
+              --description "$desc" \
+              --repo "$REPO" \
+              --force
+          }
+
+          create audit-weekly         "fbca04" "Weekly distribution audit finding"
+          create claude-code-update   "0e8a16" "Proposal to absorb a Claude Code platform update"
+          create ci-fail              "d93f0b" "CI failure analysis report (push to main)"
+          create doc-drift            "5319e7" "README/CLAUDE.md/decisions.md drift"
+          create blog-digest          "1d76db" "Anthropic engineering blog digest"
+          create harness-engineering  "f9d0c4" "Worth absorbing into docs/harness-engineering.md"

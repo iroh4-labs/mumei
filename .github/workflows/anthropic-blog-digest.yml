@@ -1,0 +1,46 @@
+# Monthly digest of Anthropic engineering blog. Compares against the 21
+# articles already summarized in docs/harness-engineering.md Part 5 and
+# proposes how mumei should absorb new ones. Files an issue (label:
+# blog-digest) only when new articles exist.
+name: anthropic-blog-digest
+
+on:
+  schedule:
+    # 15th of each month, 22:00 UTC (= 16th 07:00 JST). Offset from
+    # audit-readme-drift to spread API load across the month.
+    - cron: "0 22 15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: anthropic-blog-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compose prompt
+        id: prompt
+        run: |
+          {
+            echo 'value<<MUMEI_PROMPT_EOF'
+            cat .github/audit-prompts/blog-digest.md
+            echo 'MUMEI_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.prompt.outputs.value }}
+          claude_args: |
+            --model claude-opus-4-7
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,WebFetch,Bash(gh issue:*),Bash(gh label:*)"

@@ -1,0 +1,45 @@
+# Weekly full audit of distribution files against the latest official Claude
+# Code specs. Catches drift caused by upstream spec changes (mumei did not
+# change, the spec did). Files an issue (label: audit-weekly) only when there
+# are findings.
+name: audit-distribution-weekly
+
+on:
+  schedule:
+    # Sunday 22:00 UTC = Monday 07:00 JST
+    - cron: "0 22 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: audit-distribution-weekly
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compose prompt
+        id: prompt
+        run: |
+          {
+            echo 'value<<MUMEI_PROMPT_EOF'
+            cat .github/audit-prompts/distribution-audit-weekly.md
+            echo 'MUMEI_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: ${{ steps.prompt.outputs.value }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,WebFetch,Bash(gh issue:*),Bash(gh label:*)"
