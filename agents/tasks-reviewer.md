@@ -58,6 +58,24 @@ Each task line MUST have all three meta fields immediately after it:
 
 Missing any of `_Files:_` / `_Depends:_` / `_Requirements:_` is HIGH. The hooks rely on these.
 
+### Parser-invisible drift (HIGH, MAJOR_ISSUES)
+
+The Hook parser at `hooks/_lib/tasks.sh` is strict about a few conventions the LLM occasionally violates. Run the parser yourself to catch this — visual inspection alone misses these:
+
+```bash
+source hooks/_lib/tasks.sh
+parsed_count="$(mumei_tasks_list_ids '<feature>' 2>/dev/null | grep -cv '^$' || echo 0)"
+```
+
+If `parsed_count` is `0` while `tasks.md` is non-trivial (>200 bytes), every task is invisible to the Hook. Likely violations:
+
+- Task IDs prefixed with `T` (e.g. `T1.1`) — the parser only matches bare digits.
+- Meta lines without the leading `- ` bullet prefix (e.g. `  _Files:_ ...`) — the parser requires `^\s+- _<key>:`.
+- Backticks around `_Files:_` paths (e.g. ``  _Files:_ `path` ``) — the parser splits on commas but does not strip backticks; the resulting "path" `\`path\`` does not match anything.
+- Em dash (`—`) used for "no dependencies" instead of literal `-`.
+
+Report this as a `MAJOR_ISSUES` finding with `category: "missing_meta"` and `suggested_fix` instructing a re-draft following the literal template at `skills/plan/SKILL.md` Phase 3.1.
+
 ### Missing Goal / Verify on a Wave
 
 Every Wave header must be followed by:
@@ -71,7 +89,7 @@ Missing either is HIGH.
 
 ### Invalid REQ trace
 
-A task's `_Requirements:_` references `REQ-X.Y` that does not exist in `requirements.md`, or uses a non-`REQ-N.M` token (e.g., `_Requirements: TODO_`).
+A task's `_Requirements:_` references `REQ-X.Y` (or `REQ-X.Y.Z`) that does not exist in `requirements.md`, or uses a token that does not match the form `REQ-N.M` or `REQ-N.M.K` (e.g., `_Requirements: TODO_` or `_Requirements: REQ-1_`). Both 2-level and 3-level IDs are accepted; 3-level is reserved for large features that group ACs by category (`REQ-N.M.K`).
 
 ### REQ left untraced
 
@@ -125,18 +143,28 @@ Wave header is `## Wave 2:` with no name (allowed but reduces readability).
 
 1. Read `requirements.md`. Build a set of all `REQ-N.M` IDs (in scope only — exclude ACs explicitly under `## Out of Scope`).
 2. Read `design.md#Wave Plan`. Build the list of Waves with goals.
-3. Read `tasks.md`. Walk Wave by Wave:
+3. **Run the parser self-check first** to catch drift the LLM cannot see by eye:
+
+   ```bash
+   source hooks/_lib/tasks.sh
+   parsed_count="$(mumei_tasks_list_ids '<feature>' 2>/dev/null | grep -cv '^$' || echo 0)"
+   tasks_bytes="$(wc -c < ".mumei/specs/<feature>/tasks.md" 2>/dev/null || echo 0)"
+   ```
+
+   If `parsed_count` is `0` while `tasks_bytes` > 200, return verdict `MAJOR_ISSUES` with a single high-severity finding (category `missing_meta`) describing the parser-invisible drift section above. Do not waste time on the other checks — the file is structurally broken.
+
+4. Read `tasks.md`. Walk Wave by Wave:
    - Verify each Wave from design appears in tasks (Wave Plan coverage).
    - Verify each Wave has `**Goal**:` and `**Verify**:`.
    - For each task line:
      - Verify `_Files:_`, `_Depends:_`, `_Requirements:_` are all present.
-     - Validate `_Requirements:_` tokens are `REQ-N.M` and exist in step 1's set.
+     - Validate `_Requirements:_` tokens are `REQ-N.M` (canonical) or `REQ-N.M.K` (3-level allowed for large features) and exist in step 1's set.
      - Validate `_Depends:_` references existing task IDs and is not circular.
      - For each path in `_Files:_`, check existence. If absent, run `git check-ignore -q <path>` (cwd = project root) and treat as OK if exit 0; otherwise flag.
-4. Cross-reference: every `REQ-N.M` from step 1 should appear in at least one task's `_Requirements:_`. Flag ACs with no task reference.
-5. Inspect each `**Verify**:` clause for executability.
-6. Compute verdict per rules below.
-7. Emit JSON.
+5. Cross-reference: every `REQ-N.M` from step 1 should appear in at least one task's `_Requirements:_`. Flag ACs with no task reference.
+6. Inspect each `**Verify**:` clause for executability.
+7. Compute verdict per rules below.
+8. Emit JSON.
 
 # Verdict aggregation rules
 

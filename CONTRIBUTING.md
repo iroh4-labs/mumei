@@ -189,6 +189,31 @@ Procedure:
 4. Run `gh run watch` on the PR's CI; `sha256sum -c -` will fail loudly if
    the hash is wrong.
 
+## Maintainer-only — Claude Code subprocess signing limitation
+
+If your `gpg.format` is `ssh` and your `user.signingkey` is fronted by a
+**GUI signing helper** (1Password's `op-ssh-sign`, Secretive, KeePassXC's
+SSH agent with prompts, sshd-with-`pam_u2f`, etc.), Claude Code's `Bash`
+tool cannot drive the helper. The signing process expects an interactive
+GUI / Touch ID prompt, but subprocess context has no UI surface, so the
+commit silently lands **unsigned** even though `commit.gpgsign=true`.
+
+Workarounds:
+
+1. **Recommended**: never let Claude run `git commit` against this
+   repository. Reserve commits for the maintainer's own terminal. The
+   `mumei` orchestrator (`/mumei:plan`) follows this rule by leaving
+   commits to the user.
+2. If a commit has already landed unsigned, run
+   `git commit --amend --no-edit -S` from your own terminal — the GUI
+   helper will prompt, you approve, and the SHA is replaced with the
+   signed version.
+
+`git log -1 --show-signature` reports `No signature` even for correctly
+signed commits when `gpg.ssh.allowedSignersFile` is unset locally.
+GitHub still verifies the signature server-side; do not rely on the
+local `%G?` field as ground truth.
+
 ## Maintainer-only — release tag signing
 
 Release tags are signed with the maintainer's SSH key. To set up signing on a

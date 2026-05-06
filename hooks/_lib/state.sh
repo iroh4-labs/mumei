@@ -101,6 +101,41 @@ mumei_state_phase() {
   mumei_state_get "$feature" '.phase'
 }
 
+# Reconcile detectable state.json inconsistencies and return 0 on
+# success. Reports each correction to stderr via mumei_log_warn. Idempotent.
+#
+# Currently reconciles:
+#   - phase=plan but approved_at != null  → advance phase=implement,
+#     current_wave=1 (the orchestrator failed to set the post-approval
+#     phase, e.g. session terminated between user approval and the
+#     skill's mumei_state_set call). The user already approved; the
+#     state machine just lost the resulting transition.
+#
+# Future inconsistencies should be added here rather than scattered
+# across hook handlers, so the orchestrator (/mumei:plan) can call
+# this at startup as a single self-heal pass.
+mumei_state_reconcile() {
+  local feature="$1"
+  local sf
+  sf="$(mumei_state_path "$feature")"
+  [[ -f "$sf" ]] || return 1
+
+  local phase approved current_wave
+  phase="$(jq -r '.phase // empty' "$sf" 2>/dev/null || true)"
+  approved="$(jq -r '.approved_at // empty' "$sf" 2>/dev/null || true)"
+  current_wave="$(jq -r '.current_wave // 0' "$sf" 2>/dev/null || echo 0)"
+
+  if [[ "$phase" == "plan" ]] && [[ -n "$approved" ]]; then
+    mumei_log_warn "state.sh: ${feature} has approved_at=${approved} but phase=plan; auto-advancing to phase=implement (post-approval transition was lost)"
+    mumei_state_set "$feature" '.phase' '"implement"' || return 1
+    if [[ "$current_wave" == "0" ]]; then
+      mumei_state_set "$feature" '.current_wave' '1' || return 1
+    fi
+  fi
+
+  return 0
+}
+
 # Initialize state.json. Skip if it already exists.
 mumei_state_init() {
   local feature="$1"

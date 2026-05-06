@@ -60,6 +60,29 @@ fi
 # Everything below applies only to phase=implement
 [[ "$PHASE" == "implement" ]] || exit 0
 
+# Collect parsed task IDs once. We use the count below for a sanity
+# check that distinguishes "the file is malformed and we cannot count
+# tasks" from "we counted N tasks and they are all done".
+TASK_IDS="$(mumei_tasks_list_ids "$FEATURE" 2>/dev/null || true)"
+TASK_COUNT=0
+if [[ -n "$TASK_IDS" ]]; then
+  TASK_COUNT="$(printf '%s\n' "$TASK_IDS" | grep -cv '^$' || echo 0)"
+fi
+
+# Sanity check: if tasks.md exists with substantial content (>1KB) but
+# the parser found zero tasks, that is almost certainly a format
+# violation (e.g. T-prefixed task IDs, _Files:_ wrapped in backticks).
+# Without this guard the loop below would treat "0 tasks" as "all 0
+# tasks complete" and fire R1 spuriously, masking the real diagnosis.
+TASKS_FILE=".mumei/specs/${FEATURE}/tasks.md"
+if [[ "$TASK_COUNT" -eq 0 ]] && [[ -f "$TASKS_FILE" ]]; then
+  TASKS_BYTES="$(wc -c <"$TASKS_FILE" 2>/dev/null || echo 0)"
+  if [[ "$TASKS_BYTES" -gt 1024 ]]; then
+    mumei_log_warn "stop-guard: tasks.md present (${TASKS_BYTES} bytes) but parser found 0 tasks; skipping R1 (likely format violation — run scripts/lint-tasks.sh for details)"
+    exit 0
+  fi
+fi
+
 # Check whether every task is complete
 ANY_INCOMPLETE=0
 while IFS= read -r tid; do
@@ -69,7 +92,7 @@ while IFS= read -r tid; do
     ANY_INCOMPLETE=1
     break
   fi
-done < <(mumei_tasks_list_ids "$FEATURE")
+done <<<"$TASK_IDS"
 
 [[ "$ANY_INCOMPLETE" == "0" ]] || exit 0
 

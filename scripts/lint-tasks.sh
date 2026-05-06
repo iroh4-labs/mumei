@@ -67,7 +67,11 @@ REQUIREMENTS_FILE=".mumei/specs/${FEATURE}/requirements.md"
 # spec phase may simply have not produced one yet).
 KNOWN_REQS=""
 if [[ -f "$REQUIREMENTS_FILE" ]]; then
-  KNOWN_REQS="$(grep -oE 'REQ-[0-9]+\.[0-9]+' "$REQUIREMENTS_FILE" 2>/dev/null | sort -u)"
+  # Match both REQ-N.M (canonical) and REQ-N.M.K (3-level allowed for
+  # large features). Without the optional 3rd segment the cross-
+  # reference check rewrites valid 3-level IDs from tasks.md as
+  # "not defined in requirements.md".
+  KNOWN_REQS="$(grep -oE 'REQ-[0-9]+\.[0-9]+(\.[0-9]+)?' "$REQUIREMENTS_FILE" 2>/dev/null | sort -u)"
 fi
 
 VIOLATIONS=""
@@ -88,14 +92,17 @@ while IFS= read -r task_id; do
     VIOLATIONS+="Task ${task_id}: missing meta (${missing[*]})"$'\n'
   fi
 
-  # 2 & 3. Validate each _Requirements:_ token
+  # 2 & 3. Validate each _Requirements:_ token. Accepts both the
+  # canonical 2-level form REQ-N.M (the documented default) and the
+  # 3-level form REQ-N.M.K (used by larger features that group ACs by
+  # category — see docs/mumei-decisions.md "REQ trace ID hierarchy").
   if [[ -n "$requirements" ]]; then
     IFS=',' read -ra req_arr <<<"$requirements"
     for req in "${req_arr[@]}"; do
       req="$(echo "$req" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
       [[ -n "$req" ]] || continue
-      if ! [[ "$req" =~ ^REQ-[0-9]+\.[0-9]+$ ]]; then
-        VIOLATIONS+="Task ${task_id}: _Requirements:_ token '${req}' does not match REQ-N.M syntax"$'\n'
+      if ! [[ "$req" =~ ^REQ-[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+        VIOLATIONS+="Task ${task_id}: _Requirements:_ token '${req}' does not match REQ-N.M or REQ-N.M.K syntax"$'\n'
         continue
       fi
       if [[ -n "$KNOWN_REQS" ]] && ! printf '%s\n' "$KNOWN_REQS" | grep -qFx "$req"; then
@@ -104,8 +111,14 @@ while IFS= read -r task_id; do
     done
   fi
 
-  # 4. Validate each _Files:_ path
-  if [[ -n "$files" ]]; then
+  # 4. Validate each _Files:_ path. Existence is required only for
+  # tasks that have already been marked [x] — incomplete ([ ]) tasks
+  # may legitimately reference paths that will be created during their
+  # own implementation. Without this gating the lint shouts about every
+  # not-yet-created file in every Wave 2-N task, which trains
+  # contributors to ignore the advisory entirely.
+  task_status="$(mumei_tasks_status "$FEATURE" "$task_id" 2>/dev/null || echo unknown)"
+  if [[ -n "$files" ]] && [[ "$task_status" == "complete" ]]; then
     IFS=',' read -ra file_arr <<<"$files"
     for f in "${file_arr[@]}"; do
       f="$(echo "$f" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
@@ -117,7 +130,7 @@ while IFS= read -r task_id; do
       if mumei_path_is_gitignored "$f"; then
         continue
       fi
-      VIOLATIONS+="Task ${task_id}: _Files:_ path '${f}' does not exist"$'\n'
+      VIOLATIONS+="Task ${task_id}: _Files:_ path '${f}' does not exist (task is marked [x])"$'\n'
     done
   fi
 done < <(mumei_tasks_list_ids "$FEATURE" 2>/dev/null)

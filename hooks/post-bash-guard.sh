@@ -2,11 +2,17 @@
 # PostToolUse Bash hook.
 # Rules covered:
 #   X1: Bash modified files outside the current scope -> warn only (do not block)
+#   X3: After a successful `git commit`, advance current_wave if every
+#       task in the current Wave is now complete. Transition phase=review
+#       once every Wave is complete.
 #
 # Design principles:
 #   - X1 warns Claude via additionalContext rather than blocking, because
 #     blocking would also stop legitimate operations (e.g. npm install
 #     touching node_modules).
+#   - X3 is silent on no-op (current Wave still has [ ] tasks). It only
+#     surfaces output when it actually moved the state forward, so the
+#     hook stays kuroko on partial commits.
 #   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
 
 set -u
@@ -94,5 +100,33 @@ if [[ -n "$OUT_OF_SCOPE" ]]; then
     }
   }'
 fi
+
+# --- X3: Wave auto-advance after a successful git commit ---
+# When the user finishes a Wave by running `git commit`, the orchestrator
+# is no longer in the loop to update state.json. Detect that situation
+# from git's reflog (HEAD just moved by a commit) and advance
+# current_wave / phase accordingly. Silent unless something actually changes.
+LAST_REFLOG="$(git reflog show HEAD -n1 --pretty='%gs' 2>/dev/null || true)"
+case "$LAST_REFLOG" in
+commit:* | commit\ \(*\):*)
+  # A commit just landed. Recompute the current Wave: smallest Wave
+  # number whose tasks include any [ ]. If every Wave is complete, this
+  # returns the empty string and we transition phase=review.
+  CURRENT_WAVE_FILE="$(mumei_state_get "$FEATURE" '.current_wave' 2>/dev/null || echo 0)"
+  PARSED_WAVE="$(mumei_tasks_current_wave "$FEATURE" 2>/dev/null || true)"
+
+  if [[ -z "$PARSED_WAVE" ]]; then
+    # No incomplete Wave remains: move to phase=review (idempotent).
+    PHASE_NOW="$(mumei_state_phase "$FEATURE" 2>/dev/null || echo unknown)"
+    if [[ "$PHASE_NOW" == "implement" ]]; then
+      mumei_state_set "$FEATURE" '.phase' '"review"' >/dev/null 2>&1 || true
+      mumei_log_info "post-bash-guard: every Wave complete; phase=implement → review"
+    fi
+  elif [[ -n "$CURRENT_WAVE_FILE" ]] && [[ "$PARSED_WAVE" != "$CURRENT_WAVE_FILE" ]]; then
+    mumei_state_set "$FEATURE" '.current_wave' "$PARSED_WAVE" >/dev/null 2>&1 || true
+    mumei_log_info "post-bash-guard: current_wave advanced ${CURRENT_WAVE_FILE} → ${PARSED_WAVE}"
+  fi
+  ;;
+esac
 
 exit 0

@@ -60,11 +60,18 @@ The same policy applies to `design.md` (architecture narratives, component descr
 
 ## Phase awareness
 
-Before doing anything, check the state:
+Before doing anything, check the state and self-heal any inconsistencies left over from a previous session that terminated mid-transition:
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/state.sh"
 feature="$1"
+
+# Self-heal any phase ↔ approved_at mismatch from a session that died
+# between user approval and the phase=implement write. Idempotent.
+if mumei_state_exists "$feature" 2>/dev/null; then
+  mumei_state_reconcile "$feature" 2>/dev/null || true
+fi
+
 phase="$(mumei_state_phase "$feature" 2>/dev/null || echo "new")"
 ```
 
@@ -73,6 +80,8 @@ phase="$(mumei_state_phase "$feature" 2>/dev/null || echo "new")"
 - `phase=implement`: jump to Wave management.
 - `phase=review`: jump to review pipeline.
 - `phase=done`: tell the user "feature is done, run `/mumei:archive` to clean up".
+
+If `mumei_state_reconcile` reports an action to stderr (look for the `[mumei]` prefix), surface it to the user before proceeding so they understand why phase advanced without their visible action this turn.
 
 ## Approval model (key change vs. earlier mumei versions)
 
@@ -317,7 +326,33 @@ Generate `.mumei/specs/<feature>/tasks.md` from the design's Wave Plan:
 
 Each task MUST have `_Files:_`, `_Depends:_`, `_Requirements:_`. Each Wave MUST have `**Goal**:` and `**Verify**:`. The `tasks-reviewer` agent will block on missing meta.
 
+#### Format invariants (enforced by the parser, not just the reviewer)
+
+`hooks/_lib/tasks.sh` parses tasks.md to power every Wave / scope / dependency Hook. Any deviation from the template above silently breaks all of them. The parser expects literally:
+
+- Task IDs are bare digits separated by dots: `1.1`, `2.3`, `5.10`. **Do NOT prefix them with `T`** (`T1.1` does not parse).
+- Each meta line begins with `  - _<Key>:` (two leading spaces, then a hyphen-space, then a literal underscore, the key, a colon). **Do NOT omit the `- ` bullet prefix** (`  _Files:_ ...` does not parse).
+- The meta line ends with a single trailing underscore right before the newline. The Markdown emphasis spans the whole `_<Key>: <value>_` chunk.
+- `_Files:_` values are comma-separated **bare paths**, no backticks, no annotations: `- _Files: src/foo.ts, src/bar.ts_` not ``- _Files: `src/foo.ts`, `src/bar.ts` (legacy)_``.
+- `_Depends:_` values are comma-separated **bare task IDs** with no `T` prefix (`- _Depends: 1.1, 1.2_`), or a single literal `-` for "no dependencies" (`- _Depends: -_`). Em dashes (`—`) do not match.
+- `_Requirements:_` values are comma-separated `REQ-N.M` or `REQ-N.M.K` tokens (`- _Requirements: REQ-1.2, REQ-1.3_`).
+
+These constraints exist because the LLM occasionally drifts toward a "prettier" form (backticks around paths, `T` prefix on IDs, em dash for none). The drift is silent — `tasks-reviewer` may PASS the visually-correct draft, but `hooks/_lib/tasks.sh` then sees zero tasks and every downstream Hook misfires. Phase 3.2 below runs a deterministic parser self-check to catch this before the agent is launched.
+
 ### Phase 3.2 — tasks-reviewer (auto-iter, max 3)
+
+Before launching the reviewer, run the parser self-check. This catches format drift (anti-patterns from the previous subsection) deterministically — without relying on the LLM reviewer to notice:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/tasks.sh"
+parsed_count="$(mumei_tasks_list_ids '<feature>' 2>/dev/null | grep -cv '^$' || echo 0)"
+tasks_bytes="$(wc -c < '.mumei/specs/<feature>/tasks.md' 2>/dev/null || echo 0)"
+if [[ "$parsed_count" -eq 0 ]] && [[ "$tasks_bytes" -gt 200 ]]; then
+  echo "PARSER_FAILURE" >&2
+fi
+```
+
+If `parsed_count` is 0 while `tasks_bytes` is non-trivial, treat the draft as a `MAJOR_ISSUES` finding and iterate **before** launching the reviewer agent — re-draft following the format invariants above, then re-run the self-check. Do not call the reviewer on a draft the parser cannot read; the agent has no leverage to fix something the parser ignores. When `parsed_count > 0`, proceed with the reviewer below.
 
 Launch the reviewer:
 
@@ -345,13 +380,41 @@ After all 3 spec-reviewers have returned `PASS`, present the package to the user
    - Options: `Approve and start Wave 1` / `Edit a section (specify which)` / `Reject and abort`.
 4. On `Approve`:
 
-```bash
-mumei_state_set "$feature" '.phase' '"implement"'
-mumei_state_set "$feature" '.current_wave' '1'
-```
+   First, run the **phase-advance hard validation gate**. The transition from `plan` → `implement` is the last point at which the orchestrator can refuse a malformed spec; once `phase=implement` lands, every Wave/scope Hook starts trusting `tasks.md`. If the parser disagrees with the reviewer here, refuse the transition and re-iterate Phase 3.
 
-1. On `Edit a section`: ask which section, edit it, re-run that section's reviewer, then re-present.
-2. On `Reject`: leave state as-is (`phase=plan`); the user can resume later by re-invoking `/mumei:plan <feature>`.
+   ```bash
+   source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/tasks.sh"
+   parsed_count="$(mumei_tasks_list_ids "$feature" 2>/dev/null | grep -cv '^$' || echo 0)"
+   tasks_bytes="$(wc -c < ".mumei/specs/${feature}/tasks.md" 2>/dev/null || echo 0)"
+   approved_at="$(mumei_state_get "$feature" '.approved_at' 2>/dev/null || true)"
+
+   if [[ "$parsed_count" -eq 0 ]] && [[ "$tasks_bytes" -gt 200 ]]; then
+     # Parser sees zero tasks despite a populated file → format violation.
+     # Refuse phase advance, log to stderr, and bounce back to Phase 3.1.
+     echo "phase-advance: parser found 0 tasks in tasks.md (${tasks_bytes} bytes) — format invariants violated, rewriting" >&2
+     # Loop back to Phase 3.1 with explicit format instruction.
+     return 1  # or whatever the orchestrator uses to re-enter Phase 3.1
+   fi
+
+   # Run the lint as a final defense (advisory in normal operation, but
+   # any violation here is a phase-advance blocker).
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/lint-tasks.sh" <<<"$(jq -n --arg p ".mumei/specs/${feature}/tasks.md" '{tool_input: {file_path: $p}}')" 2>&1 |
+     grep -q 'violations detected' && {
+       echo "phase-advance: lint-tasks.sh reports violations on the approved tasks.md — refusing transition" >&2
+       return 1
+     }
+
+   # All gates passed. Record approval timestamp (so future state
+   # reconcile sees it) and transition.
+   if [[ -z "$approved_at" ]]; then
+     mumei_state_set "$feature" '.approved_at' "$(date -u +'\"%Y-%m-%dT%H:%M:%SZ\"')"
+   fi
+   mumei_state_set "$feature" '.phase' '"implement"'
+   mumei_state_set "$feature" '.current_wave' '1'
+   ```
+
+5. On `Edit a section`: ask which section, edit it, re-run that section's reviewer, then re-present.
+6. On `Reject`: leave state as-is (`phase=plan`); the user can resume later by re-invoking `/mumei:plan <feature>`.
 
 This is the single user approval gate. There is no per-spec approval before this point.
 
