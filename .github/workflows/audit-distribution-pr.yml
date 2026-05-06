@@ -39,3 +39,8 @@ jobs:
           model: claude-sonnet-4-6
           max_turns: "25"
           allowed_tools: "Read,Glob,Grep,WebFetch,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*)"
+          # WebFetch tool internally summarizes pages with the Haiku tier;
+          # without this override it tries the discontinued
+          # `claude-3-5-haiku-20241022` and every fetch returns a model 404.
+          claude_env: |
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-haiku-4-5-20251001
