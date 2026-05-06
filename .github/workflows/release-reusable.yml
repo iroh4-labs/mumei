@@ -1,0 +1,272 @@
+name: release-reusable
+
+# Reusable release pipeline. Invoked by .github/workflows/release.yml on
+# every annotated tag push. The pipeline is intentionally split out of
+# the caller workflow so the high-privilege jobs (signing, provenance,
+# release upload) sit behind the `release` GitHub Environment, which
+# requires manual approval. The caller's job is only "kick this off
+# when a tag arrives"; everything below — including secret access — is
+# gated by `environment: release`.
+#
+# Pipeline stages (per the REQ-8 design):
+#   1. Pre-flight SAST scans (semgrep, gitleaks, trufflehog)
+#      Block release on HIGH-severity findings before signing or upload.
+#   2. plugin.json schema strict validation.
+#   3. Build tarball + SHA256.
+#   4. CycloneDX SBOM via anchore/sbom-action.
+#   5. Sigstore keyless signing via cosign sign-blob.
+#   6. SLSA provenance via slsa-framework/slsa-github-generator (reusable).
+#   7. Publish: gh release upload of tarball + .sig + SBOM + provenance + hash.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The tag to release (e.g. v0.3.0)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: pre-flight scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
+      - name: semgrep
+        run: |
+          python3 -m pip install --quiet semgrep
+          semgrep --error --config=p/owasp-top-ten --config=p/security-audit --severity=ERROR .
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: trufflehog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          trufflehog filesystem --no-update --fail --results=verified .
+
+  validate-manifest:
+    name: validate plugin.json
+    runs-on: ubuntu-latest
+    needs: preflight
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Strict schema validation
+        run: |
+          python3 -m pip install --quiet jsonschema
+          python3 - <<'PY'
+          import json, sys, urllib.request
+          from pathlib import Path
+          import jsonschema
+          manifest = json.loads(Path(".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+          schema_url = manifest["$schema"]
+          with urllib.request.urlopen(schema_url, timeout=20) as resp:
+              schema = json.loads(resp.read().decode("utf-8"))
+          jsonschema.validators.validator_for(schema).check_schema(schema)
+          validator = jsonschema.validators.validator_for(schema)(schema)
+          errors = sorted(validator.iter_errors(manifest), key=lambda e: list(e.absolute_path))
+          if errors:
+              for e in errors:
+                  path = "/".join(str(p) for p in e.absolute_path) or "(root)"
+                  print(f"::error::plugin.json {path}: {e.message}")
+              sys.exit(1)
+          print("plugin.json valid against", schema_url)
+          PY
+
+  build:
+    name: build tarball
+    runs-on: ubuntu-latest
+    needs: [preflight, validate-manifest]
+    permissions:
+      contents: read
+    outputs:
+      tarball: ${{ steps.archive.outputs.tarball }}
+      hash: ${{ steps.archive.outputs.hash }}
+      base64-subjects: ${{ steps.archive.outputs.base64-subjects }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
+      - name: Create tarball + SHA256
+        id: archive
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -eu
+          tarball="mumei-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="mumei-${TAG}/" "${TAG}" -o "${tarball}"
+          hash="$(sha256sum "${tarball}" | awk '{print $1}')"
+          echo "tarball=${tarball}" >>"$GITHUB_OUTPUT"
+          echo "hash=${hash}" >>"$GITHUB_OUTPUT"
+          # SLSA generator expects base64-encoded "<hash>  <name>\n..." lines.
+          subjects="$(printf '%s  %s\n' "${hash}" "${tarball}" | base64 -w0)"
+          echo "base64-subjects=${subjects}" >>"$GITHUB_OUTPUT"
+
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tarball
+          path: ${{ steps.archive.outputs.tarball }}
+          retention-days: 1
+
+  sbom:
+    name: generate SBOM
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          format: cyclonedx-json
+          output-file: mumei-sbom.cdx.json
+          path: .
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: mumei-sbom.cdx.json
+          retention-days: 1
+
+  sign:
+    name: keyless sign tarball
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      id-token: write
+    environment: release
+    steps:
+      - uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tarball
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Sign tarball (keyless)
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: |
+          cosign sign-blob --yes \
+            --bundle "${TARBALL}.cosign.bundle" \
+            "${TARBALL}"
+
+      - name: Upload signature artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signature
+          path: ${{ needs.build.outputs.tarball }}.cosign.bundle
+          retention-days: 1
+
+  provenance:
+    name: SLSA provenance
+    needs: build
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.build.outputs.base64-subjects }}
+      upload-assets: false
+
+  publish:
+    name: publish release
+    runs-on: ubuntu-latest
+    needs: [build, sbom, sign, provenance]
+    permissions:
+      contents: write
+    environment: release
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Download tarball
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tarball
+
+      - name: Download SBOM
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+
+      - name: Download signature
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signature
+
+      - name: Download SLSA provenance
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+
+      - name: Compose release notes
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          HASH: ${{ needs.build.outputs.hash }}
+        run: |
+          {
+            echo "## Verification"
+            echo ""
+            echo "Verify the tarball against the published SHA256:"
+            echo ""
+            echo '```'
+            echo "${HASH}  ${TARBALL}"
+            echo '```'
+            echo ""
+            echo "Or via cosign (Sigstore keyless):"
+            echo ""
+            echo '```'
+            echo "cosign verify-blob \\"
+            echo "  --bundle ${TARBALL}.cosign.bundle \\"
+            echo "  --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\"
+            echo "  ${TARBALL}"
+            echo '```'
+          } >release-notes.md
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: |
+          set -eu
+          gh release view "${TAG}" >/dev/null 2>&1 \
+            || gh release create "${TAG}" --title "${TAG}" --notes-file release-notes.md
+          # SLSA generator emits provenance files matching `*.intoto.jsonl`.
+          # `./*.intoto.jsonl` form prevents shell from interpreting the
+          # match as a flag if no file is found.
+          gh release upload "${TAG}" \
+            "${TARBALL}" \
+            "${TARBALL}.cosign.bundle" \
+            "mumei-sbom.cdx.json" \
+            ./*.intoto.jsonl \
+            --clobber

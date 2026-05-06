@@ -1,10 +1,13 @@
-name: release-attestation
+name: release
 
-# Generate SLSA build provenance attestation for source tarballs of every
-# pushed annotated tag. Verifiers can then cryptographically confirm a
-# tarball was produced by this repo's release workflow.
+# Caller workflow: invoked when an annotated tag matching `v*` is
+# pushed. Delegates the entire pipeline to release-reusable.yml so
+# the high-privilege jobs (signing, SLSA provenance, GitHub release
+# upload) sit behind the `release` GitHub Environment with
+# required-reviewer approval.
 #
-# Reference: https://github.com/actions/attest-build-provenance
+# All real logic lives in release-reusable.yml; this file's only job
+# is to translate a tag-push event into a workflow_call invocation.
 
 on:
   push:
@@ -12,89 +15,15 @@ on:
       - "v*"
 
 permissions:
-  # id-token: write — required by sigstore for OIDC-based signing.
-  # attestations: write — required to upload the attestation to GitHub.
-  # contents: write — required for `gh release upload` (the read-only scope
-  #   was insufficient and produced HTTP 403 on tarball upload in v0.2.1).
-  id-token: write
-  attestations: write
-  contents: write
+  contents: read
 
 jobs:
-  attest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 0
-
-      # `git tag -v` for SSH-signed tags requires gpg.ssh.allowedSignersFile
-      # to point at a file containing the trusted public keys (git docs:
-      # https://git-scm.com/docs/git#Documentation/git.txt-gpgsshallowedSignersFile).
-      # GitHub Actions runners do not ship one, so the verify step would
-      # always fail with
-      #   error: gpg.ssh.allowedSignersFile needs to be configured and exist
-      #          for ssh signature verification
-      # Build the file dynamically from the repository owner's published
-      # SSH keys (https://github.com/<user>.keys is public). When the
-      # owner rotates keys on GitHub the next workflow run picks them up
-      # automatically; no checked-in key file to maintain.
-      - name: Build allowedSigners file from maintainer's GitHub SSH keys
-        env:
-          # Pass the repository owner via env: rather than interpolating the
-          # ${{ github.repository_owner }} expression into the shell script
-          # directly. This is GitHub's documented script-injection-hardening
-          # pattern: even though `repository_owner` is GitHub-managed and
-          # constrained to safe characters, the env-var route makes the
-          # boundary explicit and survives any future rule relaxation.
-          # Ref: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
-          OWNER: ${{ github.repository_owner }}
-        run: |
-          set -e
-          mkdir -p ~/.config/git
-          curl -fsSL "https://github.com/${OWNER}.keys" \
-            | awk 'NF { print "* " $0 }' > ~/.config/git/allowed_signers
-          test -s ~/.config/git/allowed_signers \
-            || { echo "::error::no SSH keys published at https://github.com/${OWNER}.keys"; exit 1; }
-          git config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
-
-      - name: Verify tag is signed
-        run: |
-          set -e
-          # Tags created by the release skill are signed with the maintainer's
-          # SSH key (REQ-5.13). Reject unsigned tags before generating an
-          # attestation that could otherwise mislead verifiers.
-          tag="${GITHUB_REF#refs/tags/}"
-          if ! git tag -v "$tag" 2>&1 | grep -qE "Good (\"git\"|tag) signature"; then
-            echo "::error::tag $tag is not signed or signature could not be verified"
-            git tag -v "$tag" || true
-            exit 1
-          fi
-
-      - name: Build source tarball
-        id: build
-        run: |
-          set -e
-          tag="${GITHUB_REF#refs/tags/}"
-          tarball="mumei-${tag}.tar.gz"
-          git archive --format=tar.gz --prefix="mumei-${tag}/" "$tag" -o "$tarball"
-          echo "tarball=${tarball}" >>"$GITHUB_OUTPUT"
-          sha256sum "$tarball"
-
-      - name: Generate SLSA build provenance attestation
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
-        with:
-          subject-path: ${{ steps.build.outputs.tarball }}
-
-      - name: Upload tarball to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          tag="${GITHUB_REF#refs/tags/}"
-          # Re-use existing release if one was created (release skill calls
-          # `gh release create --generate-notes` after this workflow's tag push).
-          # If the release does not yet exist, create it minimally.
-          gh release view "$tag" >/dev/null 2>&1 \
-            || gh release create "$tag" --title "$tag" --generate-notes
-          gh release upload "$tag" "${{ steps.build.outputs.tarball }}" --clobber
+  release:
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-reusable.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
