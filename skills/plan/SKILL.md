@@ -1,6 +1,6 @@
 ---
 name: plan
-description: The mumei orchestrator. Drives the full lifecycle of a feature — clarification → requirements → design → tasks (each auto-reviewed by an independent reviewer agent up to 3 iterations) → single user approval gate → implementation Wave by Wave → 4-stage review with per-issue validation. Triggers when the user invokes /mumei:plan <feature> or naturally asks to "plan", "spec", "design", or "implement" a feature with mumei. Always renders body content (User Story prose, AC bodies after EARS keywords, Assumptions, Open Questions, design narratives, task descriptions, Wave goals/verifies) in the user's conversation language; English section headings, EARS keywords, REQ trace IDs, and [CONFIRMED]/[ASSUMPTION] annotations remain literal.
+description: The mumei orchestrator. For new features, presents a vehicle picker — `spec` (full SDD workflow: clarification → requirements → design → tasks each auto-reviewed up to 3 iterations → single user approval → Wave-by-Wave implementation → 4-stage review) or `plan` (Claude Code plan-mode wrapper: hand off to plan mode, capture via hook, run /mumei:review at the end). Resumes existing features automatically by detecting which vehicle's state.json exists. Triggers when the user invokes /mumei:plan <feature> or naturally asks to "plan", "spec", "design", or "implement" a feature with mumei. Always renders body content (User Story prose, AC bodies after EARS keywords, Assumptions, Open Questions, design narratives, task descriptions, Wave goals/verifies) in the user's conversation language; English section headings, EARS keywords, REQ trace IDs, and [CONFIRMED]/[ASSUMPTION] annotations remain literal.
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion]
 argument-hint: <feature-slug>
 ---
@@ -60,28 +60,147 @@ The same policy applies to `design.md` (architecture narratives, component descr
 
 ## Phase awareness
 
-Before doing anything, check the state and self-heal any inconsistencies left over from a previous session that terminated mid-transition:
+Before doing anything, detect whether this is a new feature, a resumed spec-vehicle feature, or a resumed plan-vehicle feature. mumei has two vehicles in parallel: **spec** (the full SDD workflow described below) and **plan** (a thin wrapper around Claude Code's plan mode + TaskCreate, governed by `/mumei:review`). The orchestrator handles spec vehicle here; plan vehicle is initialized by the `pre-exitplan-guard.sh` hook and reviewed via the separate `/mumei:review` skill.
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/state.sh"
-feature="$1"
 
-# Self-heal any phase ↔ approved_at mismatch from a session that died
-# between user approval and the phase=implement write. Idempotent.
-if mumei_state_exists "$feature" 2>/dev/null; then
-  mumei_state_reconcile "$feature" 2>/dev/null || true
+# `.mumei/current` may hold either:
+#   - a spec-vehicle compound key like "REQ-9-plan-vehicle"
+#     (state.json under .mumei/specs/<key>/)
+#   - a plan-vehicle bare slug like "fix-login"
+#     (state.json under .mumei/plans/<slug>/)
+key="$(mumei_current_feature 2>/dev/null || true)"
+
+if [[ -n "$key" ]] && mumei_state_is_plan_vehicle "$key"; then
+  # Plan vehicle is active: this skill does not drive its lifecycle.
+  # Tell the user to either continue normal plan-mode work, or run
+  # /mumei:review when all TaskCompleted events have set pending_review=true.
+  vehicle="plan"
+  plan_phase="$(mumei_state_read_any "$key" '.phase')"
+  pending="$(mumei_state_read_any "$key" '.pending_review')"
+elif [[ -n "$key" ]] && mumei_state_exists "$key"; then
+  # Spec vehicle resume — self-heal phase ↔ approved_at mismatch.
+  vehicle="spec"
+  mumei_state_reconcile "$key" 2>/dev/null || true
+  phase="$(mumei_state_phase "$key" 2>/dev/null || echo "new")"
+else
+  # No active feature → new feature path. Vehicle is decided in Phase 0.
+  vehicle="new"
 fi
-
-phase="$(mumei_state_phase "$feature" 2>/dev/null || echo "new")"
 ```
 
-- `phase=new` (state.json missing): start from Phase 1.0 (state init).
-- `phase=plan`: continue from where the user left off (resume in the appropriate sub-phase by inspecting which spec docs and `spec-reviews/` files exist).
-- `phase=implement`: jump to Wave management.
-- `phase=review`: jump to review pipeline.
-- `phase=done`: tell the user "feature is done, run `/mumei:archive` to clean up".
+Branching after detection:
+
+- `vehicle="new"`: enter **Phase 0** (vehicle / scratch / slug resolution) below.
+- `vehicle="plan"`: surface plan-vehicle status and stop.
+  - if `pending_review=true` and no PASS review JSON exists: tell the user to run `/mumei:review`.
+  - if `phase=done`: tell the user to run `/mumei:archive <slug>`.
+  - otherwise: tell the user the plan-vehicle feature is in progress and point at the existing tasks in their plan-mode TaskList.
+- `vehicle="spec"`: existing spec-vehicle resume table:
+  - `phase=plan`: continue from where the user left off (resume in the appropriate sub-phase by inspecting which spec docs and `spec-reviews/` files exist).
+  - `phase=implement`: jump to Wave management.
+  - `phase=review`: jump to review pipeline.
+  - `phase=done`: tell the user "feature is done, run `/mumei:archive` to clean up".
 
 If `mumei_state_reconcile` reports an action to stderr (look for the `[mumei]` prefix), surface it to the user before proceeding so they understand why phase advanced without their visible action this turn.
+
+## Phase 0 — Vehicle and scratch resolution (new features only)
+
+Phase 0 runs only when Phase awareness detected `vehicle="new"`. It produces three pieces of state before Phase 1 starts: the **scratch attachment** (if any), the **vehicle choice** (spec or plan), and the **resolved slug**. After Phase 0, control branches to either Phase 1.0 (spec) or to a plan-vehicle handoff (plan).
+
+The user is asked at most two questions in Phase 0: a scratch picker (only in case C below) and the vehicle picker (always). Slug-collision prompts only fire when an actual collision is detected.
+
+### Phase 0.1 — Scratch correlation (case A / B / C)
+
+```bash
+slug_arg="$1"  # may be empty
+
+if [[ -n "$slug_arg" ]] && [[ -f ".mumei/scratch/${slug_arg}.md" ]]; then
+  # Case A — auto-attach matching scratch.
+  scratch_path=".mumei/scratch/${slug_arg}.md"
+  resolved_slug="$slug_arg"
+elif [[ -n "$slug_arg" ]]; then
+  # Case B — slug given but no matching scratch.
+  scratch_path=""
+  resolved_slug="$slug_arg"
+else
+  # Case C — slug not given.
+  matches=()
+  while IFS= read -r f; do matches+=("$f"); done < <(find .mumei/scratch -maxdepth 1 -name '*.md' 2>/dev/null | sort)
+  if (( ${#matches[@]} > 0 )); then
+    # AskUserQuestion: scratch list + "no scratch" option.
+    # Header: "Scratch", multiSelect: false.
+    # Options: each scratch file basename + "no scratch — start fresh".
+    # If user picks a scratch, set scratch_path = that file, resolved_slug = basename minus .md.
+    # If user picks "no scratch", set scratch_path = "", resolved_slug = "" (deferred — case D).
+    :
+  else
+    # No scratch present and no slug. Treat as case D: slug deferred until vehicle decision.
+    scratch_path=""
+    resolved_slug=""
+  fi
+fi
+```
+
+In case C with the "no scratch" choice, or any case where `resolved_slug` is still empty after this step:
+
+- if vehicle ends up as **spec**: ask the user for a slug via `AskUserQuestion` (free-text "Other" path), then continue.
+- if vehicle ends up as **plan**: keep `resolved_slug` empty. The `pre-exitplan-guard.sh` hook will derive the slug from `~/.claude/plans/<auto-name>.md` basename when ExitPlanMode fires (REQ-9.34).
+
+### Phase 0.2 — Vehicle picker (always asked for new features)
+
+`AskUserQuestion` with header `Vehicle`, multiSelect: false. Two options:
+
+- `[1] spec — full SDD workflow` — runs Phase 1.0–5 in this skill (requirements → design → tasks → implementation → review).
+  - Best for: new features with significant scope.
+- `[2] plan — Claude plan mode wrapper` — uses Claude Code's native plan mode plus TaskCreate; mumei's review pipeline runs at the end via `/mumei:review`.
+  - Best for: bug fixes, small features, or projects where the SDD workflow feels heavy.
+
+Record the chosen vehicle in a local variable. There is no "Recommended" annotation: both are first-class.
+
+### Phase 0.3 — Slug collision check + alt-slug picker
+
+Run only when `resolved_slug` is non-empty:
+
+```bash
+collision=""
+if [[ -d ".mumei/specs" ]]; then
+  while IFS= read -r d; do
+    base="$(basename "$d")"
+    # spec dir is always REQ-N-<slug>; match its trailing slug
+    if [[ "$base" == *-"$resolved_slug" ]]; then collision="$d"; fi
+  done < <(find .mumei/specs -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
+fi
+if [[ -d ".mumei/plans/${resolved_slug}" ]]; then
+  collision=".mumei/plans/${resolved_slug}"
+fi
+```
+
+If `collision` is non-empty, use `AskUserQuestion` with header `Slug collision` to offer the user three options: pick `<resolved_slug>-2` (the next available `-N` suffix — try `-2`, `-3`, etc. and pick the first that does not collide), pick a free-text alternate via "Other", or abort. On abort, exit the skill cleanly without writing state.
+
+### Phase 0.4 — Branch by vehicle
+
+- **vehicle = spec**: proceed to **Phase 1.0** (state init) using `resolved_slug` as the slug. If `resolved_slug` is empty after Phase 0.1 case D + "no scratch", ask the user for a slug here via `AskUserQuestion` ("Other" / free text).
+- **vehicle = plan**: do **NOT** initialize spec-vehicle state. Instead, hand off to plan mode — see Phase 0.5.
+
+### Phase 0.5 — Plan-vehicle handoff (vehicle=plan only)
+
+Tell the user — in plain conversational text — that they should now enter Claude Code's plan mode by pressing `Shift+Tab` twice. If a scratch was attached in Phase 0.1, paraphrase its key points so the user knows the plan-mode draft will be informed by it. The orchestrator then **stops**: no spec drafting, no Phase 1.x. The actual capture happens automatically when the user accepts the plan and the `pre-exitplan-guard.sh` hook (L-P1) initializes `.mumei/plans/<slug>/state.json`.
+
+State that gets carried into the hook:
+
+- if `resolved_slug` was decided in Phase 0.1 / 0.3, write it to `.mumei/current` so L-P1 reuses it instead of deriving from `planFilePath` basename. Otherwise leave `.mumei/current` untouched; L-P1 will pick a slug from the auto-name basename (REQ-9.34):
+
+  ```bash
+  if [[ -n "$resolved_slug" ]]; then
+    printf '%s\n' "$resolved_slug" >.mumei/current
+  fi
+  ```
+
+- if a scratch was attached, leave it in place (do not move or delete). The user may reference it during plan-mode drafting.
+
+After Phase 0.5, exit the skill. Subsequent task tracking, session-end blocks, and review trigger are owned by the plan-vehicle hooks (`post-task-event.sh`, `stop-guard.sh` L-R1) and the `/mumei:review` skill.
 
 ## Approval model (key change vs. earlier mumei versions)
 
@@ -91,9 +210,9 @@ Rationale: the per-spec approvals turned every feature into 3 separate "is this 
 
 ## Phase 1 — Clarification + Requirements
 
-### Phase 1.0 — Initialize feature state (new features only)
+### Phase 1.0 — Initialize feature state (spec vehicle, new features only)
 
-If `state.json` does not yet exist for this feature, initialize it before drafting requirements:
+Phase 1.0 only runs when Phase 0 selected `vehicle="spec"` and `state.json` does not yet exist. The slug used here is the `resolved_slug` produced by Phase 0.1–0.3 (or freshly asked in Phase 0.4 if it was deferred):
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/state.sh"
@@ -104,8 +223,9 @@ existing_max="$(find .mumei/specs .mumei/archive -name 'state.json' -exec jq -r 
 next_id_num=$(( ${existing_max:-0} + 1 ))
 id="REQ-${next_id_num}"
 
-# slug is the user-provided <feature-slug> argument (kebab-case).
-slug="<feature-slug>"
+# slug comes from Phase 0 (resolved_slug). Either a user-given <feature-slug>,
+# the basename of an attached scratch file, or a free-text answer asked in Phase 0.4.
+slug="${resolved_slug}"
 
 # Combined feature directory key
 feature_dir_key="${id}-${slug}"

@@ -50,8 +50,10 @@ exclude = [
   "slsa\\.dev/spec/",
 ]
 
-# Local-only file:// or relative anchor checks. Set false to focus on http(s).
-include_fragments = false
+# Local-only file:// or relative anchor checks. "none" focuses on http(s);
+# valid values are "none" / "anchor-only" / "text-only" / "full"
+# (lychee 0.24+ replaced the boolean form with this tristate enum).
+include_fragments = "none"
 
 # Localhost links cannot be reached from CI runners.
 exclude_loopback = true
