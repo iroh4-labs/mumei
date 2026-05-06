@@ -20,10 +20,16 @@ articles. These are the existing baseline you must NOT duplicate.
 
 ## Step 2 — Fetch the engineering page
 
-WebFetch `https://www.anthropic.com/engineering`. Parse the article list.
-Each article has a title and a date (e.g., "Apr 08, 2026").
+Use `curl` (the WebFetch tool is unreliable in CI — its internal summarizer
+tries a discontinued model and 404s):
 
-If the fetch fails or the page format has changed (no parseable article list),
+    mkdir -p /tmp/spec
+    curl -sSLf -o /tmp/spec/engineering.html https://www.anthropic.com/engineering
+
+Read with the Read tool. Parse the article list — each article has a title
+and a date (e.g., "Apr 08, 2026").
+
+If curl fails or the page format has changed (no parseable article list),
 abort: print the error and exit 0. Do NOT create an issue from stale data.
 
 ## Step 3 — Identify new articles
@@ -35,7 +41,11 @@ A new article is one whose:
 
 ## Step 4 — For each new article
 
-WebFetch the article URL. Summarize in 3–5 sentences. Then evaluate:
+Fetch with curl (same pattern as Step 2):
+
+    curl -sSLf -o /tmp/spec/article-N.html <article URL>
+
+Read with the Read tool. Summarize in 3–5 sentences. Then evaluate:
 
 - **Relevance to mumei**: HIGH (changes a design assumption) / MEDIUM
   (introduces a technique mumei could adopt) / LOW (general interest only) /

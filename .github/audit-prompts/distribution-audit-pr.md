@@ -18,15 +18,18 @@ Ignore changes outside these paths.
 
 ## Step 1 — Fetch latest specs
 
-Always fetch the current authoritative docs (do NOT rely on memory):
+Use `curl` (the WebFetch tool is unreliable in CI — its internal summarizer
+tries a discontinued model and 404s). Save each spec to `/tmp/` and read
+with the Read tool:
 
-- `https://code.claude.com/docs/en/hooks`
-- `https://code.claude.com/docs/en/skills`
-- `https://code.claude.com/docs/en/sub-agents`
-- `https://code.claude.com/docs/en/plugins-reference`
+    mkdir -p /tmp/spec
+    curl -sSLf -o /tmp/spec/hooks.html       https://code.claude.com/docs/en/hooks
+    curl -sSLf -o /tmp/spec/skills.html      https://code.claude.com/docs/en/skills
+    curl -sSLf -o /tmp/spec/sub-agents.html  https://code.claude.com/docs/en/sub-agents
+    curl -sSLf -o /tmp/spec/plugins-reference.html https://code.claude.com/docs/en/plugins-reference
 
-If a fetch fails, note it in the comment but proceed using the embedded rules
-below as fallback.
+If any curl fails, note it in the PR comment but proceed using the embedded
+rules below as fallback.
 
 ## Step 2 — Identify changed files
 

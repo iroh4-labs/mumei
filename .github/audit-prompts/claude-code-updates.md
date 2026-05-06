@@ -17,18 +17,24 @@ If no prior issue exists, use today minus 14 days as baseline.
 
 ## Step 2 — Fetch update sources
 
-Always fetch fresh:
+Use `curl` (the WebFetch tool is unreliable in CI — its internal summarizer
+tries a discontinued model and 404s). Save each source to `/tmp/` and read
+with the Read tool:
 
-- `https://code.claude.com/docs/en/changelog` — version-by-version notes
-- `https://code.claude.com/docs/llms.txt` — full doc index, useful for
-  discovering pages that have been added since baseline
-- `https://code.claude.com/docs/en/hooks` — current hook spec (full event list)
-- `https://code.claude.com/docs/en/skills` — current skill frontmatter
-- `https://code.claude.com/docs/en/sub-agents` — current agent frontmatter
-- `https://code.claude.com/docs/en/plugins-reference` — manifest spec
-- `https://code.claude.com/docs/en/headless` — programmatic / SDK changes
-- `https://platform.claude.com/docs/en/about-claude/models/overview` — current
-  model IDs and which ones are deprecated
+    mkdir -p /tmp/spec
+    curl -sSLf -o /tmp/spec/changelog.html         https://code.claude.com/docs/en/changelog
+    curl -sSLf -o /tmp/spec/llms.txt               https://code.claude.com/docs/llms.txt
+    curl -sSLf -o /tmp/spec/hooks.html             https://code.claude.com/docs/en/hooks
+    curl -sSLf -o /tmp/spec/skills.html            https://code.claude.com/docs/en/skills
+    curl -sSLf -o /tmp/spec/sub-agents.html        https://code.claude.com/docs/en/sub-agents
+    curl -sSLf -o /tmp/spec/plugins-reference.html https://code.claude.com/docs/en/plugins-reference
+    curl -sSLf -o /tmp/spec/headless.html          https://code.claude.com/docs/en/headless
+    curl -sSLf -o /tmp/spec/models-overview.html   https://platform.claude.com/docs/en/about-claude/models/overview
+
+`-sSLf` = silent + show errors + follow redirects + fail-on-HTTP-error.
+
+If any curl fails, abort: do NOT create an issue based on stale knowledge.
+Print the failure and exit 0.
 
 ## Step 3 — Diff against mumei
 

@@ -15,16 +15,24 @@ All files under:
 
 ## Step 1 — Fetch latest specs
 
-Always fetch fresh:
+Use `curl` (the WebFetch tool is unreliable in CI — its internal summarizer
+tries a discontinued model and 404s). Save each spec to `/tmp/` and read
+with the standard Read tool:
 
-- `https://code.claude.com/docs/en/hooks`
-- `https://code.claude.com/docs/en/skills`
-- `https://code.claude.com/docs/en/sub-agents`
-- `https://code.claude.com/docs/en/plugins-reference`
-- `https://code.claude.com/docs/en/changelog` (look for breaking changes)
+    mkdir -p /tmp/spec
+    curl -sSLf -o /tmp/spec/hooks.html       https://code.claude.com/docs/en/hooks
+    curl -sSLf -o /tmp/spec/skills.html      https://code.claude.com/docs/en/skills
+    curl -sSLf -o /tmp/spec/sub-agents.html  https://code.claude.com/docs/en/sub-agents
+    curl -sSLf -o /tmp/spec/plugins-reference.html https://code.claude.com/docs/en/plugins-reference
+    curl -sSLf -o /tmp/spec/changelog.html   https://code.claude.com/docs/en/changelog
 
-If a fetch fails, abort: do NOT create an issue based on stale knowledge.
-Print the failure and exit 0.
+`-sSLf` = silent + show errors + follow redirects + fail-on-HTTP-error.
+
+If any curl fails (non-zero exit), abort: do NOT create an issue based on
+stale knowledge. Print the failure and exit 0.
+
+Read each file with the Read tool. The HTML markup is tolerable — extract
+the spec rules from headings and tables in the body.
 
 ## Step 2 — Audit every distribution file
 
