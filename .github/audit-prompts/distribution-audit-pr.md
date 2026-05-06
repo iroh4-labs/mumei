@@ -31,6 +31,9 @@ with the Read tool:
 If any curl fails, note it in the PR comment but proceed using the embedded
 rules below as fallback.
 
+**Run curl exactly once per URL.** Once a file exists in `/tmp/spec/`,
+re-read it with the Read tool — do NOT re-run curl in later turns.
+
 ## Step 2 — Identify changed files
 
 Run:

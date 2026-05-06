@@ -31,6 +31,9 @@ with the standard Read tool:
 If any curl fails (non-zero exit), abort: do NOT create an issue based on
 stale knowledge. Print the failure and exit 0.
 
+**Run curl exactly once per URL.** Once a file exists in `/tmp/spec/`,
+re-read it with the Read tool — do NOT re-run curl in later turns.
+
 Read each file with the Read tool. The HTML markup is tolerable — extract
 the spec rules from headings and tables in the body.
 

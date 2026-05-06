@@ -15,6 +15,12 @@ permissions:
   pull-requests: write
   actions: read
 
+# Opt into Node.js 24 for transitive JS actions (actions/setup-node,
+# oven-sh/setup-bun) inside claude-code-base-action. Silences the Node 20
+# deprecation warning until those actions publish Node 24-compatible tags.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   analyze:
     if: github.event.workflow_run.conclusion == 'failure'
@@ -56,3 +62,6 @@ jobs:
           model: sonnet
           max_turns: "20"
           allowed_tools: "Read,Glob,Grep,Bash(gh run view:*),Bash(gh pr:*),Bash(gh issue:*),Bash(head:*),Bash(tail:*),Bash(grep:*)"
+          # Disallow WebFetch explicitly: removing it from allowed_tools
+          # alone is insufficient because the action's defaults include it.
+          disallowed_tools: "WebFetch"

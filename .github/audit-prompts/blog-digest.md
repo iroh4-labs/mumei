@@ -32,6 +32,9 @@ and a date (e.g., "Apr 08, 2026").
 If curl fails or the page format has changed (no parseable article list),
 abort: print the error and exit 0. Do NOT create an issue from stale data.
 
+**Run curl exactly once per URL.** Once a file exists in `/tmp/spec/`,
+re-read it with the Read tool — do NOT re-run curl in later turns.
+
 ## Step 3 — Identify new articles
 
 A new article is one whose:

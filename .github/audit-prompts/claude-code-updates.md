@@ -36,6 +36,9 @@ with the Read tool:
 If any curl fails, abort: do NOT create an issue based on stale knowledge.
 Print the failure and exit 0.
 
+**Run curl exactly once per URL.** Once a file exists in `/tmp/spec/`,
+re-read it with the Read tool — do NOT re-run curl in later turns.
+
 ## Step 3 — Diff against mumei
 
 Read the mumei codebase to ground every proposal:

@@ -14,6 +14,12 @@ permissions:
   contents: read
   issues: write
 
+# Opt into Node.js 24 for transitive JS actions (actions/setup-node,
+# oven-sh/setup-bun) inside claude-code-base-action. Silences the Node 20
+# deprecation warning until those actions publish Node 24-compatible tags.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: audit-distribution-weekly
   cancel-in-progress: false
@@ -34,4 +40,7 @@ jobs:
           max_turns: "30"
           # No WebFetch — its internal summarizer hits a discontinued Haiku
           # model and 404s. Use Bash(curl:*) instead per the prompt.
+          # Disallow WebFetch explicitly: removing it from allowed_tools
+          # alone is insufficient because the action's defaults include it.
           allowed_tools: "Read,Glob,Grep,Bash(curl:*),Bash(mkdir:*),Bash(gh issue:*),Bash(gh label:*)"
+          disallowed_tools: "WebFetch"
