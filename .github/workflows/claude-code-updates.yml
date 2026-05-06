@@ -36,7 +36,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/claude-code-updates.md
           model: opus
-          max_turns: "30"
+          max_turns: "60"
           # No WebFetch — its internal summarizer hits a discontinued Haiku
           # model and 404s. Use Bash(curl:*) instead per the prompt.
           # Disallow WebFetch explicitly: removing it from allowed_tools

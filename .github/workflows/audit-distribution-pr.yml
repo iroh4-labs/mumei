@@ -43,7 +43,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/distribution-audit-pr.md
           model: sonnet
-          max_turns: "25"
+          max_turns: "40"
           # No WebFetch — its internal summarizer hits a discontinued Haiku
           # model and 404s. Use Bash(curl:*) instead per the prompt.
           # Disallow WebFetch explicitly: removing it from allowed_tools

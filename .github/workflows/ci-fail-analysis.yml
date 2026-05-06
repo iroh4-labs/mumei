@@ -60,7 +60,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/ci-fail-analysis.md
           model: sonnet
-          max_turns: "20"
+          max_turns: "30"
           allowed_tools: "Read,Glob,Grep,Bash(gh run view:*),Bash(gh pr:*),Bash(gh issue:*),Bash(head:*),Bash(tail:*),Bash(grep:*)"
           # Disallow WebFetch explicitly: removing it from allowed_tools
           # alone is insufficient because the action's defaults include it.

@@ -37,7 +37,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/readme-drift.md
           model: sonnet
-          max_turns: "25"
+          max_turns: "40"
           allowed_tools: "Read,Glob,Grep,Bash(gh issue:*),Bash(gh label:*)"
           # Disallow WebFetch explicitly: removing it from allowed_tools
           # alone is insufficient because the action's defaults include it.

@@ -47,7 +47,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt_file: .github/audit-prompts/e2e-plugin-load.md
           model: sonnet
-          max_turns: "30"
+          max_turns: "40"
           allowed_tools: "Read,Glob,Grep,Bash(gh pr comment:*),Bash(jq:*)"
           # Disallow WebFetch explicitly: removing it from allowed_tools
           # alone is insufficient because the action's defaults include it.
