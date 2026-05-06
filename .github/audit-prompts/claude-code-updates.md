@@ -27,6 +27,8 @@ Always fetch fresh:
 - `https://code.claude.com/docs/en/sub-agents` — current agent frontmatter
 - `https://code.claude.com/docs/en/plugins-reference` — manifest spec
 - `https://code.claude.com/docs/en/headless` — programmatic / SDK changes
+- `https://platform.claude.com/docs/en/about-claude/models/overview` — current
+  model IDs and which ones are deprecated
 
 ## Step 3 — Diff against mumei
 
@@ -50,11 +52,40 @@ Flag only changes that are actionable for mumei. Examples of actionable:
 - A new model id mumei should adopt
 - A change to plugin manifest schema
 
+### Step 4a — Pinned model ID staleness check
+
+mumei pins certain model IDs as full versions (not aliases) where alias
+auto-update doesn't reach — typically env vars consumed by background tools.
+For each pinned ID, verify it's still the recommended current version on the
+models overview page fetched in Step 2. If a newer version supersedes it,
+propose updating the pin.
+
+Files to grep for full model IDs:
+
+- `.github/workflows/*.yml` — look for `model:` keys and `claude_env:` blocks
+  that set `ANTHROPIC_DEFAULT_*_MODEL` / `ANTHROPIC_MODEL` to a full ID
+  (matching `claude-(opus|sonnet|haiku)-[0-9]`)
+- `agents/*.md` and `skills/**/SKILL.md` frontmatter `model:` — only flag if
+  the value is a full ID (e.g., `claude-haiku-4-5-20251001`); aliases
+  (`sonnet` / `opus` / `haiku`) auto-resolve and are NOT stale by definition
+
+For each stale pin, report:
+
+- File:line
+- Currently pinned: `<old ID>`
+- Latest available: `<new ID>` (with link to models overview entry)
+- Reason for the pin (env var that demands full ID, third-party provider, etc.)
+- Proposed change (the exact replacement string)
+
+This is `Severity: MEDIUM` if the pinned ID is still supported, `Severity:
+HIGH` if it has been deprecated or removed (the API would 404).
+
 Examples of NOT actionable (do not propose):
 
 - New tutorial or how-to pages
 - Cosmetic doc rewrites
 - Features for IDE integrations mumei does not target
+- Alias-based `model:` frontmatter (those auto-update by design)
 
 ## Step 5 — Decide to issue or not
 
