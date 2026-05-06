@@ -14,7 +14,9 @@ extend-ignore-re = [
 ]
 
 [default.extend-words]
-# Project / vendor names that look like typos to typos.
+# Project / vendor names + short identifiers that look like typos to typos
+# but are intentional in this codebase.
+anc = "anc"  # ancestor abbreviation in pre-edit-guard.sh path-walk loop
 mumei = "mumei"
 kuroko = "kuroko"
 Anthropic = "Anthropic"

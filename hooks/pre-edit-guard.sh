@@ -88,8 +88,55 @@ fi
 # Covers: dotfiles (.gitignore, .dockerignore, .editorconfig, etc.), config files
 # (Makefile, *.toml, *.yaml, *.yml, *.lock, *.json), README, LICENSE,
 # CLAUDE.md / AGENTS.md, .github/, .vscode/.
+#
+# Root-scope guard: any absolute path that lies OUTSIDE the project root is
+# also treated as meta. mumei is a project-local quality gate; Claude Code
+# system paths (e.g. ~/.claude/projects/<project>/memory/), tmp dirs, OS
+# caches, etc. are out of scope and must not be denied.
+#
+# Edge cases handled (REQ-6 review F-001 HIGH):
+#   - trailing slash on CLAUDE_PROJECT_DIR (e.g. /tmp/foo/) → stripped before
+#     comparison so the inner glob does not produce a double-slash pattern
+#     that fails to match in-project paths.
+#   - macOS symlink resolution (/tmp ↔ /private/tmp, /var ↔ /private/var) →
+#     both proj_root and the input path are canonicalised via `cd && pwd -P`
+#     before comparison so a path emitted with realpath still matches.
+#   - parent dir resolution and path normalisation are handled by the same
+#     canonicalisation step.
 mumei_is_meta_path() {
   local p="$1"
+  case "$p" in
+  /*)
+    local proj_root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+    proj_root="${proj_root%/}"
+    # Canonicalise (resolve symlinks). Fall back to the trimmed value if the
+    # directory does not exist on disk (canonicalisation requires existence).
+    local canon_root
+    canon_root="$(cd "$proj_root" 2>/dev/null && pwd -P || echo "$proj_root")"
+    # For the input path, the parent dir may not exist yet (Edit/Write can
+    # create files in brand-new subdirectories). Walk up to the first
+    # existing ancestor, canonicalise that, then re-append the missing tail
+    # plus the basename. Without this walk, canon_root resolves symlinks
+    # while canon_p stays literal — they then fail to share a prefix and
+    # the in-project file is silently misclassified as meta.
+    local p_dir p_base
+    p_dir="$(dirname "$p")"
+    p_base="$(basename "$p")"
+    local anc="$p_dir"
+    local tail=""
+    while [[ ! -d "$anc" && "$anc" != "/" && -n "$anc" ]]; do
+      tail="/$(basename "$anc")$tail"
+      anc="$(dirname "$anc")"
+    done
+    local canon_anc canon_p
+    canon_anc="$(cd "$anc" 2>/dev/null && pwd -P || echo "$anc")"
+    canon_p="${canon_anc}${tail}/${p_base}"
+    case "$canon_p" in
+    "$canon_root" | "$canon_root"/*) ;; # inside project, fall through
+    *) return 0 ;;                      # outside project, meta
+    esac
+    ;;
+  esac
   case "$p" in
   .mumei/* | .claude/* | .github/* | .vscode/* | .gitlab/* | .idea/*) return 0 ;;
   .[a-zA-Z]*) return 0 ;; # dotfiles in general (.gitignore, .editorconfig, .npmrc, ...)
