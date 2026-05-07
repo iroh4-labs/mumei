@@ -49,55 +49,84 @@ mkdir -p ".mumei/plans/${SLUG}"
 LOCK_DIR=".mumei/plans/${SLUG}/.lock-dir"
 
 acquired=0
+# Install the cleanup trap BEFORE the acquisition loop, gated on
+# $acquired so it no-ops when we never took the lock. Covering EXIT,
+# INT, and TERM ensures a SIGTERM landing in the narrow window between
+# mkdir-success and trap-install (which would happen if the trap were
+# installed after the loop) cannot leak the lock dir on disk.
+#
+# The trap function clears all three signal traps on first fire so
+# bash's "EXIT trap fires after TERM trap exits" behavior cannot
+# rmdir the lock twice — the second fire would otherwise rmdir a lock
+# acquired by a different contender process in the few-millisecond
+# window between TERM trap exit and EXIT trap entry.
+# shellcheck disable=SC2329  # invoked indirectly via trap
+_post_task_cleanup() {
+  trap - EXIT INT TERM
+  [[ "$acquired" == "1" ]] && rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap _post_task_cleanup EXIT INT TERM
+
 # Up to ~5s with 200ms back-off: 25 attempts * 0.2s. Caps total wait
 # without busy-spinning. If we still cannot acquire, the contending
 # process will set the counter we care about — bail rather than block.
+#
+# Stale-lock auto-recovery is intentionally NOT implemented. Earlier
+# attempts (rmdir+mkdir on age threshold) introduced a TOCTOU race —
+# two contenders both detecting "stale" can rmdir each other's freshly
+# acquired lock, defeating mutual exclusion. The cost of omitting it:
+# if a process is SIGKILL-ed mid critical section (< 100ms window,
+# extremely rare), .mumei/plans/<slug>/.lock-dir persists and counter
+# events stay stuck. Recovery: `rm -rf .mumei/plans/<slug>/.lock-dir`.
+# The 5-second timeout below already handles healthy contention.
 for _ in $(seq 1 25); do
   if mkdir "$LOCK_DIR" 2>/dev/null; then
     acquired=1
     break
   fi
-  # Stale lock recovery: if the lock dir was created more than 30s ago,
-  # the holder almost certainly crashed (no critical section legitimately
-  # holds for 30s). Force-clear and retry once.
-  if [[ -d "$LOCK_DIR" ]] &&
-    [[ -z "$(find "$LOCK_DIR" -maxdepth 0 -mmin -0.5 2>/dev/null)" ]]; then
-    rmdir "$LOCK_DIR" 2>/dev/null || true
-    if mkdir "$LOCK_DIR" 2>/dev/null; then
-      mumei_log_warn "post-task-event: cleared stale lock for ${SLUG} (held >30s)"
-      acquired=1
-      break
-    fi
-  fi
   sleep 0.2
 done
 
 if [[ "$acquired" == "0" ]]; then
-  mumei_log_warn "post-task-event: could not acquire lock for ${SLUG} within 5s; skipping increment"
+  mumei_log_warn "post-task-event: could not acquire lock for ${SLUG} within 5s; skipping increment (if a previous run crashed mid-critical-section, remove .mumei/plans/${SLUG}/.lock-dir manually)"
   exit 0
 fi
-trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
+# Numeric validation helper. Non-numeric / empty input passes the legacy
+# `[[ -n ]]` check yet crashes `$((x+1))` under set -u, leaving the
+# arithmetic target unset and silently dropping the increment. Coerce
+# unparsable values to 0 with a warn so the next event can recover.
+_post_task_int() {
+  local value="$1" field="$2" event="$3"
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    mumei_log_warn "${event}: non-numeric ${field}='${value}' for ${SLUG} — treating as 0"
+    printf '%s' 0
+  else
+    printf '%s' "$value"
+  fi
+}
+
+# Use 10#$value in arithmetic to force base-10 interpretation. Without
+# this, a value like "08" or "09" would pass _post_task_int's
+# `^[0-9]+$` regex but then crash `$((08+1))` ("value too great for
+# base") because bash interprets leading-zero numerics as octal.
 case "$EVENT" in
 TaskCreated)
-  current="$(mumei_state_read_any "$SLUG" '.task_created_count')"
-  [[ -n "$current" ]] || current=0
-  next=$((current + 1))
+  current="$(_post_task_int "$(mumei_state_read_any "$SLUG" '.task_created_count')" task_created_count L-T1)"
+  next=$((10#$current + 1))
   if ! mumei_plan_state_set "$SLUG" '.task_created_count' "$next"; then
     mumei_log_warn "L-T1: failed to increment task_created_count for ${SLUG}"
   fi
   ;;
 TaskCompleted)
-  completed="$(mumei_state_read_any "$SLUG" '.task_completed_count')"
-  [[ -n "$completed" ]] || completed=0
-  next_completed=$((completed + 1))
+  completed="$(_post_task_int "$(mumei_state_read_any "$SLUG" '.task_completed_count')" task_completed_count L-T2)"
+  next_completed=$((10#$completed + 1))
   if ! mumei_plan_state_set "$SLUG" '.task_completed_count' "$next_completed"; then
     mumei_log_warn "L-T2: failed to increment task_completed_count for ${SLUG}"
     exit 0
   fi
-  created="$(mumei_state_read_any "$SLUG" '.task_created_count')"
-  [[ -n "$created" ]] || created=0
-  if [[ "$next_completed" == "$created" ]] && [[ "$created" != "0" ]]; then
+  created="$(_post_task_int "$(mumei_state_read_any "$SLUG" '.task_created_count')" task_created_count L-T2)"
+  if [[ "$next_completed" == "$((10#$created))" ]] && [[ "$created" != "0" ]]; then
     if ! mumei_plan_state_set "$SLUG" '.pending_review' 'true'; then
       mumei_log_warn "L-T2: failed to set pending_review=true for ${SLUG}"
     fi
