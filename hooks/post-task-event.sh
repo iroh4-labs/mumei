@@ -84,7 +84,7 @@ trap _mumei_post_task_cleanup EXIT INT TERM
 # extremely rare), .mumei/plans/<slug>/.lock-dir persists and counter
 # events stay stuck. Recovery: `rm -rf .mumei/plans/<slug>/.lock-dir`.
 # The 5-second timeout below already handles healthy contention.
-for _ in $(seq 1 25); do
+for _ in {1..25}; do
   if mkdir "$LOCK_DIR" 2>/dev/null; then
     acquired=1
     break

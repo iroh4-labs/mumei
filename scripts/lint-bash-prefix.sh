@@ -26,7 +26,7 @@ bad="$(awk '
   }
 ' hooks/_lib/*.sh hooks/*.sh scripts/*.sh || true)"
 
-if [ -n "$bad" ]; then
+if [[ -n "$bad" ]]; then
   printf '%s\n' "Non-prefixed function definitions found in hooks/ or scripts/:" >&2
   printf '%s\n' "$bad" >&2
   printf '%s\n' "convention: public functions use mumei_*, internal helpers use _mumei_*." >&2
