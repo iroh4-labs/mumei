@@ -43,13 +43,54 @@ jobs:
             exit 0
           fi
 
+          # gh-api retry helper. Distinguishes transient API errors
+          # (5xx, rate-limit, network) from real "verified=false" responses.
+          # Transient → exponential backoff retry (1s, 2s, 4s) up to 3 attempts;
+          # persistent transient → return 2 so the workflow can fail with
+          # an infra-error category instead of silently treating the commit
+          # as unsigned.
+          # 4xx (e.g. 404 commit not found) is treated as terminal and
+          # propagated as `verified=false` so the existing branch handles it.
+          gh_api_verified_with_retry() {
+            local sha="$1" attempts=3 i=0 last_stderr="" stdout="" rc=0
+            local stderr_file
+            stderr_file="$(mktemp)"
+            while [ "$i" -lt "$attempts" ]; do
+              stdout="$(gh api "repos/${REPO_FULL}/commits/${sha}" \
+                --jq '.commit.verification.verified' 2>"$stderr_file")"
+              rc=$?
+              last_stderr="$(cat "$stderr_file")"
+              if [ "$rc" -eq 0 ]; then
+                rm -f "$stderr_file"
+                printf '%s' "$stdout"
+                return 0
+              fi
+              # 4xx is real failure (commit not found etc.) — do not retry,
+              # surface as verified=false to the existing unsigned branch.
+              if printf '%s' "$last_stderr" | grep -qE 'HTTP 4[0-9][0-9]'; then
+                rm -f "$stderr_file"
+                printf 'false'
+                return 0
+              fi
+              i=$((i + 1))
+              if [ "$i" -lt "$attempts" ]; then
+                sleep $((1 << (i - 1)))
+              fi
+            done
+            rm -f "$stderr_file"
+            printf '[mumei] gh api transient failure after %d attempts (last stderr: %s)\n' \
+              "$attempts" "$last_stderr" >&2
+            return 2
+          }
+
           unsigned=""
           for sha in "${shas[@]}"; do
-            verified="$(
-              gh api "repos/${REPO_FULL}/commits/${sha}" \
-                --jq '.commit.verification.verified' 2>/dev/null \
-                || echo "false"
-            )"
+            verified="$(gh_api_verified_with_retry "$sha")"
+            api_rc=$?
+            if [ "$api_rc" -eq 2 ]; then
+              echo "::error::infra failure: cannot determine signed status of ${sha} after retries"
+              exit 2
+            fi
             if [ "$verified" != "true" ]; then
               author="$(git log -1 --format='%an <%ae>' "$sha")"
               unsigned+="${sha}  ${author}"$'\n'
