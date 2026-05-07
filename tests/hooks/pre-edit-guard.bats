@@ -226,3 +226,49 @@ EOF
   [ "$output" = "" ]
   [ -z "$stderr" ]
 }
+
+@test "R3: deny fires when no .mumei/current is set (feature-independent)" {
+  # No _init_feature_with_tasks: there is no active mumei feature.
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/security-reviewer/MEMORY.md"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+}
+
+@test "R3: deny fires on plan vehicle (vehicle-independent)" {
+  # Initialize a plan-vehicle state.json (no specs/ dir) so vehicle resolves to "plan".
+  mkdir -p .mumei/plans/somefeature
+  echo "somefeature" >.mumei/current
+  cat >.mumei/plans/somefeature/state.json <<'EOF'
+{"slug":"somefeature","phase":"implement","plan_file_path":"/tmp/p.md","task_created_count":0,"task_completed_count":0,"pending_review":false,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
+EOF
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/adversarial-reviewer/MEMORY.md"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+}
+
+@test "R3: deny fires on path with leading ./ (canonicalize)" {
+  _init_feature_with_tasks "implement" 1
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":"./.claude/agent-memory/security-reviewer/MEMORY.md"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+}
+
+@test "R3: deny fires on path with .. traversal segment (canonicalize)" {
+  _init_feature_with_tasks "implement" 1
+  mkdir -p .claude/agent-memory/security-reviewer/sub
+  _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/security-reviewer/sub/../MEMORY.md"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+}
+
+@test "R3: deny fires on absolute path inside CLAUDE_PROJECT_DIR (canonicalize)" {
+  _init_feature_with_tasks "implement" 1
+  CLAUDE_PROJECT_DIR="$MUMEI_TEST_TMPDIR" _run_hook "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${MUMEI_TEST_TMPDIR}/.claude/agent-memory/spec-compliance-reviewer/MEMORY.md\"}}"
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+}

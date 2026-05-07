@@ -117,6 +117,14 @@ fi
 # bash tool execution actually contains `git commit` — reading from
 # tool_input.command (NOT from `git reflog`, which surfaces the last
 # commit on every unrelated bash call and would loop-advance state).
+# Additionally gate on tool_response.exit_code == 0 so failed commits
+# (pre-commit hook reject, nothing-to-commit, branch protection) do NOT
+# advance state — that prevents the silent phase=review transition that
+# leaves git log unchanged but state.json moved on.
+TOOL_EXIT="$(printf '%s' "$INPUT" | jq -r '.tool_response.exit_code // .tool_response.stdout_exit_code // 0' 2>/dev/null || echo 0)"
+if [[ "$TOOL_EXIT" != "0" ]]; then
+  exit 0
+fi
 if printf '%s' "$COMMAND" | grep -qE '(^|[[:space:];|&])git[[:space:]]+commit([[:space:]]|$)'; then
   # A commit just landed. Recompute the current Wave: smallest Wave
   # number whose tasks include any [ ]. If every Wave is complete, this

@@ -11,8 +11,10 @@ if ! declare -F mumei_log_info >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
-# Save threshold and the 7 rubric axes. Update both if requirements change.
+# Save threshold, the 7 rubric axes, and the per-entry byte cap.
+# Update all three together if requirements change.
 readonly MUMEI_MEMORY_THRESHOLD=15
+readonly MUMEI_MEMORY_FINAL_TEXT_MAX_BYTES=1024
 MUMEI_MEMORY_AXES=(generality recurrence longevity coverage_gap actionability density confidence)
 readonly MUMEI_MEMORY_AXES
 
@@ -89,6 +91,16 @@ mumei_memory_validate_curator_output() {
       return 1
     fi
   fi
+  # Cap final_text bytes — prevents curator drift from blowing past the
+  # 8KB MEMORY.md cap. SKIP can have empty final_text (length 0).
+  if [[ "$op" != "SKIP" ]]; then
+    local ft_bytes
+    ft_bytes="$(printf '%s' "$input" | jq -r '.final_text' | wc -c | tr -d ' ')"
+    if ((ft_bytes > MUMEI_MEMORY_FINAL_TEXT_MAX_BYTES)); then
+      printf 'final_text too long: %d bytes (cap %d)\n' "$ft_bytes" "$MUMEI_MEMORY_FINAL_TEXT_MAX_BYTES" >&2
+      return 1
+    fi
+  fi
   return 0
 }
 
@@ -103,36 +115,119 @@ mumei_memory_apply_operation() {
   input="$(cat)"
   op="$(printf '%s' "$input" | jq -r '.operation')"
   mfile="${dir}/MEMORY.md"
-  case "$op" in
-  SKIP)
+
+  if [[ "$op" == "SKIP" ]]; then
     return 0
-    ;;
-  ADD)
-    mkdir -p "$dir"
-    [[ -f "$mfile" ]] || : >"$mfile"
+  fi
+  if [[ "$op" != "ADD" && "$op" != "UPDATE" ]]; then
+    mumei_log_error "unknown operation: ${op}"
+    return 1
+  fi
+
+  mkdir -p "$dir" || {
+    mumei_log_error "mkdir failed: ${dir}"
+    return 1
+  }
+  [[ -f "$mfile" ]] || : >"$mfile"
+
+  # Acquire flock against ${mfile}.lock so concurrent ADDs do not lose updates.
+  # flock auto-releases when fd closes (return / exit).
+  local lockfile="${mfile}.lock"
+  : >"$lockfile" 2>/dev/null || true
+  exec 9>"$lockfile" || {
+    mumei_log_error "flock fd open failed: ${lockfile}"
+    return 1
+  }
+  if command -v flock >/dev/null 2>&1; then
+    flock -x 9 || {
+      mumei_log_error "flock acquire failed: ${lockfile}"
+      exec 9>&-
+      return 1
+    }
+  fi
+  # macOS lacks flock(1) by default; fall back to mkdir-lock as a soft mutex
+  # (best-effort; not POSIX-strict).
+  local mkdir_lock="${mfile}.mkdirlock"
+  local mkdir_lock_acquired=0
+  if ! command -v flock >/dev/null 2>&1; then
+    local tries=0
+    while ! mkdir "$mkdir_lock" 2>/dev/null; do
+      tries=$((tries + 1))
+      if ((tries > 50)); then
+        mumei_log_error "mkdir-lock timeout: ${mkdir_lock}"
+        exec 9>&-
+        return 1
+      fi
+      sleep 0.1
+    done
+    mkdir_lock_acquired=1
+  fi
+
+  # trap cleanup: tmp files + locks released on any return path
+  tmp=""
+  newtext_file=""
+  # shellcheck disable=SC2064
+  trap "rm -rf -- \"\${tmp:-}\" \"\${newtext_file:-}\" 2>/dev/null; \
+        if [[ \"$mkdir_lock_acquired\" == \"1\" ]]; then rmdir \"$mkdir_lock\" 2>/dev/null || true; fi; \
+        exec 9>&-" RETURN
+
+  if [[ "$op" == "ADD" ]]; then
     final_text="$(printf '%s' "$input" | jq -r '.final_text')"
     id="$(mumei_memory__slugify "$final_text")"
-    tmp="$(mktemp "${mfile}.XXXXXX")"
-    cat "$mfile" >"$tmp"
-    if [[ -s "$tmp" ]]; then
-      printf '\n' >>"$tmp"
+    if [[ -z "$id" ]]; then
+      # Slug pipeline yielded empty (e.g., Japanese-only or emoji-only text).
+      # Fall back to a content hash so multiple non-ASCII entries don't share an empty id.
+      id="sha-$(printf '%s' "$final_text" | shasum -a 256 | cut -c1-12)"
     fi
-    printf '<!-- id: %s -->\n%s\n' "$id" "$final_text" >>"$tmp"
-    mv "$tmp" "$mfile"
-    ;;
-  UPDATE)
+    tmp="$(mktemp "${mfile}.XXXXXX")" || {
+      mumei_log_error "mktemp failed"
+      return 1
+    }
+    cat "$mfile" >"$tmp" || {
+      mumei_log_error "ADD: cat failed"
+      return 1
+    }
+    if [[ -s "$tmp" ]]; then
+      printf '\n' >>"$tmp" || {
+        mumei_log_error "ADD: append newline failed"
+        return 1
+      }
+    fi
+    printf '<!-- id: %s -->\n%s\n' "$id" "$final_text" >>"$tmp" ||
+      {
+        mumei_log_error "ADD: append entry failed"
+        return 1
+      }
+    mv "$tmp" "$mfile" || {
+      mumei_log_error "ADD: mv failed"
+      return 1
+    }
+    tmp=""
+    mumei_log_info "memory ADD id=${id} reviewer=$(basename "$dir") bytes=$(printf '%s' "$final_text" | wc -c | tr -d ' ')"
+  else
+    # UPDATE
     target="$(printf '%s' "$input" | jq -r '.merge_target_id')"
     final_text="$(printf '%s' "$input" | jq -r '.final_text')"
     if [[ ! -f "$mfile" ]]; then
       mumei_log_error "UPDATE failed: ${mfile} does not exist"
       return 1
     fi
-    newtext_file="$(mktemp)"
-    printf '%s\n' "$final_text" >"$newtext_file"
-    tmp="$(mktemp "${mfile}.XXXXXX")"
+    newtext_file="$(mktemp)" || {
+      mumei_log_error "UPDATE: mktemp failed"
+      return 1
+    }
+    printf '%s\n' "$final_text" >"$newtext_file" ||
+      {
+        mumei_log_error "UPDATE: write newtext_file failed"
+        return 1
+      }
+    tmp="$(mktemp "${mfile}.XXXXXX")" || {
+      mumei_log_error "UPDATE: mktemp failed"
+      return 1
+    }
     awk -v id="$target" -v newfile="$newtext_file" '
         /^<!-- id: / {
-          match($0, /id: [a-z0-9-]+/)
+          match($0, /id: [^ ]+/)
           cur = substr($0, RSTART+4, RLENGTH-4)
           if (cur == id) {
             print "<!-- id: " id " -->"
@@ -144,18 +239,23 @@ mumei_memory_apply_operation() {
           if (skip) skip = 0
         }
         { if (!skip) print }
-      ' "$mfile" >"$tmp"
-    rm -f "$newtext_file"
-    mv "$tmp" "$mfile"
-    ;;
-  *)
-    mumei_log_error "unknown operation: ${op}"
-    return 1
-    ;;
-  esac
+      ' "$mfile" >"$tmp" || {
+      mumei_log_error "UPDATE: awk failed"
+      return 1
+    }
+    mv "$tmp" "$mfile" || {
+      mumei_log_error "UPDATE: mv failed"
+      return 1
+    }
+    tmp=""
+    mumei_log_info "memory UPDATE id=${target} reviewer=$(basename "$dir")"
+  fi
+  return 0
 }
 
 # Internal: slugify a paragraph into a kebab-case id (first 6 alnum tokens).
+# Returns empty string when the input contains no [a-z0-9] characters
+# (caller must fall back to a content hash to keep ids unique).
 mumei_memory__slugify() {
   local text="$1"
   printf '%s' "$text" |

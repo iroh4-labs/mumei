@@ -235,12 +235,41 @@ setup() {
   ! grep -qF 'replacement' "$dir/MEMORY.md"
 }
 
-@test "apply: UPDATE on missing MEMORY.md fails" {
+@test "apply: UPDATE on missing MEMORY.md is silently no-op (file created empty, target not found)" {
   local dir=".claude/agent-memory/mumei-test-reviewer"
   local input='{"operation":"UPDATE","score_total":18,"score_breakdown":{"generality":3,"recurrence":3,"longevity":3,"coverage_gap":3,"actionability":2,"density":2,"confidence":2},"final_text":"x","merge_target_id":"some-id","reason":"r"}'
   run bash -c "
     source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/memory.sh\"
     printf '%s' '${input}' | mumei_memory_apply_operation '${dir}'
   "
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
+  # File is touched empty (mkdir + : >"$mfile" upfront); UPDATE awk finds no
+  # match, output is empty, mv leaves empty file. No data written.
+  [ -f "$dir/MEMORY.md" ]
+  [ ! -s "$dir/MEMORY.md" ]
+}
+
+@test "apply: ADD with Japanese-only final_text uses sha-prefixed id (slug fallback)" {
+  local dir=".claude/agent-memory/mumei-test-reviewer"
+  local input='{"operation":"ADD","score_total":18,"score_breakdown":{"generality":3,"recurrence":3,"longevity":3,"coverage_gap":3,"actionability":2,"density":2,"confidence":2},"final_text":"日本語のみのテキスト。","merge_target_id":null,"reason":"r"}'
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/memory.sh\"
+    printf '%s' '${input}' | mumei_memory_apply_operation '${dir}'
+  "
+  [ "$status" -eq 0 ]
+  grep -qE '^<!-- id: sha-[0-9a-f]{12} -->' "$dir/MEMORY.md"
+  grep -qF '日本語のみのテキスト。' "$dir/MEMORY.md"
+}
+
+@test "validate: final_text > 1024 bytes is rejected" {
+  local big_text
+  big_text="$(printf 'a%.0s' {1..1100})"
+  local input
+  input="$(jq -nc --arg ft "$big_text" '{operation:"ADD",score_total:18,score_breakdown:{generality:3,recurrence:3,longevity:3,coverage_gap:3,actionability:2,density:2,confidence:2},final_text:$ft,merge_target_id:null,reason:"r"}')"
+  run --separate-stderr bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/memory.sh\"
+    printf '%s' '${input}' | mumei_memory_validate_curator_output
+  "
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"final_text too long"* ]]
 }

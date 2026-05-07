@@ -270,3 +270,15 @@ EOF
   source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
   [ "$(mumei_state_get 'REQ-1-foo' '.current_wave')" = "2" ]
 }
+
+@test "X3: failed git commit (exit_code != 0) does NOT advance state" {
+  _init_feature_implement
+  _complete_wave1_add_wave2
+  # Simulate Claude Code's PostToolUse payload with non-zero exit_code from a
+  # rejected commit (pre-commit hook reject, branch protection, etc.)
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m wave1"},"tool_response":{"exit_code":1,"stdout":"","stderr":"husky: pre-commit failed"}}'
+  [ "$status" -eq 0 ]
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  # State must still be 1 — failed commit must not silently advance phase.
+  [ "$(mumei_state_get 'REQ-1-foo' '.current_wave')" = "1" ]
+}
