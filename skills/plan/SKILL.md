@@ -959,6 +959,52 @@ the review JSON appears clean.
 }
 ```
 
+### Stage 6.5 — Memory candidate curation (sync, non-blocking)
+
+After the review JSON is persisted (Stage 6) and before any phase transition,
+walk every reviewer's `memory_candidates` array and dispatch each candidate to
+`memory-curator` (sync invocation, REQ-10.10). The curator scores against the
+7-axis rubric (>= 15/21 → ADD or UPDATE, else SKIP). The orchestrator validates
+the curator's strict JSON via `mumei_memory_validate_curator_output` and on
+validator pass applies the operation to `.claude/agent-memory/<reviewer>/MEMORY.md`
+via `mumei_memory_apply_operation`. Any single candidate that fails validation
+is non-blocking — the orchestrator emits `[mumei] curator output invalid: <reason>`
+to stderr, treats that candidate as SKIP, and continues.
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/memory.sh"
+# reviewer_outputs is keyed by reviewer short-name (spec-compliance, security,
+# adversarial) and holds the full JSON output captured from Stage 1/2.
+for reviewer in spec-compliance security adversarial; do
+  output_json="${reviewer_outputs[$reviewer]:-}"
+  [[ -n "$output_json" ]] || continue
+  reviewer_dir=".claude/agent-memory/${reviewer}-reviewer"
+  candidate_count="$(jq -r '(.memory_candidates // []) | length' <<<"$output_json")"
+  # Hard cap at 5 even if a reviewer drifts past its body's stated cap.
+  (( candidate_count > 5 )) && candidate_count=5
+  for i in $(seq 0 $((candidate_count - 1))); do
+    candidate="$(jq -c --argjson i "$i" --arg r "${reviewer}-reviewer" \
+      '.memory_candidates[$i] + {source_reviewer: $r}' <<<"$output_json")"
+    existing_memory=""
+    [[ -f "${reviewer_dir}/MEMORY.md" ]] && existing_memory="$(cat "${reviewer_dir}/MEMORY.md")"
+    curator_out="$(Task subagent_type=memory-curator \
+      prompt="Score this candidate per agents/memory-curator.md. candidate=${candidate} existing_memory=<<<${existing_memory}>>>")"
+    reason="$(printf '%s' "$curator_out" | mumei_memory_validate_curator_output 2>&1 >/dev/null)"
+    if [[ -z "$reason" ]]; then
+      printf '%s' "$curator_out" | mumei_memory_apply_operation "$reviewer_dir"
+    else
+      printf '[mumei] curator output invalid: %s\n' "$reason" >&2
+    fi
+  done
+done
+```
+
+The curator runs once per candidate (single Task subagent_type=memory-curator
+launch). It is `tools: Read` only; the orchestrator's bash-based file ops in
+`mumei_memory_apply_operation` (atomic mv + awk pipelines) do not pass through
+`pre-edit-guard.sh`, so the legitimate write path is unaffected by the R3 deny
+rule that blocks LLM-driven Edit/Write on `.claude/agent-memory/<r>/MEMORY.md`.
+
 If `verdict == PASS`:
 
 ```bash
