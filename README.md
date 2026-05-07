@@ -1,5 +1,9 @@
 # mumei
 
+<div align="center">
+  <img src="./assets/mumei-mascot.png" alt="mumei mascot" width="220" />
+</div>
+
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 [![CI](https://github.com/hir4ta/mumei/actions/workflows/ci.yml/badge.svg)](https://github.com/hir4ta/mumei/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/hir4ta/mumei/actions/workflows/codeql.yml/badge.svg)](https://github.com/hir4ta/mumei/actions/workflows/codeql.yml)
