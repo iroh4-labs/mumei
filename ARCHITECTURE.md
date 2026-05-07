@@ -72,27 +72,28 @@ not by prompting.
 
 ## Hook rules — full enforcement table
 
-The 14 rules below describe **what mumei refuses to do** when an invariant is
+The 15 rules below describe **what mumei refuses to do** when an invariant is
 violated. Each rule is a single check in one of the handler scripts under
 `hooks/`. Rules denoted _advisory_ surface findings via `additionalContext`
 without blocking the tool call.
 
-| ID  | Phase     | Hook event        | Trigger                                                         | Implementation             |
-| --- | --------- | ----------------- | --------------------------------------------------------------- | -------------------------- |
-| P1  | plan      | PreToolUse(Edit)  | Editing `src/` while spec incomplete                            | `hooks/pre-edit-guard.sh`  |
-| P2  | plan      | PreToolUse(Write) | `design.md` while `requirements.md` has `[NEEDS CLARIFICATION]` | `hooks/pre-edit-guard.sh`  |
-| P3  | plan      | PreToolUse(Write) | `tasks.md` without `design.md`                                  | `hooks/pre-edit-guard.sh`  |
-| I1  | implement | PreToolUse(Edit)  | Owning task's `_Depends:_` not complete                         | `hooks/pre-edit-guard.sh`  |
-| I2  | implement | PreToolUse(Edit)  | File outside any task's `_Files:_` (scope creep)                | `hooks/pre-edit-guard.sh`  |
-| I3  | implement | PreToolUse(Bash)  | `git commit` with failing tests                                 | `hooks/pre-bash-guard.sh`  |
-| I4  | implement | PostToolUse(Edit) | Marking `[x]` without an implementation diff                    | `hooks/post-edit-guard.sh` |
-| W1  | implement | PreToolUse(Edit)  | Editing Wave N+1 file before Wave N committed                   | `hooks/pre-edit-guard.sh`  |
-| W2  | implement | PreToolUse(Bash)  | `git commit` while current Wave has `[ ]` tasks                 | `hooks/pre-bash-guard.sh`  |
-| R1  | review    | Stop              | Session ends with all tasks done but review skipped             | `hooks/stop-guard.sh`      |
-| R2  | review    | PreToolUse(Bash)  | `git push` while latest review verdict is `MAJOR_ISSUES`        | `hooks/pre-bash-guard.sh`  |
-| R3  | done      | Stop              | `phase=done` but feature still in `.mumei/current`              | `hooks/stop-guard.sh`      |
-| X1  | any       | PostToolUse(Bash) | Bash modified files outside scope (advisory)                    | `hooks/post-bash-guard.sh` |
-| X2  | any       | PostToolUse(Edit) | tasks.md format violation (advisory)                            | `scripts/lint-tasks.sh`    |
+| ID  | Phase     | Hook event        | Trigger                                                                                      | Implementation             |
+| --- | --------- | ----------------- | -------------------------------------------------------------------------------------------- | -------------------------- |
+| P1  | plan      | PreToolUse(Edit)  | Editing `src/` while spec incomplete                                                         | `hooks/pre-edit-guard.sh`  |
+| P2  | plan      | PreToolUse(Write) | `design.md` while `requirements.md` has `[NEEDS CLARIFICATION]`                              | `hooks/pre-edit-guard.sh`  |
+| P3  | plan      | PreToolUse(Write) | `tasks.md` without `design.md`                                                               | `hooks/pre-edit-guard.sh`  |
+| I1  | implement | PreToolUse(Edit)  | Owning task's `_Depends:_` not complete                                                      | `hooks/pre-edit-guard.sh`  |
+| I2  | implement | PreToolUse(Edit)  | File outside any task's `_Files:_` (scope creep)                                             | `hooks/pre-edit-guard.sh`  |
+| I3  | implement | PreToolUse(Bash)  | `git commit` with failing tests                                                              | `hooks/pre-bash-guard.sh`  |
+| I4  | implement | PostToolUse(Edit) | Marking `[x]` without an implementation diff                                                 | `hooks/post-edit-guard.sh` |
+| W1  | implement | PreToolUse(Edit)  | Editing Wave N+1 file before Wave N committed                                                | `hooks/pre-edit-guard.sh`  |
+| W2  | implement | PreToolUse(Bash)  | `git commit` while current Wave has `[ ]` tasks                                              | `hooks/pre-bash-guard.sh`  |
+| R1  | review    | Stop              | Session ends with all tasks done but review skipped                                          | `hooks/stop-guard.sh`      |
+| R2  | review    | PreToolUse(Bash)  | `git push` while latest review verdict is `MAJOR_ISSUES`                                     | `hooks/pre-bash-guard.sh`  |
+| R3  | done      | Stop              | `phase=done` but feature still in `.mumei/current`                                           | `hooks/stop-guard.sh`      |
+| M1  | any       | PreToolUse(Edit)  | LLM-driven Edit/Write on `.claude/agent-memory/<reviewer>/MEMORY.md` (curator pipeline only) | `hooks/pre-edit-guard.sh`  |
+| X1  | any       | PostToolUse(Bash) | Bash modified files outside scope (advisory)                                                 | `hooks/post-bash-guard.sh` |
+| X2  | any       | PostToolUse(Edit) | tasks.md format violation (advisory)                                                         | `scripts/lint-tasks.sh`    |
 
 The single escape hatch is `MUMEI_BYPASS=1` (env var). It short-circuits every
 hook on entry. There is no per-rule bypass; this is intentional (see
@@ -120,8 +121,9 @@ flowchart TD
   S4 --> S5["Stage 5<br/>filter to valid (or valid_by_assertion) only"]
   S5 --> S6["Stage 6<br/>persist reviews/&lt;ts&gt;.json<br/>+ verdict aggregation<br/>(iter_head, next_iter_reviewers,<br/>detector_skipped, detector_reused_from)"]
 
-  S6 -->|verdict PASS| D[phase=done]
-  S6 -->|MAJOR_ISSUES| F[fix loop]
+  S6 --> S65["Stage 6.5<br/>memory-curator<br/>(7-axis rubric, ≥15/21 → ADD/UPDATE,<br/>else SKIP; max 5 candidates / reviewer)"]
+  S65 -->|verdict PASS| D[phase=done]
+  S65 -->|MAJOR_ISSUES| F[fix loop]
 ```
 
 Key constraints:
@@ -134,6 +136,15 @@ Key constraints:
   collide; the validator's role is filter-only.
 - **`memory: project` reviewers persist learned patterns** under
   `.claude/agent-memory/<reviewer>/MEMORY.md` (gitignored, per-developer).
+- **Memory writes are gated by `memory-curator`.** Reviewers do not write
+  directly. Each emits up to 5 `memory_candidates` per review; the
+  orchestrator runs the curator (`tools: Read`, sonnet) per candidate, and
+  only candidates scoring `≥ 15 / 21` on the 7-axis rubric are appended
+  (ADD operation) or replace an existing entry verbatim (UPDATE operation)
+  in MEMORY.md atomically (`hooks/_lib/memory.sh`). Direct LLM
+  Edit/Write to `.claude/agent-memory/<r>/MEMORY.md` is denied by the M1
+  hook rule (above). The plan-vehicle equivalent runs as **Step 8.5** in
+  `/mumei:review`.
 
 ## File-based state model
 

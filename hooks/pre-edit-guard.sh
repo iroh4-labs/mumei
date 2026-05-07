@@ -42,9 +42,9 @@ if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
-# --- R3: deny direct write to reviewer MEMORY.md (vehicle/feature independent) ---
+# --- M1: deny direct write to reviewer MEMORY.md (vehicle/feature independent) ---
 # Memory entries flow through memory-curator + the orchestrator's atomic
-# helpers in hooks/_lib/memory.sh. R3 is placed BEFORE the FEATURE check and
+# helpers in hooks/_lib/memory.sh. M1 is placed BEFORE the FEATURE check and
 # the vehicle dispatch because:
 #   - reviewer agent-memory protection is global (spec or plan vehicle, or
 #     even no-active-feature sessions like post-archive): it must never be
@@ -53,7 +53,7 @@ fi
 #     absolute paths so glob bypass via non-normalized inputs is closed.
 # The orchestrator's mumei_memory_apply_operation uses Bash file ops
 # (mv/awk pipelines), which do not pass through this hook.
-mumei_r3_canonicalize_path() {
+mumei_m1_canonicalize_path() {
   local p="$1"
   case "$p" in
   /*)
@@ -79,8 +79,8 @@ mumei_r3_canonicalize_path() {
     ;;
   esac
 }
-R3_CANON="$(mumei_r3_canonicalize_path "$FILE_PATH")"
-if [[ "$R3_CANON" =~ /\.claude/agent-memory/[^/]+/MEMORY\.md$ ]]; then
+M1_CANON="$(mumei_m1_canonicalize_path "$FILE_PATH")"
+if [[ "$M1_CANON" =~ /\.claude/agent-memory/[^/]+/MEMORY\.md$ ]]; then
   jq -n --arg r "Direct write to ${FILE_PATH} is denied. Reviewer memory flows through memory-curator + the orchestrator (hooks/_lib/memory.sh)." \
     --arg c "Emit candidate entries via the memory_candidates array in your review output (max 5 per review). The curator scores each against the 7-axis rubric (>=15/21 → ADD or UPDATE) and the orchestrator persists ADD/UPDATE atomically. Set MUMEI_BYPASS=1 only for emergency manual edits." \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'

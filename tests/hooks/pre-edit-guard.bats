@@ -180,9 +180,9 @@ EOF
   [ -z "$stderr" ]
 }
 
-# ─── R3: deny direct write to reviewer MEMORY.md ─────────────
+# ─── M1: deny direct write to reviewer MEMORY.md ─────────────
 
-@test "R3: deny Edit on .claude/agent-memory/spec-compliance-reviewer/MEMORY.md" {
+@test "M1: deny Edit on .claude/agent-memory/spec-compliance-reviewer/MEMORY.md" {
   _init_feature_with_tasks "implement" 1
   _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/spec-compliance-reviewer/MEMORY.md"}}'
   [ "$status" -eq 0 ]
@@ -192,7 +192,7 @@ EOF
   [[ "$reason" == *"memory-curator"* ]]
 }
 
-@test "R3: deny Edit on .claude/agent-memory/security-reviewer/MEMORY.md" {
+@test "M1: deny Edit on .claude/agent-memory/security-reviewer/MEMORY.md" {
   _init_feature_with_tasks "implement" 1
   _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/security-reviewer/MEMORY.md"}}'
   [ "$status" -eq 0 ]
@@ -200,7 +200,7 @@ EOF
   [ "$decision" = "deny" ]
 }
 
-@test "R3: deny Write on .claude/agent-memory/adversarial-reviewer/MEMORY.md" {
+@test "M1: deny Write on .claude/agent-memory/adversarial-reviewer/MEMORY.md" {
   _init_feature_with_tasks "implement" 1
   _run_hook '{"tool_name":"Write","tool_input":{"file_path":".claude/agent-memory/adversarial-reviewer/MEMORY.md"}}'
   [ "$status" -eq 0 ]
@@ -208,9 +208,9 @@ EOF
   [ "$decision" = "deny" ]
 }
 
-@test "R3: allow Edit on agent-memory dir but non-MEMORY.md filename" {
+@test "M1: allow Edit on agent-memory dir but non-MEMORY.md filename" {
   _init_feature_with_tasks "implement" 1
-  # notes.md under same dir is not MEMORY.md → R3 does NOT fire (would
+  # notes.md under same dir is not MEMORY.md → M1 does NOT fire (would
   # then fall through to scope check, and since .claude/* is meta-path
   # exempt from scope, it passes).
   _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/spec-compliance-reviewer/notes.md"}}'
@@ -219,7 +219,7 @@ EOF
   [ -z "$stderr" ]
 }
 
-@test "R3: MUMEI_BYPASS=1 short-circuits MEMORY.md write" {
+@test "M1: MUMEI_BYPASS=1 short-circuits MEMORY.md write" {
   _init_feature_with_tasks "implement" 1
   MUMEI_BYPASS=1 _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/spec-compliance-reviewer/MEMORY.md"}}'
   [ "$status" -eq 0 ]
@@ -227,7 +227,7 @@ EOF
   [ -z "$stderr" ]
 }
 
-@test "R3: deny fires when no .mumei/current is set (feature-independent)" {
+@test "M1: deny fires when no .mumei/current is set (feature-independent)" {
   # No _init_feature_with_tasks: there is no active mumei feature.
   _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/security-reviewer/MEMORY.md"}}'
   [ "$status" -eq 0 ]
@@ -235,7 +235,7 @@ EOF
   [ "$decision" = "deny" ]
 }
 
-@test "R3: deny fires on plan vehicle (vehicle-independent)" {
+@test "M1: deny fires on plan vehicle (vehicle-independent)" {
   # Initialize a plan-vehicle state.json (no specs/ dir) so vehicle resolves to "plan".
   mkdir -p .mumei/plans/somefeature
   echo "somefeature" >.mumei/current
@@ -248,7 +248,7 @@ EOF
   [ "$decision" = "deny" ]
 }
 
-@test "R3: deny fires on path with leading ./ (canonicalize)" {
+@test "M1: deny fires on path with leading ./ (canonicalize)" {
   _init_feature_with_tasks "implement" 1
   _run_hook '{"tool_name":"Edit","tool_input":{"file_path":"./.claude/agent-memory/security-reviewer/MEMORY.md"}}'
   [ "$status" -eq 0 ]
@@ -256,7 +256,7 @@ EOF
   [ "$decision" = "deny" ]
 }
 
-@test "R3: deny fires on path with .. traversal segment (canonicalize)" {
+@test "M1: deny fires on path with .. traversal segment (canonicalize)" {
   _init_feature_with_tasks "implement" 1
   mkdir -p .claude/agent-memory/security-reviewer/sub
   _run_hook '{"tool_name":"Edit","tool_input":{"file_path":".claude/agent-memory/security-reviewer/sub/../MEMORY.md"}}'
@@ -265,7 +265,7 @@ EOF
   [ "$decision" = "deny" ]
 }
 
-@test "R3: deny fires on absolute path inside CLAUDE_PROJECT_DIR (canonicalize)" {
+@test "M1: deny fires on absolute path inside CLAUDE_PROJECT_DIR (canonicalize)" {
   _init_feature_with_tasks "implement" 1
   CLAUDE_PROJECT_DIR="$MUMEI_TEST_TMPDIR" _run_hook "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${MUMEI_TEST_TMPDIR}/.claude/agent-memory/spec-compliance-reviewer/MEMORY.md\"}}"
   [ "$status" -eq 0 ]

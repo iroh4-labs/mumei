@@ -66,6 +66,7 @@ flowchart LR
 - **Wave-based commits**: 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` meta to block phantom completion (marking `[x]` without an actual implementation).
 - **3-reviewer pipeline + adversarial**: `spec-compliance` / `security` (parallel in Stage 1) plus `adversarial` (sequential, sees prior findings via injection in Stage 2), plus a severity-conditional per-issue validator on a fresh context (memory: local, read-only) that filters false positives before findings reach the user. (Post-REQ-7: `code-quality` reviewer was removed after a dogfood metric showed 0 valid findings — KISS / over-engineering coverage delegated to `adversarial`, scope creep to `spec-compliance`.)
 - **Deterministic security ground-truth**: `semgrep` + `osv-scanner` run before LLM reviewers. HIGH findings pin the verdict to `MAJOR_ISSUES` so the LLM cannot downgrade a real CVE.
+- **Curator-gated reviewer memory**: reviewer agents do not write to their `.claude/agent-memory/<r>/MEMORY.md` directly (denied by M1 hook). Instead they emit up to 5 candidates per review; an independent `memory-curator` (sonnet, read-only) scores each on a 7-axis rubric and only candidates scoring `≥ 15/21` are persisted via `hooks/_lib/memory.sh` atomic helpers. Keeps reviewer memory under the 30-entry / 8 KB cap that mumei targets (vs the 25 KB Claude Code auto-inject ceiling).
 - **Kuroko (黒衣) stance**: Zero side effects on projects that have not opted in. No `.mumei/current` = every Hook is a no-op. No telemetry, no writes outside `.mumei/`, no auto-commit, no auto-fix.
 
 ## Why
@@ -179,9 +180,14 @@ Stage 4 (parallel, severity-conditional): per-issue-validator (Sonnet, memory: l
 Stage 5: filter to valid (and valid_by_assertion) only
 Stage 6: write reviews/<timestamp>.json (incl. iter_head, next_iter_reviewers,
          detector_skipped, detector_reused_from) + update state
+Stage 6.5: memory-curator (sonnet, read-only) scores each reviewer's
+         memory_candidates on a 7-axis rubric (≥15/21 → ADD/UPDATE; SKIP
+         otherwise). orchestrator atomically applies ADD/UPDATE via
+         hooks/_lib/memory.sh. plan vehicle runs the equivalent as Step 8.5
+         in /mumei:review.
 ```
 
-Each reviewer is independent (fresh context). No reviewer sees its own prior runs — only the project memory it has built up.
+Each reviewer is independent (fresh context). No reviewer sees its own prior runs — only the project memory it has built up (which is itself gated by the curator at write time).
 
 ### 6. Done
 
@@ -333,6 +339,7 @@ The `_Files:_`, `_Depends:_`, `_Requirements:_` lines are **mandatory**. They po
 | R1  | review    | Stop                     | Session ending with all tasks done but review skipped                                                                                                                   |
 | R2  | review    | PreToolUse(Bash)         | `git push` while latest review verdict is `MAJOR_ISSUES`                                                                                                                |
 | R3  | done      | Stop                     | `phase=done` reached but feature still listed in `.mumei/current` (archive pending)                                                                                     |
+| M1  | any       | PreToolUse(Edit\|Write)  | LLM-driven Edit/Write on `.claude/agent-memory/<reviewer>/MEMORY.md` — memory writes flow through `memory-curator` only                                                 |
 | X1  | any       | PostToolUse(Bash)        | Bash modified files outside scope (advisory only)                                                                                                                       |
 | X2  | any       | PostToolUse(Edit\|Write) | `.mumei/specs/*/tasks.md` format violation: missing `_Files:_`/`_Depends:_`/`_Requirements:_` meta, bad REQ-N.M syntax, or non-existent `_Files:_` path (advisory only) |
 

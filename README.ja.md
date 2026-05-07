@@ -66,6 +66,7 @@ flowchart LR
 - **Wave 単位の commit**: 1 Wave = 1 commit です。Hook が diff を各 task の `_Files:_` メタと突き合わせて、phantom completion (実装の diff がないのに `[x]` を付ける) をブロックします。
 - **3 reviewer + adversarial の review pipeline**: `spec-compliance` / `security` (Stage 1 並列) と `adversarial` (Stage 2 sequential、prior_findings injection 付き) が走ります。各 finding は severity 条件付きで per-issue validator (fresh context、memory: local、read-only) が再検証します (HIGH/CRITICAL は必須、MEDIUM/LOW は reviewer.confidence=HIGH なら `valid_by_assertion` 化 + 約 19% hash-sample で calibration、REQ-7.4)。偽陽性は user に届く前に取り除かれます。 (post-REQ-7: `code-quality` reviewer は dogfood で valid finding 0 件だったため削除、KISS / over-engineering は `adversarial`、scope creep は `spec-compliance` がカバー。)
 - **決定論的な security ground-truth**: `semgrep` + `osv-scanner` を LLM reviewer の前に走らせます。HIGH の finding が出たら verdict を `MAJOR_ISSUES` に固定するので、LLM が本物の CVE を勝手に「軽い問題」と判定し直すことはできません。
+- **curator-gated な reviewer memory**: reviewer agent は `.claude/agent-memory/<r>/MEMORY.md` に直接書き込めません (M1 hook で deny)。代わりに review ごとに最大 5 件の候補を emit し、独立した `memory-curator` (sonnet、read-only) が 7 軸 rubric で score、`>= 15/21` の候補だけを `hooks/_lib/memory.sh` の atomic helper で永続化します。reviewer の memory を 30 entry / 8 KB の cap に保ち、Claude Code の auto-inject 上限 (25 KB) より十分に手前で gate します。
 - **黒子 (kuroko) スタンス**: opt-in していないプロジェクトには副作用ゼロです。`.mumei/current` がなければ Hook はすべて no-op になります。テレメトリも、`.mumei/` の外への書き込みも、auto-commit も、auto-fix もしません。
 
 ## なぜ
@@ -179,9 +180,14 @@ Stage 4 (並列、severity 条件付き): per-issue-validator (Sonnet, memory: l
 Stage 5: valid (および valid_by_assertion) のみ surface
 Stage 6: reviews/<timestamp>.json に書き込み (iter_head / next_iter_reviewers /
          detector_skipped / detector_reused_from を含む) + state 更新
+Stage 6.5: memory-curator (Sonnet, read-only) が各 reviewer の
+         memory_candidates を 7 軸 rubric で score (>=15/21 → ADD/UPDATE、
+         未満は SKIP)。orchestrator が hooks/_lib/memory.sh の atomic helper
+         で ADD/UPDATE を反映。plan vehicle は /mumei:review の Step 8.5 で
+         同等の処理が走る。
 ```
 
-各 reviewer は独立に動きます (fresh context)。自分の過去の実行結果は見えず、プロジェクトの memory に蓄積されたものだけを参照します。
+各 reviewer は独立に動きます (fresh context)。自分の過去の実行結果は見えず、プロジェクトの memory に蓄積されたものだけを参照します (その memory も書き込み時点で curator に gate されています)。
 
 ### 6. 完了
 
@@ -331,6 +337,7 @@ annotations の意味:
 | R1  | review    | Stop                     | すべての task が完了したのに、レビューを実行せずに session 終了                                                                                                   |
 | R2  | review    | PreToolUse(Bash)         | 直近のレビュー verdict が `MAJOR_ISSUES` のまま `git push`                                                                                                        |
 | R3  | done      | Stop                     | `phase=done` に達したが feature が `.mumei/current` に残ったまま (archive 未実行)                                                                                 |
+| M1  | any       | PreToolUse(Edit\|Write)  | LLM 起動の Edit/Write が `.claude/agent-memory/<reviewer>/MEMORY.md` に当たる (memory 書き込みは memory-curator 経路のみ許可)                                     |
 | X1  | any       | PostToolUse(Bash)        | Bash でスコープ外のファイル変更 (警告のみ)                                                                                                                        |
 | X2  | any       | PostToolUse(Edit\|Write) | `.mumei/specs/*/tasks.md` のフォーマット違反: `_Files:_`/`_Depends:_`/`_Requirements:_` メタ欠落、REQ-N.M 構文エラー、または存在しない `_Files:_` パス (警告のみ) |
 
