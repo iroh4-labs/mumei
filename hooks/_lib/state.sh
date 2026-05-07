@@ -91,19 +91,36 @@ mumei_state_is_plan_vehicle() {
 #   "spec" if .mumei/specs/<key>/state.json exists (precedence)
 #   "plan" if only .mumei/plans/<key>/state.json exists
 #   ""     if neither exists
-# Always emits a single warn line to stderr when both exist (dual-state
-# inconsistency), so all dispatch sites converge on spec and the user
-# is told their layout is malformed.
+# Emits a warn line to stderr when both exist, but dedups via a sentinel
+# file (.mumei/.dual-state-warned-<key-sanitized>) so the warn appears
+# at most once per dual-state lifetime — not once per hook invocation.
+# The sentinel is auto-cleaned when dual-state resolves (only one of
+# specs/plans remains), so a future re-occurrence emits a fresh warn.
 mumei_state_active_vehicle() {
   local key="$1"
   local has_spec=0 has_plan=0
   [[ -f ".mumei/specs/${key}/state.json" ]] && has_spec=1
   [[ -f ".mumei/plans/${key}/state.json" ]] && has_plan=1
+
+  # Sentinel uses a sanitised key so slug strings with `/` (unlikely but
+  # not rejected upstream) cannot escape into a path component.
+  local sanitised="${key//[^A-Za-z0-9._-]/_}"
+  local mark=".mumei/.dual-state-warned-${sanitised}"
+
   if [[ "$has_spec" == "1" && "$has_plan" == "1" ]]; then
-    mumei_log_warn "dual-state: both .mumei/specs/${key}/ and .mumei/plans/${key}/ exist; treating as spec vehicle (move or remove the plan dir to dismiss this warning)"
+    if [[ ! -f "$mark" ]]; then
+      mumei_log_warn "dual-state: both .mumei/specs/${key}/ and .mumei/plans/${key}/ exist; treating as spec vehicle (move or remove the plan dir to dismiss this warning)"
+      mkdir -p .mumei 2>/dev/null || true
+      : >"$mark" 2>/dev/null || true
+    fi
     printf '%s' "spec"
     return 0
   fi
+
+  # Dual-state resolved (or never existed): clear the sentinel so a
+  # future re-occurrence will emit a fresh warn.
+  [[ -f "$mark" ]] && rm -f "$mark" 2>/dev/null
+
   if [[ "$has_spec" == "1" ]]; then
     printf '%s' "spec"
     return 0

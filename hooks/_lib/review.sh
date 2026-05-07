@@ -247,9 +247,14 @@ mumei_review_persist() {
   local tmp
   tmp="$(mktemp "${out}.XXXXXX")"
   cat >"$tmp"
-  if ! jq empty <"$tmp" 2>/dev/null; then
+  # Same 0-byte clobber defense as the state.sh atomic-write helpers:
+  # `jq empty` accepts 0-byte input as rc=0, so a truncated stdin (SIGINT
+  # mid-write, OOM kill) would otherwise land an empty review JSON on
+  # disk. `[[ -s ]]` rejects 0-byte; `jq -e 'type'` requires at least
+  # one parseable JSON value (rejecting whitespace-only input too).
+  if [[ ! -s "$tmp" ]] || ! jq -e 'type' <"$tmp" >/dev/null 2>&1; then
     rm -f "$tmp"
-    mumei_log_error "review.sh: refusing to persist invalid JSON to ${out}"
+    mumei_log_error "review.sh: refusing to persist 0-byte / unparsable JSON to ${out}"
     return 1
   fi
   mv "$tmp" "$out"

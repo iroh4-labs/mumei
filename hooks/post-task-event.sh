@@ -41,51 +41,71 @@ mumei_state_is_plan_vehicle "$SLUG" || exit 0
 # Counter mutation must be serialized — without a lock, two concurrent
 # Claude Code sessions on the same project race on read+write and lose
 # increments, leaving task_completed_count != task_created_count and
-# pending_review never firing. flock the per-slug lock file so the
-# read-modify-write block is atomic across processes. Empty-file lock
-# target is created on first call.
-LOCK_FILE=".mumei/plans/${SLUG}/.lock"
+# pending_review never firing. Use mkdir-based atomic locking (portable
+# across macOS / Linux / BSD; flock is util-linux and not on macOS by
+# default). mkdir is POSIX atomic — if the directory already exists,
+# the call fails with rc=1, signalling another process holds the lock.
 mkdir -p ".mumei/plans/${SLUG}"
-[[ -f "$LOCK_FILE" ]] || : >"$LOCK_FILE"
+LOCK_DIR=".mumei/plans/${SLUG}/.lock-dir"
 
-(
-  # 5s timeout: if we cannot acquire the lock that fast, the contending
-  # process will set the counter we care about anyway — bail rather than
-  # deadlock.
-  if ! flock -w 5 9; then
-    mumei_log_warn "post-task-event: could not acquire lock for ${SLUG} within 5s; skipping increment"
+acquired=0
+# Up to ~5s with 200ms back-off: 25 attempts * 0.2s. Caps total wait
+# without busy-spinning. If we still cannot acquire, the contending
+# process will set the counter we care about — bail rather than block.
+for _ in $(seq 1 25); do
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    acquired=1
+    break
+  fi
+  # Stale lock recovery: if the lock dir was created more than 30s ago,
+  # the holder almost certainly crashed (no critical section legitimately
+  # holds for 30s). Force-clear and retry once.
+  if [[ -d "$LOCK_DIR" ]] &&
+    [[ -z "$(find "$LOCK_DIR" -maxdepth 0 -mmin -0.5 2>/dev/null)" ]]; then
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      mumei_log_warn "post-task-event: cleared stale lock for ${SLUG} (held >30s)"
+      acquired=1
+      break
+    fi
+  fi
+  sleep 0.2
+done
+
+if [[ "$acquired" == "0" ]]; then
+  mumei_log_warn "post-task-event: could not acquire lock for ${SLUG} within 5s; skipping increment"
+  exit 0
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+case "$EVENT" in
+TaskCreated)
+  current="$(mumei_state_read_any "$SLUG" '.task_created_count')"
+  [[ -n "$current" ]] || current=0
+  next=$((current + 1))
+  if ! mumei_plan_state_set "$SLUG" '.task_created_count' "$next"; then
+    mumei_log_warn "L-T1: failed to increment task_created_count for ${SLUG}"
+  fi
+  ;;
+TaskCompleted)
+  completed="$(mumei_state_read_any "$SLUG" '.task_completed_count')"
+  [[ -n "$completed" ]] || completed=0
+  next_completed=$((completed + 1))
+  if ! mumei_plan_state_set "$SLUG" '.task_completed_count' "$next_completed"; then
+    mumei_log_warn "L-T2: failed to increment task_completed_count for ${SLUG}"
     exit 0
   fi
-
-  case "$EVENT" in
-  TaskCreated)
-    current="$(mumei_state_read_any "$SLUG" '.task_created_count')"
-    [[ -n "$current" ]] || current=0
-    next=$((current + 1))
-    if ! mumei_plan_state_set "$SLUG" '.task_created_count' "$next"; then
-      mumei_log_warn "L-T1: failed to increment task_created_count for ${SLUG}"
+  created="$(mumei_state_read_any "$SLUG" '.task_created_count')"
+  [[ -n "$created" ]] || created=0
+  if [[ "$next_completed" == "$created" ]] && [[ "$created" != "0" ]]; then
+    if ! mumei_plan_state_set "$SLUG" '.pending_review' 'true'; then
+      mumei_log_warn "L-T2: failed to set pending_review=true for ${SLUG}"
     fi
-    ;;
-  TaskCompleted)
-    completed="$(mumei_state_read_any "$SLUG" '.task_completed_count')"
-    [[ -n "$completed" ]] || completed=0
-    next_completed=$((completed + 1))
-    if ! mumei_plan_state_set "$SLUG" '.task_completed_count' "$next_completed"; then
-      mumei_log_warn "L-T2: failed to increment task_completed_count for ${SLUG}"
-      exit 0
-    fi
-    created="$(mumei_state_read_any "$SLUG" '.task_created_count')"
-    [[ -n "$created" ]] || created=0
-    if [[ "$next_completed" == "$created" ]] && [[ "$created" != "0" ]]; then
-      if ! mumei_plan_state_set "$SLUG" '.pending_review' 'true'; then
-        mumei_log_warn "L-T2: failed to set pending_review=true for ${SLUG}"
-      fi
-    fi
-    ;;
-  *)
-    # Unknown event — no-op
-    ;;
-  esac
-) 9>"$LOCK_FILE"
+  fi
+  ;;
+*)
+  # Unknown event — no-op
+  ;;
+esac
 
 exit 0
