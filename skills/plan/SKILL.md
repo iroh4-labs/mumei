@@ -575,8 +575,49 @@ Source the lib once at the top of Phase 5:
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/review.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/cost-log.sh"
 review_dir=".mumei/specs/${feature}/reviews"
 ```
+
+### Cost-log wrap pattern (REQ-11.5)
+
+Every reviewer / curator Task launch in Phase 5 must be wrapped with cost-log
+helpers so token usage is recorded for later aggregation:
+
+```bash
+mumei_cost_log_before "$feature" "$current_wave" "$current_iter" "<agent-name>"
+# ... Task subagent_type=<agent-name> ... (Claude Code launches the subagent)
+# Capture the subagent's usage block from the conversation transcript or the
+# Task tool's metadata; pass `{}` if not observable.
+mumei_cost_log_after  "$feature" "$current_wave" "$current_iter" "<agent-name>" "$usage_json"
+```
+
+The pattern applies to: Stage 1 reviewers (spec-compliance / security),
+Stage 2 adversarial-reviewer, Stage 4 issue-validator (one record per
+finding), and Stage 6.5 memory-curator (one record per candidate). The
+records land in `.mumei/specs/<feature>/cost-log.jsonl`; aggregate via
+`scripts/aggregate-cost.sh`.
+
+### Reviewer prompt structure (REQ-11.7)
+
+`hooks/_lib/reviewer-prompt.sh` builds the reviewer Task prompt as
+**immutable prefix + variable suffix** so Anthropic's prompt cache (5-min TTL)
+hits across iterations. Source the lib and call the helper:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/reviewer-prompt.sh"
+
+prompt="$(mumei_reviewer_prompt \
+  "spec-compliance-reviewer" \
+  "$feature" "$current_wave" "$current_iter" \
+  "$diff" "$prior_findings" "$detector_block")"
+# Pass $prompt to the Task tool's prompt argument when launching the subagent.
+```
+
+The prefix is byte-identical across iterations of the same agent within
+a 5-minute window — keep that contract intact. Variable values
+(`feature` / `wave` / `iter` / `diff` / `prior_findings` / detector
+findings injection) belong in the suffix so cache hits remain stable.
 
 ### Iteration entry — REQ-7.7 iter-1-all-PASS short-circuit
 

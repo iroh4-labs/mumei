@@ -36,6 +36,7 @@ All steps below assume the current working directory is the project root and a g
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/state.sh"
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/review.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/cost-log.sh"
 
 slug="$(mumei_current_feature 2>/dev/null || true)"
 if [[ -z "$slug" ]]; then
@@ -53,6 +54,42 @@ state_path=".mumei/plans/${slug}/state.json"
 ```
 
 REQ-9.15 / REQ-9.15.2 — the skill no-ops on missing or spec-vehicle active features and tells the user the right path.
+
+### Cost-log wrap pattern (REQ-11.5)
+
+Every reviewer / curator Task launch in this skill must be wrapped with
+cost-log helpers so token usage is recorded for later aggregation. Plan
+vehicle stores the cost-log under `.mumei/plans/<slug>/cost-log.jsonl`
+(the helper writes there via `mumei_cost_log_path "$slug"`):
+
+```bash
+mumei_cost_log_before "$slug" "all" "$iter" "<agent-name>"
+# ... Task subagent_type=<agent-name> ...
+mumei_cost_log_after  "$slug" "all" "$iter" "<agent-name>" "$usage_json"
+```
+
+`wave="all"` because plan-vehicle does not have Wave numbering. Aggregate
+via `scripts/aggregate-cost.sh`.
+
+### Reviewer prompt structure (REQ-11.7)
+
+Use `hooks/_lib/reviewer-prompt.sh` to build the reviewer Task prompt as
+**immutable prefix + variable suffix** so Anthropic's prompt cache (5-min
+TTL) hits across iterations:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/reviewer-prompt.sh"
+
+prompt="$(mumei_reviewer_prompt \
+  "security-reviewer" \
+  "$slug" "all" "$iter" \
+  "$diff" "$prior_findings" "$detector_block")"
+# Pass $prompt to the Task tool's prompt argument.
+```
+
+Plan vehicle passes `wave="all"` to the helper; the rest is identical to
+spec vehicle. Keep the prefix byte-identical across iterations to
+preserve cache hits.
 
 ### Step 2 — pending_review gate (REQ-9.16)
 

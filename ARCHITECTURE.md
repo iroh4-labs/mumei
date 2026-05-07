@@ -43,6 +43,8 @@ mumei/
 │   │   ├── detectors.sh    # semgrep / osv-scanner runners + severity normalizer
 │   │   ├── review.sh       # shared Phase 5 / /mumei:review pipeline helpers
 │   │   ├── memory.sh       # memory-curator atomic helpers (score → operation, validate, apply)
+│   │   ├── cost-log.sh     # reviewer/curator Task usage append (.mumei/.../cost-log.jsonl)
+│   │   ├── reviewer-prompt.sh # immutable prefix + variable suffix builder for cache-friendly prompts
 │   │   └── log.sh          # mumei_log_info / warn / error / debug
 │   ├── pre-edit-guard.sh   # P1 / P2 / P3 / I1 / I2 / W1 / M1
 │   ├── pre-bash-guard.sh   # I3 / R2 / W2

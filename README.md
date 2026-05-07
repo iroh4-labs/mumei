@@ -298,6 +298,8 @@ mumei enforces **16 hook rules** across phase transitions, Wave boundaries, comm
 
 For a deeper look at the runtime structure (distribution layout, the 16 hook rules, the reviewer pipeline, the phase state machine, the file-based state model), see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+For practical guidance on running mumei in the Claude Opus 4.7 era (proactive `/compact`, subagent cost, prompt cache, byte-exact tools, `MUMEI_BYPASS=1` discipline), see [docs/opus-4-7-playbook.md](./docs/opus-4-7-playbook.md).
+
 ## License
 
 MIT
