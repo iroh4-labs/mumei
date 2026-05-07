@@ -133,17 +133,34 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
 
-      - name: Strict schema validation
+      - name: Strict schema validation (vendored schema)
+        # The release path validates against schemas/plugin.schema.json — a
+        # vendored copy of https://json.schemastore.org/claude-code-plugin-manifest.json
+        # checked into the repo. This decouples tag-push releases from
+        # json.schemastore.org's TLS / DNS / 5xx availability. Drift is
+        # detected by .github/workflows/plugin-json-validate.yml which keeps
+        # the live fetch on every PR — if the upstream schema changes, that
+        # PR-time check surfaces the divergence and the operator re-bumps
+        # schemas/plugin.schema.json.
         run: |
           python3 -m pip install --quiet jsonschema
           python3 - <<'PY'
-          import json, sys, urllib.request
+          import json, sys
           from pathlib import Path
           import jsonschema
+          EXPECTED_SCHEMA_URL = "https://json.schemastore.org/claude-code-plugin-manifest.json"
           manifest = json.loads(Path(".claude-plugin/plugin.json").read_text(encoding="utf-8"))
-          schema_url = manifest["$schema"]
-          with urllib.request.urlopen(schema_url, timeout=20) as resp:
-              schema = json.loads(resp.read().decode("utf-8"))
+          schema_url_in_manifest = manifest.get("$schema")
+          if schema_url_in_manifest != EXPECTED_SCHEMA_URL:
+              print(f"::error::plugin.json $schema mismatch: expected {EXPECTED_SCHEMA_URL}, got {schema_url_in_manifest!r}")
+              print("::error::if the upstream schema URL has changed, refresh schemas/plugin.schema.json and bump the manifest $schema field.")
+              sys.exit(1)
+          schema_path = Path("schemas/plugin.schema.json")
+          if not schema_path.is_file():
+              print(f"::error::vendored schema missing: {schema_path}")
+              print(f"::error::run: curl -sL {EXPECTED_SCHEMA_URL} -o {schema_path}")
+              sys.exit(1)
+          schema = json.loads(schema_path.read_text(encoding="utf-8"))
           jsonschema.validators.validator_for(schema).check_schema(schema)
           validator = jsonschema.validators.validator_for(schema)(schema)
           errors = sorted(validator.iter_errors(manifest), key=lambda e: list(e.absolute_path))
@@ -152,7 +169,7 @@ jobs:
                   path = "/".join(str(p) for p in e.absolute_path) or "(root)"
                   print(f"::error::plugin.json {path}: {e.message}")
               sys.exit(1)
-          print("plugin.json valid against", schema_url)
+          print(f"plugin.json valid against vendored {schema_path} (mirrors {EXPECTED_SCHEMA_URL})")
           PY
 
   build:
