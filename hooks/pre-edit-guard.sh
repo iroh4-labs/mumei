@@ -95,6 +95,11 @@ mumei_m1_canonicalize_path() {
 }
 M1_CANON="$(mumei_m1_canonicalize_path "$FILE_PATH")"
 if [[ "$M1_CANON" =~ /\.claude/agent-memory/[^/]+/MEMORY\.md$ ]]; then
+  if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+    mumei_hook_stats_record "M1" "deny" "${TOOL_NAME:-Edit}" "Direct write to reviewer MEMORY.md denied"
+  fi
   jq -n --arg r "Direct write to ${FILE_PATH} is denied. Reviewer memory flows through memory-curator + the orchestrator (hooks/_lib/memory.sh)." \
     --arg c "Emit candidate entries via the memory_candidates array in your review output (max 5 per review). The curator scores each against the 7-axis rubric (>=15/21 → ADD or UPDATE) and the orchestrator persists ADD/UPDATE atomically. Set MUMEI_BYPASS=1 only for emergency manual edits." \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
@@ -120,6 +125,12 @@ esac
 mumei_deny() {
   local reason="$1"
   local context="${2:-}"
+  local hook_id="${3:-pre-edit-guard}"
+  if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+    mumei_hook_stats_record "$hook_id" "deny" "${TOOL_NAME:-Edit}" "$reason"
+  fi
   jq -n --arg r "$reason" --arg c "$context" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -139,7 +150,8 @@ if [[ "$FILE_PATH" == ".mumei/specs/${FEATURE}/design.md" ]]; then
   if [[ -f "$REQ_FILE" ]] && grep -q '\[NEEDS CLARIFICATION' "$REQ_FILE"; then
     mumei_deny \
       "requirements.md has unresolved [NEEDS CLARIFICATION] markers. Resolve them before drafting design." \
-      "Run /mumei:plan to step through clarifications, or edit requirements.md directly to remove the markers."
+      "Run /mumei:plan to step through clarifications, or edit requirements.md directly to remove the markers." \
+      "P2"
   fi
 fi
 
@@ -149,7 +161,8 @@ if [[ "$FILE_PATH" == ".mumei/specs/${FEATURE}/tasks.md" ]]; then
   if [[ ! -f "$DESIGN_FILE" ]]; then
     mumei_deny \
       "design.md missing for feature ${FEATURE}. Generate design before tasks." \
-      "Run /mumei:plan or create .mumei/specs/${FEATURE}/design.md first."
+      "Run /mumei:plan or create .mumei/specs/${FEATURE}/design.md first." \
+      "P3"
   fi
 fi
 
@@ -228,7 +241,8 @@ if [[ "$PHASE" == "plan" ]]; then
   if ! mumei_is_meta_path "$FILE_PATH"; then
     mumei_deny \
       "Cannot edit ${FILE_PATH} while phase=plan for feature ${FEATURE}. Complete the spec (requirements/design/tasks) first." \
-      "Current phase: plan. Approve all spec phases via /mumei:plan, then phase will advance to implement."
+      "Current phase: plan. Approve all spec phases via /mumei:plan, then phase will advance to implement." \
+      "P1"
   fi
 fi
 
@@ -247,7 +261,8 @@ OWNERS="$(mumei_tasks_owners_of_file "$FEATURE" "$FILE_PATH" 2>/dev/null || true
 if [[ -z "$OWNERS" ]]; then
   mumei_deny \
     "File ${FILE_PATH} is out of scope: not listed in any task's _Files: meta in tasks.md." \
-    "If editing this file is intentional, add it to the owning task's _Files: line in .mumei/specs/${FEATURE}/tasks.md, then retry."
+    "If editing this file is intentional, add it to the owning task's _Files: line in .mumei/specs/${FEATURE}/tasks.md, then retry." \
+    "I2"
 fi
 
 # --- I1: editing a downstream task while its prerequisite is incomplete ---
@@ -264,7 +279,8 @@ if [[ -n "$OWNER_TASK" ]]; then
       if [[ "$DEP_STATUS" != "complete" ]]; then
         mumei_deny \
           "Task ${OWNER_TASK} depends on task ${dep} which is not yet complete. Complete task ${dep} first." \
-          "Edit ${FILE_PATH} requires task ${dep} to be marked [x] in tasks.md before proceeding."
+          "Edit ${FILE_PATH} requires task ${dep} to be marked [x] in tasks.md before proceeding." \
+          "I1"
       fi
     done
   fi
@@ -281,8 +297,26 @@ if [[ -n "$TASK_WAVE" ]] && [[ "$TASK_WAVE" -gt "$CURRENT_WAVE" ]]; then
     if [[ -n "$(git status --porcelain | grep -v '^?? \.mumei/' || true)" ]]; then
       mumei_deny \
         "Wave ${CURRENT_WAVE} has uncommitted changes. Commit them before starting Wave ${TASK_WAVE}." \
-        "Run \`git status\` to inspect, then commit Wave ${CURRENT_WAVE} before editing files in Wave ${TASK_WAVE}."
+        "Run \`git status\` to inspect, then commit Wave ${CURRENT_WAVE} before editing files in Wave ${TASK_WAVE}." \
+        "W1"
     fi
+  fi
+fi
+
+# Byte-exact advisory (REQ-11.12) — non-blocking note when editing files
+# whose extension is in MUMEI_BYTE_EXACT_EXTS and whose on-disk content
+# uses CRLF / tab indent.
+if [[ -f "${PLUGIN_ROOT}/hooks/_lib/byte-exact.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "${PLUGIN_ROOT}/hooks/_lib/byte-exact.sh"
+  BYTE_EXACT_NOTE="$(mumei_byte_exact_check "$FILE_PATH")"
+  if [[ -n "$BYTE_EXACT_NOTE" ]]; then
+    jq -n --arg c "$BYTE_EXACT_NOTE" '{
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: $c
+      }
+    }'
   fi
 fi
 

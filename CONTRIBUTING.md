@@ -128,10 +128,17 @@ are generated from the subject line alone, and bot-style attribution adds noise.
 3. Run `bats -r tests/` and `/validate` locally; both must pass.
 4. Update `README.md`, `PRIVACY.md`, or `docs/` if your change alters external
    behaviour, install steps, network egress, or distribution layout.
-5. Open the PR. The template (`.github/PULL_REQUEST_TEMPLATE.md`) lists the
+5. **Ratchet principle**: when a PR adds a new hook rule, agent, skill, or
+   Hook ID, append a one-paragraph entry to `docs/mumei-decisions.md`
+   explaining _why this addition earned inclusion_ — link the dogfood
+   incident or external research that triggered the rule. mumei rules earn
+   their place through observed failure or external knowledge, not through
+   speculation. The check is enforced by review (no automated tooling),
+   so do this in the same commit as the rule itself.
+6. Open the PR. The template (`.github/PULL_REQUEST_TEMPLATE.md`) lists the
    pre-merge checklist; tick each item that applies.
-6. CI runs on the PR. All required checks must pass before merge.
-7. Self-merge is permitted (1-developer reality); approval count is not enforced.
+7. CI runs on the PR. All required checks must pass before merge.
+8. Self-merge is permitted (1-developer reality); approval count is not enforced.
 
 ## Spec-driven changes
 

@@ -101,6 +101,11 @@ if [[ -n "$CHANGED_FILES" ]]; then
   done <<<"$CHANGED_FILES"
 
   if [[ -n "$OUT_OF_SCOPE" ]]; then
+    if [[ -f "${CLAUDE_PLUGIN_ROOT:-}/hooks/_lib/hook-stats.sh" ]]; then
+      # shellcheck disable=SC1091
+      source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+      mumei_hook_stats_record "X1" "warn" "Bash" "out-of-scope writes detected"
+    fi
     CONTEXT=$'The following files were modified via Bash but are NOT listed in any task\'s _Files: meta in .mumei/specs/'"$FEATURE"$'/tasks.md:\n\n'"$OUT_OF_SCOPE"$'\nIf these changes are intentional, add the files to the appropriate task\'s _Files: line. Otherwise revert them.'
     jq -n --arg c "$CONTEXT" '{
       hookSpecificOutput: {
@@ -138,10 +143,20 @@ if printf '%s' "$COMMAND" | grep -qE '(^|[[:space:];|&])git[[:space:]]+commit([[
     if [[ "$PHASE_NOW" == "implement" ]]; then
       mumei_state_set "$FEATURE" '.phase' '"review"' >/dev/null 2>&1 || true
       mumei_log_info "post-bash-guard: every Wave complete; phase=implement → review"
+      if [[ -f "${CLAUDE_PLUGIN_ROOT:-}/hooks/_lib/hook-stats.sh" ]]; then
+        # shellcheck disable=SC1091
+        source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+        mumei_hook_stats_record "X3" "pass" "Bash" "phase implement -> review"
+      fi
     fi
   elif [[ -n "$CURRENT_WAVE_FILE" ]] && [[ "$PARSED_WAVE" != "$CURRENT_WAVE_FILE" ]]; then
     mumei_state_set "$FEATURE" '.current_wave' "$PARSED_WAVE" >/dev/null 2>&1 || true
     mumei_log_info "post-bash-guard: current_wave advanced ${CURRENT_WAVE_FILE} → ${PARSED_WAVE}"
+    if [[ -f "${CLAUDE_PLUGIN_ROOT:-}/hooks/_lib/hook-stats.sh" ]]; then
+      # shellcheck disable=SC1091
+      source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+      mumei_hook_stats_record "X3" "pass" "Bash" "current_wave ${CURRENT_WAVE_FILE} -> ${PARSED_WAVE}"
+    fi
   fi
 fi
 

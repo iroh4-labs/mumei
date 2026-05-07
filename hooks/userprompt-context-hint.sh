@@ -52,6 +52,11 @@ esac
 PCT=$((TOKENS_USED * 100 / MAX_TOKENS))
 
 if [[ "$PCT" -ge "$PCT_LIMIT" ]]; then
+  if [[ -f "${CLAUDE_PLUGIN_ROOT:-}/hooks/_lib/hook-stats.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+    mumei_hook_stats_record "context-hint" "warn" "UserPromptSubmit" "context at ${PCT}%"
+  fi
   jq -n --arg pct "$PCT" '{
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",

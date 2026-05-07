@@ -45,6 +45,12 @@ esac
 mumei_deny() {
   local reason="$1"
   local context="${2:-}"
+  local hook_id="${3:-pre-bash-guard}"
+  if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+    mumei_hook_stats_record "$hook_id" "deny" "Bash" "$reason"
+  fi
   jq -n --arg r "$reason" --arg c "$context" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -80,7 +86,8 @@ if mumei_is_git_commit "$COMMAND"; then
         done)"
         mumei_deny \
           "Wave ${CURRENT_WAVE} has incomplete tasks: ${INCOMPLETE_TASKS}. Complete or revert before committing." \
-          "Mark each task [x] in .mumei/specs/${FEATURE}/tasks.md after the implementation is done, or revert pending changes."
+          "Mark each task [x] in .mumei/specs/${FEATURE}/tasks.md after the implementation is done, or revert pending changes." \
+          "W2"
       fi
     fi
   fi
@@ -109,7 +116,8 @@ if mumei_is_git_commit "$COMMAND"; then
       TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
       mumei_deny \
         "Tests failing. Fix before committing." \
-        "Test command: ${TEST_CMD}\n\n${TEST_TAIL}"
+        "Test command: ${TEST_CMD}\n\n${TEST_TAIL}" \
+        "I3"
     fi
   fi
 fi
@@ -135,11 +143,13 @@ if mumei_is_git_push "$COMMAND"; then
         if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
           mumei_deny \
             "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
-            "Latest review: ${LATEST_REVIEW}\nRun /mumei:review to re-evaluate after fixing."
+            "Latest review: ${LATEST_REVIEW}\nRun /mumei:review to re-evaluate after fixing." \
+            "L-R2"
         else
           mumei_deny \
             "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
-            "Latest review: ${LATEST_REVIEW}\nRun /mumei:plan to address findings and re-review."
+            "Latest review: ${LATEST_REVIEW}\nRun /mumei:plan to address findings and re-review." \
+            "R2"
         fi
       fi
     fi
