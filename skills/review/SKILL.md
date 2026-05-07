@@ -227,7 +227,7 @@ case "$verdict" in
 esac
 ```
 
-`MUMEI_BYPASS=1` (REQ-9.33 / REQ-9.33.2): when the env var is set, the Stop / PreBash blocks are skipped, and reviewer / validator output is shown as informational only (the verdict is still computed and written to disk, but no phase transition is forced and no block fires). This stays consistent with the spec-vehicle escape hatch.
+`MUMEI_BYPASS=1` (REQ-9.33 / REQ-9.33.2): when the env var is set, the Stop hook (L-R1) and PreBash hook (L-R2) `decision: "block"` paths do not fire. Verdict computation, review JSON write, and phase transitions proceed normally — the escape hatch only neutralizes the gates, not the bookkeeping. This stays consistent with the spec-vehicle escape hatch.
 
 ## Output
 

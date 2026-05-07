@@ -56,8 +56,11 @@ fi
 
 # If a spec-vehicle state.json already exists for this key, skip — the
 # user is mid-spec and plan mode is being used internally, not as the
-# vehicle root.
+# vehicle root. Emit a warn so a slug-collision case (user typed an
+# existing compound key as the plan-vehicle slug, evading the Phase 0.3
+# suffix-match check) is visible instead of silent.
 if [[ -f ".mumei/specs/${SLUG}/state.json" ]]; then
+  mumei_log_warn "L-P1: slug ${SLUG} resolves to an existing spec-vehicle dir (.mumei/specs/${SLUG}/); plan capture skipped — pick a different slug or clear .mumei/current to proceed as plan vehicle"
   exit 0
 fi
 

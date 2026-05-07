@@ -80,8 +80,16 @@ mumei_review_run_detector() {
   local summary=""
   local rc=0
 
-  # Try the iter-2+ skip path first.
-  if [[ "$current_iter" -ge 2 ]] && [[ -n "$prev_iter_head" ]] &&
+  # Try the iter-2+ skip path first. The SHA validity check is mandatory:
+  # `git diff <invalid> HEAD` exits 128 with empty stdout, which the
+  # negated grep below would interpret as "no detector-relevant change",
+  # silently engaging the skip path on rebase / force-push / branch
+  # reset. `git rev-parse --verify --quiet` rejects invalid SHAs up front.
+  prev_head_valid=0
+  if [[ -n "$prev_iter_head" ]] && git rev-parse --verify --quiet "${prev_iter_head}^{commit}" >/dev/null 2>&1; then
+    prev_head_valid=1
+  fi
+  if [[ "$current_iter" -ge 2 ]] && [[ "$prev_head_valid" == "1" ]] &&
     ! git diff --name-only "$prev_iter_head" HEAD 2>/dev/null | grep -qE "$ext_re"; then
     local last_detector
     last_detector="$(mumei_review_latest_detector_report "$review_dir")"
@@ -97,7 +105,7 @@ mumei_review_run_detector() {
     fi
   fi
 
-  if [[ "$current_iter" -lt 2 ]] || [[ -z "$prev_iter_head" ]] ||
+  if [[ "$current_iter" -lt 2 ]] || [[ "$prev_head_valid" == "0" ]] ||
     [[ "$fall_through_to_run" == "1" ]] ||
     git diff --name-only "$prev_iter_head" HEAD 2>/dev/null | grep -qE "$ext_re"; then
     summary="$(bash "${plugin_root}/hooks/pre-review-detector.sh")"

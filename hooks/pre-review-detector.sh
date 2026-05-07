@@ -52,18 +52,25 @@ if [[ -n "$missing_bins" ]]; then
   exit 2
 fi
 
-# 2.4 — Resolve active feature and target output path.
+# 2.4 — Resolve active feature and target output path. Vehicle-aware:
+# spec vehicle (`.mumei/specs/<feature>/`) wins on dual-state but plan
+# vehicle (`.mumei/plans/<slug>/`) is supported via the same code path
+# so /mumei:review can drive Stage 0 against a plan-vehicle layout.
 FEATURE="$(mumei_current_feature 2>/dev/null || true)"
 if [[ -z "$FEATURE" ]]; then
   mumei_log_error ".mumei/current is missing or empty; cannot run detectors without an active feature."
   exit 2
 fi
-SPEC_DIR=".mumei/specs/${FEATURE}"
-if [[ ! -d "$SPEC_DIR" ]]; then
-  mumei_log_error "spec directory not found: ${SPEC_DIR}"
+ACTIVE_VEHICLE="$(mumei_state_active_vehicle "$FEATURE")"
+case "$ACTIVE_VEHICLE" in
+spec) FEATURE_DIR=".mumei/specs/${FEATURE}" ;;
+plan) FEATURE_DIR=".mumei/plans/${FEATURE}" ;;
+*)
+  mumei_log_error "no state.json found for ${FEATURE} under .mumei/specs/ or .mumei/plans/"
   exit 2
-fi
-REVIEWS_DIR="${SPEC_DIR}/reviews"
+  ;;
+esac
+REVIEWS_DIR="${FEATURE_DIR}/reviews"
 mkdir -p "$REVIEWS_DIR"
 
 TS="$(date -u +%Y-%m-%dT%H-%M-%SZ)"

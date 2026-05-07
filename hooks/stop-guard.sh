@@ -3,8 +3,7 @@
 # Rules covered:
 #   R1: session ending with every spec-vehicle task complete but no review run -> block
 #   R3: spec-vehicle phase=done while .mumei/current still active -> block to prompt /mumei:archive
-#   L-R1 (plan vehicle): pending_review=true with no PASS review JSON -> block
-#   L-R3 (plan vehicle): phase=done while .mumei/current still active -> block to prompt /mumei:archive
+#   L-R1 (plan vehicle): pending_review=true with no PASS review JSON or no detector_report -> block
 #
 # Design principles:
 #   - Loop prevention: if stop_hook_active=true, exit 0 immediately.
@@ -39,27 +38,24 @@ if [[ -z "$KEY" ]]; then
   exit 0
 fi
 
-# --- Plan vehicle branch (L-R1 / L-R3) ---
-# Trigger when .mumei/plans/<key>/state.json exists. The plan vehicle has
-# no Wave/task structure inside tasks.md; instead, all-tasks-completed is
-# signaled by pending_review=true (set by hooks/post-task-event.sh on the
-# Nth TaskCompleted that matches task_created_count).
-if mumei_state_is_plan_vehicle "$KEY"; then
-  PLAN_PHASE="$(mumei_state_read_any "$KEY" '.phase')"
+# Unified vehicle dispatch (spec wins on dual-state, with warn).
+ACTIVE_VEHICLE="$(mumei_state_active_vehicle "$KEY")"
+
+# --- Plan vehicle branch (L-R1) ---
+# Trigger when the active vehicle is plan. The plan vehicle has no
+# Wave/task structure inside tasks.md; instead, all-tasks-completed is
+# signaled by pending_review=true (set by hooks/post-task-event.sh on
+# the Nth TaskCompleted that matches task_created_count). The /mumei:archive
+# prompt for phase=done plan-vehicle features is owned by the
+# /mumei:review skill (REQ-9.23 echo on PASS); the Stop hook only gates
+# pending review, never phase=done (REQ-9.24 explicitly excludes done).
+if [[ "$ACTIVE_VEHICLE" == "plan" ]]; then
   PLAN_PENDING="$(mumei_state_read_any "$KEY" '.pending_review')"
   PLAN_REVIEW_DIR=".mumei/plans/${KEY}/reviews"
 
-  # L-R3: phase=done but .mumei/current still active -> archive prompt
-  if [[ "$PLAN_PHASE" == "done" ]]; then
-    REASON="Feature ${KEY} (plan vehicle) reached phase=done but is still active in .mumei/current. Run /mumei:archive ${KEY} to move the spec, or clear .mumei/current."
-    CONTEXT="The archive skill (/mumei:archive) is user-invocable only; the orchestrator cannot run it. Either invoke /mumei:archive to move .mumei/plans/${KEY}/ to .mumei/archive/<YYYY-MM>/, or clear .mumei/current to dismiss this gate."
-    jq -n --arg r "$REASON" --arg c "$CONTEXT" '{decision: "block", reason: $r, systemMessage: $c}'
-    exit 0
-  fi
-
-  # L-R1: pending_review=true but no PASS review JSON yet -> block
   if [[ "$PLAN_PENDING" == "true" ]]; then
     NEEDS_REVIEW=0
+    LATEST_REVIEW=""
     if [[ ! -d "$PLAN_REVIEW_DIR" ]]; then
       NEEDS_REVIEW=1
     else
@@ -81,6 +77,24 @@ if mumei_state_is_plan_vehicle "$KEY"; then
       jq -n --arg r "$REASON" --arg c "$CONTEXT" '{decision: "block", reason: $r, systemMessage: $c}'
       exit 0
     fi
+
+    # Defense-in-depth: a PASS review JSON without a resolvable
+    # detector_report means Stage 0 was skipped (skill bug, manual edit).
+    # Same gate the spec-vehicle branch enforces below.
+    REVIEW_NAME="$(basename "$LATEST_REVIEW")"
+    if [[ ! -s "$LATEST_REVIEW" ]] || ! jq -e 'type' <"$LATEST_REVIEW" >/dev/null 2>&1; then
+      REASON="Plan-vehicle review ${REVIEW_NAME} is empty or not valid JSON. Delete or restore the file and re-run /mumei:review."
+      CONTEXT="${LATEST_REVIEW} cannot be parsed by jq. Restore from git or delete and let /mumei:review write a fresh review."
+      jq -n --arg r "$REASON" --arg c "$CONTEXT" '{decision: "block", reason: $r, systemMessage: $c}'
+      exit 0
+    fi
+    PLAN_DETECTOR_FILE="$(jq -r '.detector_report // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
+    if [[ -z "$PLAN_DETECTOR_FILE" || ! -f "$PLAN_DETECTOR_FILE" ]]; then
+      REASON="Plan-vehicle review ${REVIEW_NAME} has no resolvable detector_report — Stage 0 (deterministic detector run) was skipped. Re-run /mumei:review."
+      CONTEXT="The review JSON must include a top-level \"detector_report\" field whose value is a readable path to a detectors.json from hooks/pre-review-detector.sh. Either the field is missing, empty, or points to a file that no longer exists."
+      jq -n --arg r "$REASON" --arg c "$CONTEXT" '{decision: "block", reason: $r, systemMessage: $c}'
+      exit 0
+    fi
   fi
 
   # Plan vehicle handled; do not fall through to spec-vehicle logic.
@@ -89,7 +103,7 @@ fi
 
 # --- Spec vehicle branch (existing R1 + R3) ---
 FEATURE="$KEY"
-if ! mumei_state_exists "$FEATURE"; then
+if [[ "$ACTIVE_VEHICLE" != "spec" ]] || ! mumei_state_exists "$FEATURE"; then
   exit 0
 fi
 

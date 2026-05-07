@@ -87,6 +87,34 @@ mumei_state_is_plan_vehicle() {
   [[ -f ".mumei/plans/${key}/state.json" ]]
 }
 
+# Return the active vehicle name for the given key on stdout:
+#   "spec" if .mumei/specs/<key>/state.json exists (precedence)
+#   "plan" if only .mumei/plans/<key>/state.json exists
+#   ""     if neither exists
+# Always emits a single warn line to stderr when both exist (dual-state
+# inconsistency), so all dispatch sites converge on spec and the user
+# is told their layout is malformed.
+mumei_state_active_vehicle() {
+  local key="$1"
+  local has_spec=0 has_plan=0
+  [[ -f ".mumei/specs/${key}/state.json" ]] && has_spec=1
+  [[ -f ".mumei/plans/${key}/state.json" ]] && has_plan=1
+  if [[ "$has_spec" == "1" && "$has_plan" == "1" ]]; then
+    mumei_log_warn "dual-state: both .mumei/specs/${key}/ and .mumei/plans/${key}/ exist; treating as spec vehicle (move or remove the plan dir to dismiss this warning)"
+    printf '%s' "spec"
+    return 0
+  fi
+  if [[ "$has_spec" == "1" ]]; then
+    printf '%s' "spec"
+    return 0
+  fi
+  if [[ "$has_plan" == "1" ]]; then
+    printf '%s' "plan"
+    return 0
+  fi
+  printf '%s' ""
+}
+
 # Check whether state.json exists. Exit 1 if missing.
 mumei_state_exists() {
   local feature="$1"
@@ -116,10 +144,14 @@ mumei_state_write_full() {
   local tmp
   tmp="$(mktemp "${sf}.XXXXXX")"
   cat >"$tmp"
-  # validate JSON before commit
-  if ! jq empty <"$tmp" 2>/dev/null; then
+  # Validate JSON before commit. `jq empty` accepts 0-byte input (returns
+  # rc=0 on whitespace-only or empty stdin), so a parse failure upstream
+  # that produced 0 bytes would slip through. Guard with `[[ -s ]]` and
+  # `jq -e 'type'` (requires at least one parseable JSON value) — same
+  # pattern stop-guard.sh:206 uses for review JSON validation.
+  if [[ ! -s "$tmp" ]] || ! jq -e 'type' <"$tmp" >/dev/null 2>&1; then
     rm -f "$tmp"
-    mumei_log_error "invalid JSON for state.json (feature=${feature})"
+    mumei_log_error "refusing to write 0-byte / unparsable state.json (feature=${feature})"
     return 1
   fi
   mv "$tmp" "$sf"
@@ -238,9 +270,9 @@ mumei_state_init_plan() {
       created_at: $now,
       updated_at: $now
     }' >"$tmp"
-  if ! jq empty <"$tmp" 2>/dev/null; then
+  if [[ ! -s "$tmp" ]] || ! jq -e 'type' <"$tmp" >/dev/null 2>&1; then
     rm -f "$tmp"
-    mumei_log_error "invalid JSON for plan-vehicle state.json (slug=${slug})"
+    mumei_log_error "refusing to write 0-byte / unparsable plan-vehicle state.json (slug=${slug})"
     return 1
   fi
   mv "$tmp" "$sf"
@@ -261,9 +293,9 @@ mumei_plan_state_set() {
   local tmp
   tmp="$(mktemp "${sf}.XXXXXX")"
   jq "${jq_path} = ${json_value} | .updated_at = (now | todateiso8601)" "$sf" >"$tmp"
-  if ! jq empty <"$tmp" 2>/dev/null; then
+  if [[ ! -s "$tmp" ]] || ! jq -e 'type' <"$tmp" >/dev/null 2>&1; then
     rm -f "$tmp"
-    mumei_log_error "invalid JSON after set on plan-vehicle state.json (slug=${slug})"
+    mumei_log_error "refusing to write 0-byte / unparsable plan-vehicle state.json after set (slug=${slug}, path=${jq_path})"
     return 1
   fi
   mv "$tmp" "$sf"

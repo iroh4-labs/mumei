@@ -33,18 +33,14 @@ COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 KEY="$(mumei_current_feature 2>/dev/null || true)"
 [[ -n "$KEY" ]] || exit 0
 
-# Determine vehicle. spec vehicle uses .mumei/specs/<key>/state.json,
-# plan vehicle uses .mumei/plans/<key>/state.json. If neither exists,
-# this is not a mumei-active session and the hook is a no-op.
+# Unified vehicle dispatch (spec wins on dual-state, with warn).
 IS_PLAN_VEHICLE=0
 FEATURE="$KEY"
-if mumei_state_exists "$FEATURE"; then
-  :
-elif mumei_state_is_plan_vehicle "$KEY"; then
-  IS_PLAN_VEHICLE=1
-else
-  exit 0
-fi
+case "$(mumei_state_active_vehicle "$KEY")" in
+spec) ;;
+plan) IS_PLAN_VEHICLE=1 ;;
+*) exit 0 ;;
+esac
 
 mumei_deny() {
   local reason="$1"

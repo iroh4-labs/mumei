@@ -168,8 +168,13 @@ collision=""
 if [[ -d ".mumei/specs" ]]; then
   while IFS= read -r d; do
     base="$(basename "$d")"
-    # spec dir is always REQ-N-<slug>; match its trailing slug
-    if [[ "$base" == *-"$resolved_slug" ]]; then collision="$d"; fi
+    # spec dir is always REQ-N-<slug>; match either the trailing slug
+    # OR an exact dir name match (handles the case where the user typed
+    # an existing compound key like REQ-9-fix-login as the slug, which
+    # the suffix-match alone would miss).
+    if [[ "$base" == *-"$resolved_slug" ]] || [[ "$base" == "$resolved_slug" ]]; then
+      collision="$d"
+    fi
   done < <(find .mumei/specs -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
 fi
 if [[ -d ".mumei/plans/${resolved_slug}" ]]; then

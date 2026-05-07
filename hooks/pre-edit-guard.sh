@@ -47,17 +47,16 @@ FEATURE="$(mumei_current_feature 2>/dev/null || true)"
 [[ -n "$FEATURE" ]] || exit 0
 
 # REQ-9.36: spec-only hooks (P1/P2/P3, I1/I2, W1) must skip when plan
-# vehicle is active. mumei_state_is_plan_vehicle is true iff
-# .mumei/plans/<key>/state.json exists, meaning all rules below assume
-# spec-format artifacts (requirements.md, design.md, tasks.md with
-# _Files: meta) which plan vehicle does not have.
-if mumei_state_is_plan_vehicle "$FEATURE"; then
-  exit 0
-fi
-
-if ! mumei_state_exists "$FEATURE"; then
-  exit 0
-fi
+# vehicle is active. Resolution goes through mumei_state_active_vehicle
+# so dispatch is consistent with pre-bash-guard.sh and skills/archive
+# (spec wins on dual-state). All rules below assume spec-format
+# artifacts (requirements.md, design.md, tasks.md with _Files: meta)
+# which plan vehicle does not have.
+case "$(mumei_state_active_vehicle "$FEATURE")" in
+plan) exit 0 ;;
+spec) ;;
+*) exit 0 ;; # neither vehicle has state.json — not a mumei session
+esac
 
 mumei_deny() {
   local reason="$1"
