@@ -272,3 +272,18 @@ EOF
   decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
   [ "$decision" = "deny" ]
 }
+
+@test "M1: deny fires on a leaf symlink pointing into agent-memory/<r>/MEMORY.md (regression for review iter 1 adv-F-002)" {
+  _init_feature_with_tasks "implement" 1
+  # Create the protected target and a symlink elsewhere pointing to it.
+  mkdir -p .claude/agent-memory/security-reviewer
+  : >.claude/agent-memory/security-reviewer/MEMORY.md
+  local tmp_link
+  tmp_link="$(mktemp -u -t mumei-symlink.XXXXXX)"
+  ln -s "$(pwd)/.claude/agent-memory/security-reviewer/MEMORY.md" "$tmp_link"
+  _run_hook "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${tmp_link}\"}}"
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  rm -f "$tmp_link"
+}

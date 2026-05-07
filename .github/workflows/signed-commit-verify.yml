@@ -43,14 +43,14 @@ jobs:
             exit 0
           fi
 
-          # gh-api retry helper. Distinguishes transient API errors
-          # (5xx, rate-limit, network) from real "verified=false" responses.
-          # Transient → exponential backoff retry (1s, 2s, 4s) up to 3 attempts;
-          # persistent transient → return 2 so the workflow can fail with
-          # an infra-error category instead of silently treating the commit
-          # as unsigned.
-          # 4xx (e.g. 404 commit not found) is treated as terminal and
-          # propagated as `verified=false` so the existing branch handles it.
+          # gh-api retry helper. Distinguishes:
+          #   - terminal 4xx (only HTTP 404 = commit truly missing on remote) → return verified=false
+          #   - transient/infra 4xx (HTTP 401 token scope, HTTP 403 perms, HTTP 429 rate-limit) → retry
+          #   - 5xx / network / unknown → retry
+          #   - persistent transient after retries exhausted → return 2 (infra-error)
+          # Backoff: sleep 1s before retry 2 and 2s before retry 3 — total wait 3s on full transient burst.
+          # The earlier overly-broad `HTTP 4[0-9][0-9]` regex misclassified 401/403/429 as terminal-unsigned
+          # under rate-limit storms, so we now positive-match only HTTP 404 for the terminal arm.
           gh_api_verified_with_retry() {
             local sha="$1" attempts=3 i=0 last_stderr="" stdout="" rc=0
             local stderr_file
@@ -65,13 +65,16 @@ jobs:
                 printf '%s' "$stdout"
                 return 0
               fi
-              # 4xx is real failure (commit not found etc.) — do not retry,
-              # surface as verified=false to the existing unsigned branch.
-              if printf '%s' "$last_stderr" | grep -qE 'HTTP 4[0-9][0-9]'; then
+              # HTTP 404 is the only terminal 4xx for this endpoint
+              # (commit not found / repo not found). Surface as
+              # verified=false so the existing unsigned branch logs it.
+              if printf '%s' "$last_stderr" | grep -qE '\bHTTP 404\b'; then
                 rm -f "$stderr_file"
                 printf 'false'
                 return 0
               fi
+              # Everything else (401, 403, 429, 5xx, network) is treated as
+              # transient and retried.
               i=$((i + 1))
               if [ "$i" -lt "$attempts" ]; then
                 sleep $((1 << (i - 1)))

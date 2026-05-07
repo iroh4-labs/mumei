@@ -55,9 +55,24 @@ fi
 # (mv/awk pipelines), which do not pass through this hook.
 mumei_m1_canonicalize_path() {
   local p="$1"
+  # Resolve ALL components (including the leaf basename) via realpath /
+  # python3 os.path.realpath. Without leaf resolution a symlink whose
+  # target points into .claude/agent-memory/<r>/MEMORY.md would slip
+  # past the case-glob deny — the OS Edit/Write follows the symlink and
+  # the protected file gets clobbered (review iter 1 adv-F-002).
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m "$p" 2>/dev/null && return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$p" 2>/dev/null && return 0
+  fi
+  # Fallback: parent-only canonicalise (best-effort; leaf symlink check
+  # depends on realpath/python3 availability — if neither is on PATH we
+  # log a warn but still produce a useful result so the hook can match
+  # at least the literal path).
+  mumei_log_warn "M1 leaf-symlink check skipped: realpath / python3 missing on PATH"
   case "$p" in
   /*)
-    # Absolute path: canonicalise via walk-to-existing-ancestor + cd && pwd -P
     local p_dir p_base
     p_dir="$(dirname "$p")"
     p_base="$(basename "$p")"
@@ -72,7 +87,6 @@ mumei_m1_canonicalize_path() {
     printf '%s' "${canon_anc}${tail}/${p_base}"
     ;;
   *)
-    # Relative path: prepend pwd (canonicalised) so .. and ./ are resolved.
     local pwd_p
     pwd_p="$(pwd -P)"
     printf '%s' "$(cd "$pwd_p" && cd "$(dirname "$p")" 2>/dev/null && pwd -P || echo "${pwd_p}/$(dirname "$p")")/$(basename "$p")"

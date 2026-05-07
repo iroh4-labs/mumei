@@ -138,12 +138,19 @@ jobs:
         # vendored copy of https://json.schemastore.org/claude-code-plugin-manifest.json
         # checked into the repo. This decouples tag-push releases from
         # json.schemastore.org's TLS / DNS / 5xx availability. Drift is
-        # detected by .github/workflows/plugin-json-validate.yml which keeps
-        # the live fetch on every PR — if the upstream schema changes, that
-        # PR-time check surfaces the divergence and the operator re-bumps
-        # schemas/plugin.schema.json.
+        # detected by .github/workflows/plugin-json-validate.yml on PRs
+        # that touch the manifest / vendored schema AND on a weekly cron
+        # (added in review iter 1 adv-F-004 fix) so upstream schema
+        # changes surface even without a mumei manifest PR. On drift the
+        # operator refreshes schemas/plugin.schema.json and bumps the
+        # manifest $schema field together.
         run: |
-          python3 -m pip install --quiet jsonschema
+          # Pin jsonschema for release-time reproducibility (review iter 1
+          # adv-F-003): unpinned `pip install jsonschema` resolves to whatever
+          # is current at re-run time, so the same tag could validate green
+          # today and red after a jsonschema minor bump. Bump via Dependabot
+          # (PRs gate on plugin-json-validate.yml) so drift is intentional.
+          python3 -m pip install --quiet 'jsonschema==4.23.0'
           python3 - <<'PY'
           import json, sys
           from pathlib import Path

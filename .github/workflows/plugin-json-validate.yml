@@ -19,6 +19,15 @@ on:
     paths:
       - ".claude-plugin/plugin.json"
       - ".github/workflows/plugin-json-validate.yml"
+      - "schemas/plugin.schema.json"
+  schedule:
+    # Weekly drift sentinel for the vendored schema (added review iter 1
+    # adv-F-004): if upstream json.schemastore.org adds / changes fields
+    # without a mumei manifest PR, the paths-filtered PR run never fires.
+    # Cron picks up the divergence so the operator can refresh
+    # schemas/plugin.schema.json before the next release.
+    - cron: "30 9 * * 1" # Mondays 09:30 UTC
+  workflow_dispatch: {}
 
 permissions:
   contents: read
