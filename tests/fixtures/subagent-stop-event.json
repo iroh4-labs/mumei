@@ -1,0 +1,10 @@
+{
+  "session_id": "abc123",
+  "transcript_path": "/tmp/mumei-fixture/parent.jsonl",
+  "cwd": "/tmp/mumei-fixture",
+  "permission_mode": "default",
+  "hook_event_name": "SubagentStop",
+  "stop_reason": "end_turn",
+  "agent_id": "a89dde18dea238367",
+  "agent_type": "mumei:spec-compliance-reviewer"
+}

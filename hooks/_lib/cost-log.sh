@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
-# Cost-log helpers for reviewer / curator Task invocations (REQ-11.5).
+# Cost-log helpers for reviewer / curator Task invocations.
 #
-# Target file: .mumei/specs/<feature>/cost-log.jsonl  (per-feature, JSONL append-only).
-# Caller pattern (in skills/plan/SKILL.md Phase 5 / skills/review/SKILL.md):
+# Target file: .mumei/specs/<feature>/cost-log.jsonl (spec vehicle) or
+# .mumei/plans/<slug>/cost-log.jsonl (plan vehicle). Per-feature,
+# JSONL append-only. Aggregation: scripts/aggregate-cost.sh.
+#
+# Authoritative record path (REQ-16): hooks/subagent-cost-log.sh fires
+# on SubagentStop and writes a phase=after record by reverse-looking up
+# the subagent's own jsonl from agent_id. The orchestrator-side wrap
+# below is OPTIONAL — call it only when you want a `phase=before`
+# bookmark or to record additional metadata (wave / iteration). The
+# aggregator dedupes (agent, ts) within a 1s window so duplicate
+# records from both paths merge cleanly.
 #
 #   mumei_cost_log_before "$feature" "$current_wave" "$current_iter" "spec-compliance-reviewer"
 #   # ... launch the Task subagent ...
 #   mumei_cost_log_after  "$feature" "$current_wave" "$current_iter" "spec-compliance-reviewer" "$usage_json"
 #
-# `usage_json` is the JSON object captured from the subagent's final usage
-# block (input_tokens / output_tokens / cache_read_input_tokens /
+# `usage_json` is the JSON object captured from the subagent's final
+# usage block (input_tokens / output_tokens / cache_read_input_tokens /
 # cache_creation_input_tokens). Pass `{}` if usage cannot be observed.
-# Aggregation is provided by scripts/aggregate-cost.sh.
 #
 # Per-feature cost-log.jsonl is intentionally NOT a target of
-# log-rotate.sh (REQ-14.12): the file moves with the feature into
-# .mumei/archive/ via /mumei:archive, so its lifecycle is bounded by
-# the feature itself rather than by long-lived disk pressure.
+# log-rotate.sh: the file moves with the feature into .mumei/archive/
+# via /mumei:archive, so its lifecycle is bounded by the feature itself.
 
 set -u
 
