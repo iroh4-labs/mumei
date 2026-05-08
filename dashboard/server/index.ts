@@ -5,12 +5,14 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
+import fastifyStatic from '@fastify/static'
 import { Type } from '@sinclair/typebox'
 import Fastify from 'fastify'
 
 import { buildActivity } from './activity.ts'
 import { buildFeatureDetail } from './detail.ts'
 import { listFeatures } from './features.ts'
+import { MASCOT_ASCII } from './lib/mascot-ascii.ts'
 import { buildMeta, buildMetaStats } from './meta.ts'
 import { registerSse } from './sse.ts'
 import { trendHooks, trendReviews, trendTokens } from './trends.ts'
@@ -40,11 +42,22 @@ const PROJECT_ROOT = process.env.MUMEI_DASHBOARD_PROJECT_ROOT
 const MUMEI_DIR = path.join(PROJECT_ROOT, '.mumei')
 const PORT = Number(process.env.MUMEI_DASHBOARD_PORT ?? '3001')
 const LOG_LEVEL = process.env.MUMEI_DASHBOARD_LOG_LEVEL ?? 'info'
+// Default allow-list covers the two same-origin URLs the bundled SPA can
+// emit (`http://localhost:<PORT>` / `http://127.0.0.1:<PORT>`) plus the
+// Vite dev server (5173) used during monorepo development.
 const CORS_ORIGINS = process.env.MUMEI_DASHBOARD_CORS_ORIGINS?.split(',')
   .map((s) => s.trim())
-  .filter(Boolean) ?? ['http://localhost:5173']
+  .filter(Boolean) ?? [
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+  'http://localhost:5173',
+]
 
 const app = Fastify({
+  // Per-request `incoming request` / `request completed` logs are noisy
+  // for a local dev tool — keep them only when the user opts into
+  // debug/trace verbosity.
+  disableRequestLogging: !(LOG_LEVEL === 'debug' || LOG_LEVEL === 'trace'),
   logger: {
     level: LOG_LEVEL,
     // Redact sensitive headers in case the proxy ever forwards them
@@ -85,6 +98,37 @@ await app.register(cors, {
   },
   credentials: true,
 })
+
+// SPA static + deep-link fallback. Resolve dist for built mode
+// (`dist/server/index.js` → `dist/`) and dev mode (`server/index.ts`
+// → `dashboard/dist/`). Absent dist is non-fatal: API still works and
+// the Vite dev server (5173) is the dev-time UI host.
+const spaRoot = ((): string | null => {
+  const here = import.meta.dirname
+  for (const c of [path.resolve(here, '..'), path.resolve(here, '../dist')]) {
+    if (existsSync(path.join(c, 'index.html'))) return c
+  }
+  return null
+})()
+
+if (spaRoot) {
+  await app.register(fastifyStatic, {
+    root: spaRoot,
+    prefix: '/',
+    wildcard: false,
+  })
+  app.setNotFoundHandler((req, reply) => {
+    if (req.method !== 'GET' || req.url.startsWith('/api/')) {
+      reply.code(404).send({ error: 'not found', url: req.url })
+      return
+    }
+    return reply.sendFile('index.html')
+  })
+} else {
+  app.log.warn(
+    'SPA dist not found; UI not served. Run `npm run build:client` for production, or use the Vite dev server on port 5173.',
+  )
+}
 
 // ---------------------------------------------------------------------------
 // TypeBox schemas — single source of truth for request validation +
@@ -262,16 +306,62 @@ const sse = registerSse(app, { projectRoot: PROJECT_ROOT })
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+// Standard figlet font: `figlet -f standard mumei`. Five rows: row 1 holds
+// only the dot of the trailing `i`. Backslashes and backticks are escaped
+// for the JS template literal — the rendered output remains plain ASCII.
+const LOGO_ASCII = `\
+                              _
+ _ __ ___  _   _ _ __ ___   ___(_)
+| '_ \` _ \\| | | | '_ \` _ \\ / _ \\ |
+| | | | | | |_| | | | | | |  __/ |
+|_| |_| |_|\\__,_|_| |_| |_|\\___|_|`
+
+function renderBanner(addr: string): string {
+  const logoLines = LOGO_ASCII.split('\n')
+  const mascotLines = MASCOT_ASCII.replace(/^\n+|\n+$/g, '').split('\n')
+  const logoW = Math.max(...logoLines.map((l) => l.length))
+  const mascotW = Math.max(...mascotLines.map((l) => l.length))
+  const SEP = '  '
+  const combinedW = logoW + SEP.length + mascotW
+  const totalH = Math.max(logoLines.length, mascotLines.length)
+  const logoTop = Math.floor((totalH - logoLines.length) / 2)
+  const mascotTop = Math.floor((totalH - mascotLines.length) / 2)
+  const padLine = (arr: string[], top: number, w: number, i: number): string => {
+    const idx = i - top
+    const line = idx >= 0 && idx < arr.length ? arr[idx] : undefined
+    return (line ?? '').padEnd(w)
+  }
+  const termW = process.stdout.columns && process.stdout.columns > 0 ? process.stdout.columns : 80
+  const leftPad = ' '.repeat(Math.max(0, Math.floor((termW - combinedW) / 2)))
+  const rows: string[] = []
+  for (let i = 0; i < totalH; i++) {
+    const l = padLine(logoLines, logoTop, logoW, i)
+    const m = padLine(mascotLines, mascotTop, mascotW, i)
+    rows.push(`${leftPad}${l}${SEP}${m}`.replace(/\s+$/, ''))
+  }
+  const info = [
+    `${leftPad}Dashboard:    ${addr}`,
+    `${leftPad}Project root: ${PROJECT_ROOT}`,
+    `${leftPad}.mumei dir:   ${MUMEI_DIR}`,
+  ].join('\n')
+  return `\n${rows.join('\n')}\n\n${info}\n\n`
+}
+
+// Suppress Fastify's default `Server listening at ...` info log so the
+// banner is the only startup output. Restored to the configured level
+// inside the listen callback so subsequent runtime errors are surfaced.
+app.log.level = 'warn'
 app.listen({ port: PORT, host: '127.0.0.1' }, (err, addr) => {
+  app.log.level = LOG_LEVEL
   if (err) {
     app.log.error(err)
     process.exit(1)
   }
-  app.log.info({ addr, projectRoot: PROJECT_ROOT, mumei: MUMEI_DIR }, 'mumei-dashboard server up')
+  process.stdout.write(renderBanner(addr))
 })
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
-  app.log.info({ signal }, 'shutting down')
+  process.stdout.write(`\nmumei-dashboard: ${signal} received, shutting down\n`)
   await sse.close()
   await app.close()
   process.exit(0)
