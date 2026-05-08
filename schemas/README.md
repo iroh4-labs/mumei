@@ -1,0 +1,55 @@
+# mumei JSON schemas
+
+This directory holds **canonical schema definitions** that both the bash
+core (mumei plugin) and the Node/TS dashboard consume. Treat the files
+here as the contract.
+
+## Why a shared `schemas/` directory
+
+The bash hooks under `hooks/_lib/state.sh`, `hooks/_lib/review.sh`,
+`hooks/_lib/cost-log.sh` write JSON to disk; the dashboard reads it.
+Without a single source of truth the two sides drift — a new field added
+on the bash side stays invisible on the dashboard side until someone
+notices weeks later. Keeping schemas here lets a single PR touch both
+producer and consumer.
+
+## Files
+
+| Schema                   | Producer                                         | Consumer                                               |
+| ------------------------ | ------------------------------------------------ | ------------------------------------------------------ |
+| `state.schema.json`      | `hooks/_lib/state.sh`                            | dashboard, `/mumei:retro`                              |
+| `review.schema.json`     | `hooks/_lib/review.sh`, `pre-review-detector.sh` | dashboard, `/mumei:retro`                              |
+| `cost-log.schema.json`   | `hooks/_lib/cost-log.sh`, `subagent-cost-log.sh` | dashboard, `/mumei:retro`, `scripts/aggregate-cost.sh` |
+| `tasks-meta.schema.json` | `skills/plan/SKILL.md` (template)                | `hooks/_lib/tasks.sh`, dashboard                       |
+
+## How the two sides consume them
+
+- **bash side**: schemas are documentation. We do not run JSON Schema
+  validation in hooks (jq doesn't speak JSON Schema natively, and
+  validation latency would slow every hook fire). Each producing
+  function has a comment block referencing the schema file.
+- **TS side**: `dashboard/` runs `json-schema-to-typescript` at build
+  time to generate `dashboard/src/types/*.ts`. This gives the React
+  app compile-time type safety.
+
+## Versioning
+
+Schema bumps follow semver in the schema's `$id` field:
+
+```json
+{
+  "$id": "https://mumei.dev/schemas/state.schema.json#v0.1.0",
+  ...
+}
+```
+
+Breaking changes require a major bump and a coordinated PR that updates
+both bash producers and TS consumers. Non-breaking additions (new
+optional fields) bump the patch.
+
+## Adding a new schema
+
+1. Write `<name>.schema.json` here.
+2. Reference it from the producing bash module's docstring.
+3. If TS code consumes it, regenerate types: `cd dashboard && npm run generate-types`.
+4. Commit both sides in the same PR.

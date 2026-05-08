@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mumei.dev/schemas/review.schema.json#v0.1.0",
+  "title": "mumei review pipeline output",
+  "description": "Phase 5 / /mumei:review pipeline verdict, persisted at .mumei/specs/<feature>/reviews/<ts>.json (spec vehicle) or .mumei/plans/<slug>/reviews/<ts>.json (plan vehicle).",
+  "type": "object",
+  "required": ["feature", "iteration", "verdict", "summary"],
+  "properties": {
+    "feature": {
+      "type": "string",
+      "description": "REQ-N-slug or plan-vehicle bare slug."
+    },
+    "wave": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "const": "all" }
+      ],
+      "description": "Wave under review, or 'all' for end-of-feature pipelines."
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "Review iter (capped at 3). Iter 1 is baseline; iter 2+ uses next_iter_reviewers from iter N-1."
+    },
+    "iter_head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$",
+      "description": "git rev-parse HEAD at iter completion. Used by Stage 0 detector skip logic in iter N+1."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES"]
+    },
+    "summary": { "type": "string" },
+    "reviewers": {
+      "type": "object",
+      "description": "Per-reviewer verdict map. Keys are reviewer short names (spec-compliance / security / adversarial).",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES"]
+          }
+        }
+      }
+    },
+    "findings_surfaced": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "findings_filtered": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "next_iter_reviewers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Reviewer set to launch in iter N+1. Always contains 'adversarial' (REQ-7.3 invariant)."
+    },
+    "detector_skipped": {
+      "type": "boolean",
+      "description": "REQ-7.5: true when iter 2+ skipped Stage 0 because no detector-relevant file changed since iter N-1."
+    },
+    "detector_reused_from": {
+      "type": ["string", "null"],
+      "description": "Path to the previous iter's detector report when detector_skipped == true."
+    },
+    "detector_report": {
+      "type": "string",
+      "description": "Path to <ts>-detectors.json with raw semgrep / osv-scanner findings."
+    },
+    "short_circuited_from": {
+      "type": "string",
+      "description": "Path to the prior review JSON when this entry is a REQ-7.7 short-circuit synthetic record."
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["severity", "message"],
+      "properties": {
+        "id": { "type": "string" },
+        "reviewer": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        },
+        "category": { "type": "string" },
+        "location": { "type": "string" },
+        "message": { "type": "string" },
+        "source": {
+          "type": "string",
+          "description": "Detector ground-truth marker: 'semgrep' / 'osv-scanner' / 'structural-integrity' for deterministic findings."
+        },
+        "validator": {
+          "type": "object",
+          "properties": {
+            "decision": {
+              "type": "string",
+              "enum": ["valid", "invalid", "unsure", "valid_by_assertion"]
+            },
+            "confidence": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

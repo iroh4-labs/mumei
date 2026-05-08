@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mumei.dev/schemas/cost-log.schema.json#v0.1.0",
+  "title": "mumei cost-log JSONL entry",
+  "description": "One line of .mumei/specs/<feature>/cost-log.jsonl (spec vehicle) or .mumei/plans/<slug>/cost-log.jsonl (plan vehicle). Append-only. Per-feature, archived with the feature.",
+  "type": "object",
+  "required": ["ts", "feature", "agent", "phase"],
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC."
+    },
+    "feature": { "type": "string" },
+    "wave": { "type": ["integer", "null"] },
+    "iteration": { "type": ["integer", "null"] },
+    "agent": {
+      "type": "string",
+      "description": "Reviewer / curator / SDK agent short name."
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["before", "after"],
+      "description": "before: launch bookmark (no token usage). after: completion record with usage payload."
+    },
+    "input_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Anthropic API canonical field. Tokens AFTER the cache breakpoint (i.e., not cached)."
+    },
+    "output_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cache_read_input_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cache HIT (tokens served from cache). Anthropic canonical field."
+    },
+    "cache_creation_input_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cache MISS first-write (tokens that just landed in a new cache breakpoint). Anthropic canonical field."
+    }
+  },
+  "additionalProperties": false
+}

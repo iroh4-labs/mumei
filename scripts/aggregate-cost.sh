@@ -4,17 +4,26 @@
 # pivoted views (by agent, by iteration, by wave) on stdout.
 #
 # Usage:
-#   bash scripts/aggregate-cost.sh                # use .mumei/current
-#   bash scripts/aggregate-cost.sh REQ-11-foo     # explicit feature/slug
-#   bash scripts/aggregate-cost.sh -f path.jsonl  # arbitrary log file
+#   bash scripts/aggregate-cost.sh                  # use .mumei/current
+#   bash scripts/aggregate-cost.sh REQ-11-foo       # explicit feature/slug
+#   bash scripts/aggregate-cost.sh -f path.jsonl    # arbitrary log file
+#   bash scripts/aggregate-cost.sh --json [feature] # JSON output (dashboard)
 #
 # Only `phase: "after"` records are tallied. `before` rows carry no
 # token usage and exist only as launch-time bookmarks.
+#
+# Schema reference: schemas/cost-log.schema.json#v0.1.0
 
 set -u
 
 log=""
 feature=""
+json_mode=0
+
+if [[ "${1:-}" == "--json" ]]; then
+  json_mode=1
+  shift
+fi
 
 case "${1:-}" in
 -f)
@@ -45,7 +54,51 @@ if [[ -z "$log" ]]; then
 fi
 
 if [[ ! -f "$log" ]]; then
-  echo "aggregate-cost: no cost-log found at ${log}" >&2
+  if [[ "$json_mode" == "1" ]]; then
+    printf '{"feature":"%s","missing":true,"records":0}\n' "${feature:-unknown}"
+  else
+    echo "aggregate-cost: no cost-log found at ${log}" >&2
+  fi
+  exit 0
+fi
+
+# JSON output for dashboard consumption. Emits per-agent / per-iter
+# breakdown plus totals plus cache hit ratio. One JSON object on stdout.
+if [[ "$json_mode" == "1" ]]; then
+  jq -s --arg feature "${feature:-unknown}" '
+    [.[] | select(.phase == "after")] as $rows
+    | {
+        feature: $feature,
+        records: ($rows | length),
+        totals: {
+          input: ($rows | map(.input_tokens // 0) | add // 0),
+          output: ($rows | map(.output_tokens // 0) | add // 0),
+          cache_read: ($rows | map(.cache_read_input_tokens // 0) | add // 0),
+          cache_create: ($rows | map(.cache_creation_input_tokens // 0) | add // 0)
+        },
+        cache_hit_rate: (
+          ($rows | map(.cache_read_input_tokens // 0) | add // 0) as $hit
+          | ($rows | map(.cache_creation_input_tokens // 0) | add // 0) as $miss
+          | if ($hit + $miss) == 0 then null else ($hit / ($hit + $miss)) end
+        ),
+        by_agent: ($rows | group_by(.agent // "<null>") | map({
+          agent: (.[0].agent // "<null>"),
+          count: length,
+          input: (map(.input_tokens // 0) | add // 0),
+          output: (map(.output_tokens // 0) | add // 0),
+          cache_read: (map(.cache_read_input_tokens // 0) | add // 0),
+          cache_create: (map(.cache_creation_input_tokens // 0) | add // 0)
+        })),
+        by_iteration: ($rows | group_by(.iteration // 0) | map({
+          iteration: (.[0].iteration // 0),
+          count: length,
+          input: (map(.input_tokens // 0) | add // 0),
+          output: (map(.output_tokens // 0) | add // 0),
+          cache_read: (map(.cache_read_input_tokens // 0) | add // 0),
+          cache_create: (map(.cache_creation_input_tokens // 0) | add // 0)
+        }))
+      }
+  ' "$log"
   exit 0
 fi
 
@@ -104,5 +157,13 @@ jq -r '"  input        \(.input)
   output       \(.output)
   cache_read   \(.cache_read)
   cache_create \(.cache_create)"' <<<"$totals"
+
+# Cache hit ratio = cache_read / (cache_read + cache_create). Nil-safe.
+hit_rate="$(jq -r '
+  if (.cache_read + .cache_create) == 0 then "n/a"
+  else (.cache_read / (.cache_read + .cache_create) * 100 | tostring + "%")
+  end
+' <<<"$totals")"
+printf '  cache_hit    %s\n' "$hit_rate"
 
 exit 0
