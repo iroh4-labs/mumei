@@ -32,6 +32,13 @@ _run_hook() {
 
 _init_feature_implement() {
   local feature="REQ-1-foo"
+  # Seed last_observed_head from the current HEAD so the X3 hook's
+  # HEAD-diff gate has a baseline. Mirrors what state.sh's
+  # mumei_state_reconcile does when phase transitions to implement in
+  # production. Tests that want to exercise the lazy-init branch can
+  # `jq 'del(.last_observed_head)' state.json` before running the hook.
+  local head_now
+  head_now="$(git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
   mkdir -p ".mumei/specs/${feature}"
   echo "${feature}" >.mumei/current
   cat >".mumei/specs/${feature}/state.json" <<EOF
@@ -40,6 +47,7 @@ _init_feature_implement() {
   "slug": "foo",
   "phase": "implement",
   "current_wave": 1,
+  "last_observed_head": "${head_now}",
   "created_at": "2026-01-01T00:00:00Z",
   "updated_at": "2026-01-01T00:00:00Z"
 }
@@ -200,6 +208,9 @@ EOF
 # the X3 regression tests below.
 _complete_wave1_add_wave2() {
   local feature="REQ-1-foo"
+  # Optional first arg: commit message (default Conventional Commit so
+  # the X3 commit-message-pattern gate accepts it).
+  local commit_msg="${1:-feat: wave 1 commit}"
   cat >".mumei/specs/${feature}/tasks.md" <<'EOF'
 # foo plan
 
@@ -228,7 +239,7 @@ EOF
   mkdir -p src
   echo "x" >src/in-scope.ts.placeholder
   git add -A
-  git commit -m "wave 1 commit" -q
+  git commit -m "$commit_msg" -q
 }
 
 @test "X3: bash with no git commit must NOT advance current_wave" {
@@ -281,4 +292,55 @@ EOF
   source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
   # State must still be 1 — failed commit must not silently advance phase.
   [ "$(mumei_state_get 'REQ-1-foo' '.current_wave')" = "1" ]
+}
+
+# ─── REQ-12.1 / REQ-12.2: HEAD-diff + commit message pattern triple gate ─────
+#
+# Three regression cases for the W-X1 dogfood scenario where pre-commit
+# auto-fix abort yields tool_response.exit_code=0 (shell `$?` masks the
+# intermediate failure) but no commit actually landed. The hook must
+# refuse to advance current_wave unless ALL three gates pass:
+#   1. tool_response.exit_code == 0  (existing short-circuit)
+#   2. last_observed_head ≠ current HEAD  (new — HEAD-diff)
+#   3. commit message matches Wave pattern  (new — Conventional Commits
+#      with optional REQ-N.M scope, OR `[wave-N]` tag)
+
+@test "X3 REQ-12.1 (a): TOOL_EXIT=0 but HEAD unchanged → does NOT advance (W-X1 fix)" {
+  _init_feature_implement
+  _complete_wave1_add_wave2
+  # Simulate prior X3 fire that recorded the current HEAD as baseline.
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  cur_head="$(git rev-parse HEAD)"
+  mumei_state_set_observed_head 'REQ-1-foo' "$cur_head"
+  # No new commit lands (pre-commit auto-fix aborted), HEAD is still cur_head.
+  # tool_response.exit_code is 0 because the shell chain short-circuited
+  # to a successful command after the failed git commit.
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m wave2"},"tool_response":{"exit_code":0}}'
+  [ "$status" -eq 0 ]
+  # State must still be 1 — HEAD-diff gate caught the silent failure.
+  [ "$(mumei_state_get 'REQ-1-foo' '.current_wave')" = "1" ]
+}
+
+@test "X3 REQ-12.1 (b): WIP commit message → does NOT advance (Wave pattern fail)" {
+  _init_feature_implement
+  # Helper lands a 'wip checkpoint' commit (no Conventional Commits prefix).
+  _complete_wave1_add_wave2 'wip checkpoint'
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m wip"},"tool_response":{"exit_code":0}}'
+  [ "$status" -eq 0 ]
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  # State must still be 1 — commit message gate rejected the WIP commit.
+  [ "$(mumei_state_get 'REQ-1-foo' '.current_wave')" = "1" ]
+  # Baseline must still be updated so the next X3 fire compares correctly.
+  [ -n "$(mumei_state_get 'REQ-1-foo' '.last_observed_head')" ]
+}
+
+@test "X3 REQ-12.1 (c): feat(REQ-N.M) commit → DOES advance (all gates pass)" {
+  _init_feature_implement
+  _complete_wave1_add_wave2 'feat(REQ-1.1): implement wave 1'
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m wave1"},"tool_response":{"exit_code":0}}'
+  [ "$status" -eq 0 ]
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  [ "$(mumei_state_get 'REQ-1-foo' '.current_wave')" = "2" ]
+  # last_observed_head must be set to the post-commit HEAD.
+  [ "$(mumei_state_get 'REQ-1-foo' '.last_observed_head')" = "$(git rev-parse HEAD)" ]
 }

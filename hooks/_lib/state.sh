@@ -197,6 +197,19 @@ mumei_state_phase() {
   mumei_state_get "$feature" '.phase'
 }
 
+# Record the last HEAD observed by post-bash-guard's X3 hook. Used to
+# detect commit-fail scenarios where tool_response.exit_code is 0 but
+# no commit actually landed (W-X1 dogfood case in pre-commit auto-fix
+# chains). Lazy-initialized on the first git-commit observation; once
+# set, X3 compares state.last_observed_head against the post-commit
+# `git rev-parse HEAD` and refuses to advance current_wave when they
+# match. Caller passes a bare 40-char git rev (no quotes).
+mumei_state_set_observed_head() {
+  local feature="$1"
+  local rev="$2"
+  mumei_state_set "$feature" '.last_observed_head' "\"${rev}\""
+}
+
 # Reconcile detectable state.json inconsistencies and return 0 on
 # success. Reports each correction to stderr via mumei_log_warn. Idempotent.
 #
@@ -216,16 +229,35 @@ mumei_state_reconcile() {
   sf="$(mumei_state_path "$feature")"
   [[ -f "$sf" ]] || return 1
 
-  local phase approved current_wave
+  local phase approved current_wave observed_head
   phase="$(jq -r '.phase // empty' "$sf" 2>/dev/null || true)"
   approved="$(jq -r '.approved_at // empty' "$sf" 2>/dev/null || true)"
   current_wave="$(jq -r '.current_wave // 0' "$sf" 2>/dev/null || echo 0)"
+  observed_head="$(jq -r '.last_observed_head // empty' "$sf" 2>/dev/null || true)"
 
   if [[ "$phase" == "plan" ]] && [[ -n "$approved" ]]; then
     mumei_log_warn "state.sh: ${feature} has approved_at=${approved} but phase=plan; auto-advancing to phase=implement (post-approval transition was lost)"
     mumei_state_set "$feature" '.phase' '"implement"' || return 1
     if [[ "$current_wave" == "0" ]]; then
       mumei_state_set "$feature" '.current_wave' '1' || return 1
+    fi
+    phase="implement"
+  fi
+
+  # REQ-12.1: seed last_observed_head when phase=implement and the field
+  # is missing. Without this, the X3 hook's lazy-init branch could treat
+  # a stray observation (e.g. a failed git commit chain that leaves HEAD
+  # at a pre-existing Conventional-Commits message) as a baseline AND
+  # falsely advance on the very next fire. Seeding ensures the HEAD-diff
+  # gate always has a reference point.
+  if [[ "$phase" == "implement" ]] && [[ -z "$observed_head" ]]; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+      local head_now
+      head_now="$(git rev-parse HEAD 2>/dev/null || true)"
+      if [[ -n "$head_now" ]]; then
+        mumei_log_warn "state.sh: ${feature} is in implement phase with no last_observed_head; seeding to current HEAD (${head_now})"
+        mumei_state_set_observed_head "$feature" "$head_now" || return 1
+      fi
     fi
   fi
 
