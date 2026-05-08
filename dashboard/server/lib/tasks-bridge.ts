@@ -60,18 +60,19 @@ export async function buildWaveplan(args: {
 }): Promise<WaveMeta[]> {
   const { projectRoot, featureKey, pluginRoot, bustCache } = args
   const memoKey = `${projectRoot}::${featureKey}`
-  if (!bustCache) {
-    const hit = memo.get(memoKey)
-    if (hit && Date.now() - hit.ts < MEMO_TTL_MS) return hit.payload
+  const cachedHit = memo.get(memoKey)
+  if (!bustCache && cachedHit && Date.now() - cachedHit.ts < MEMO_TTL_MS) {
+    return cachedHit.payload
   }
 
   const tf = await resolveTasksFile(projectRoot, featureKey)
   if (!tf) {
-    // Surface a single info line on the FIRST miss within a memo TTL so
-    // operators can distinguish "plan-vehicle by design" from "parse
-    // failure" without having to read source. The memo dedupes
-    // subsequent calls within 5s. (REQ-15 review iter 2 finding.)
-    if (!memo.has(memoKey)) {
+    // Surface a single info line whenever the memo TTL has rolled over
+    // so operators can distinguish "plan-vehicle by design" from "parse
+    // failure" without reading source. Use the same staleness predicate
+    // as the memo hit check above — bare memo.has() would dedupe forever.
+    const stale = !cachedHit || Date.now() - cachedHit.ts >= MEMO_TTL_MS
+    if (stale) {
       try {
         await access(path.join(projectRoot, '.mumei', 'plans', featureKey))
         process.stderr.write(
