@@ -53,7 +53,7 @@ export function CompactDashboard(): ReactElement {
         <div className="flex-1 min-w-0 border-r border-zinc-800 overflow-y-auto">
           <FilterStrip />
 
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 auto-rows-fr">
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 auto-rows-fr">
             {active.map((f) => (
               <CompactCard key={f.id} f={f} selected={selected === f.id} onSelect={setSelected} />
             ))}
@@ -73,7 +73,7 @@ export function CompactDashboard(): ReactElement {
             {showArchived && (
               <div
                 id="archived-grid"
-                className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 auto-rows-fr opacity-70"
+                className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 auto-rows-fr opacity-70"
               >
                 {archived.map((f) => (
                   <CompactCard
@@ -93,7 +93,7 @@ export function CompactDashboard(): ReactElement {
           className={cn(
             'shrink-0 bg-zinc-950/40 transition-all',
             // Desktop: pinned side panel sized for laptop down to 4K
-            'hidden lg:block lg:w-[340px] xl:w-[380px] 2xl:w-[420px]',
+            'hidden lg:block lg:w-[400px] xl:w-[480px] 2xl:w-[560px]',
             // Mobile / tablet: only mount when a feature is selected, then float as drawer
             detailOpen &&
               'fixed inset-0 z-30 block w-full lg:static lg:inset-auto lg:z-auto bg-zinc-950',
@@ -123,15 +123,17 @@ function TopBar({
   connected: boolean
 }): ReactElement {
   return (
-    <header className="h-[64px] shrink-0 border-b border-zinc-800 flex items-center px-3 sm:px-5 gap-3 sm:gap-5">
+    <header className="h-[80px] shrink-0 border-b border-zinc-800 flex items-center px-3 sm:px-5 gap-3 sm:gap-5">
       <div className="flex items-center gap-2 shrink-0">
         <img
           src="/mumei-mascot.png"
           alt="mumei"
-          className="w-6 h-6 shrink-0"
+          className="w-12 h-12 shrink-0"
           style={{ imageRendering: 'pixelated' }}
         />
-        <span className="font-mono text-[16px] tracking-tight text-zinc-100">mumei</span>
+        <span className="font-mono text-[26px] font-semibold tracking-tight text-zinc-100">
+          mumei
+        </span>
       </div>
       <div className="hidden sm:flex flex-1 items-center gap-2 max-w-md font-mono text-[17px] min-w-0">
         <span className="text-zinc-500 shrink-0">~/code/</span>
