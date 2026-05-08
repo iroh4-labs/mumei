@@ -74,6 +74,8 @@ mumei/
 ├── scripts/
 │   └── lint-tasks.sh       # X2 (advisory: tasks.md format)
 ├── tests/                  # bats suite (175+ tests, CI on macOS + Ubuntu)
+├── schemas/                # shared JSON Schemas (state / review / cost-log) — NOT shipped in plugin tarball
+├── dashboard/              # @mumei/dashboard — Vite + React 19 + Tailwind v4 + shadcn/ui — NOT shipped in plugin tarball
 └── README.md / README.ja.md / LICENSE / SECURITY.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md / PRIVACY.md
 ```
 

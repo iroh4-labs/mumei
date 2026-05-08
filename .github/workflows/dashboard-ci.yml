@@ -1,0 +1,57 @@
+name: dashboard-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dashboard/**"
+      - "schemas/**"
+      - ".github/workflows/dashboard-ci.yml"
+  pull_request:
+    paths:
+      - "dashboard/**"
+      - "schemas/**"
+      - ".github/workflows/dashboard-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: install
+        working-directory: dashboard
+        run: npm ci --prefer-offline
+
+      - name: typecheck
+        working-directory: dashboard
+        run: npm run typecheck
+
+      - name: generate-types (verify schema sync)
+        working-directory: dashboard
+        run: |
+          npm run generate-types
+          if ! git diff --quiet -- src/types/; then
+            # shellcheck disable=SC2016  # markdown-style code spans in error message
+            echo "::error::generated types differ from committed src/types/. Run 'npm run generate-types' and commit the result." >&2
+            git --no-pager diff -- src/types/
+            exit 1
+          fi
+
+      - name: build
+        working-directory: dashboard
+        run: npm run build
+
+      - name: test
+        working-directory: dashboard
+        run: npm test

@@ -76,6 +76,10 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 - マルチツール対応ではありません。Cursor / Codex / Aider はサポート外。物理的な強制レイヤーは Claude Code Hook に固有です。
 - ストレージシステムではありません。state は plain file。DB なし、MCP server なし。
 
+## 関連ツール
+
+- **[@mumei/dashboard](./dashboard/README.md)** — ローカル実行のリアルタイム browser ダッシュボード。`.mumei/` を watch し、各 feature の phase / Wave 進捗 / review verdict / token cost / Hook 発火 trend を可視化。任意プロジェクトで `npx @mumei/dashboard` で起動。npm 別配布で plugin tarball には同梱されません。
+
 ## ドキュメント
 
 - **[docs/getting-started.ja.md](./docs/getting-started.ja.md)** — 詳細な解説: 二つの vehicle、ワークフロー、spec / tasks フォーマット、前提ツール、プロジェクト構成、Hook ルール、Troubleshooting。
