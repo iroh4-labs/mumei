@@ -78,10 +78,14 @@ function DetailContent({ slug, onClose }: { slug: string; onClose: () => void })
           close
         </Button>
       </header>
-      <div className="border-b border-zinc-800 px-2 py-1.5 overflow-x-auto">
-        <TabsList variant="line" className="bg-transparent">
+      <div className="border-b border-zinc-800 px-2 py-1.5 overflow-x-auto bg-zinc-900/50">
+        <TabsList className="bg-transparent">
           {TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id} className="font-mono text-xs">
+            <TabsTrigger
+              key={t.id}
+              value={t.id}
+              className="font-mono text-xs cursor-pointer border border-transparent data-[state=active]:bg-zinc-800/60 data-[state=active]:text-zinc-100 data-[state=active]:border-zinc-700"
+            >
               {t.label}
             </TabsTrigger>
           ))}
