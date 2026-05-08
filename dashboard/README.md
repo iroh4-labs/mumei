@@ -93,6 +93,11 @@ dashboard/
 | `GET /api/meta`                | Project label (home-relative path)                                                 |
 | `GET /api/meta/stats`          | TopBar counters: active count, month tokens, cache hit rate, hooks/sec, 24h events |
 | `GET /api/features`            | FeatureSummary[] from `.mumei/specs/` + `.mumei/plans/`                            |
+| `GET /api/trends/tokens`       | Daily token totals, `?days=N` window (default 14)                                  |
+| `GET /api/trends/reviews`      | Daily verdict counts (PASS/NEEDS_IMPROVEMENT/MAJOR_ISSUES), `?days=N` window       |
+| `GET /api/trends/hooks`        | Top-N hook firings, `?topN=N&windowH=H` (defaults 10/24)                           |
+| `GET /api/feature/:slug/detail`| FeatureDetail (timeline / acs / waveplan / reviews / costPerIter)                  |
+| `GET /api/activity`            | Activity events (commit/review/phase/hook), `?limit=N` (default 50)                |
 | `GET /api/feature/:slug/:doc`  | Read-only Markdown: requirements / design / tasks                                  |
 | `GET /api/cost?feature=<slug>` | Aggregate cost-log via `scripts/aggregate-cost.sh --json`                          |
 | `GET /api/hook-stats`          | Aggregate hook stats via `scripts/aggregate-hook-stats.sh --json`                  |

@@ -8,8 +8,13 @@ import { Type } from '@sinclair/typebox'
 import { watch } from 'chokidar'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 
+import { buildActivity } from './activity.ts'
+import { buildFeatureDetail } from './detail.ts'
 import { listFeatures } from './features.ts'
 import { buildMeta, buildMetaStats } from './meta.ts'
+import { trendHooks, trendReviews, trendTokens } from './trends.ts'
+
+const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT ?? path.resolve(import.meta.dirname, '../..')
 
 const exec = promisify(execFile)
 
@@ -98,6 +103,65 @@ app.get('/api/meta', async () => {
 
 app.get('/api/meta/stats', async () => {
   return buildMetaStats({ projectRoot: PROJECT_ROOT })
+})
+
+// ---------------------------------------------------------------------------
+// REST: /api/trends/{tokens,reviews,hooks}
+// ---------------------------------------------------------------------------
+const TrendDaysQuery = Type.Object({
+  days: Type.Optional(Type.Integer({ minimum: 1, maximum: 90 })),
+})
+const TrendHooksQuery = Type.Object({
+  topN: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+  windowH: Type.Optional(Type.Integer({ minimum: 1, maximum: 168 })),
+})
+
+app.get('/api/trends/tokens', { schema: { querystring: TrendDaysQuery } }, async (req) => {
+  const { days } = req.query as { days?: number }
+  return trendTokens({ projectRoot: PROJECT_ROOT, days: days ?? 14 })
+})
+
+app.get('/api/trends/reviews', { schema: { querystring: TrendDaysQuery } }, async (req) => {
+  const { days } = req.query as { days?: number }
+  return trendReviews({ projectRoot: PROJECT_ROOT, days: days ?? 14 })
+})
+
+app.get('/api/trends/hooks', { schema: { querystring: TrendHooksQuery } }, async (req) => {
+  const { topN, windowH } = req.query as { topN?: number; windowH?: number }
+  return trendHooks({
+    projectRoot: PROJECT_ROOT,
+    topN: topN ?? 10,
+    windowH: windowH ?? 24,
+  })
+})
+
+// ---------------------------------------------------------------------------
+// REST: /api/feature/:slug/detail — DetailPanel payload
+// ---------------------------------------------------------------------------
+app.get('/api/feature/:slug/detail', { schema: { params: SlugParam } }, async (req, reply) => {
+  const { slug } = req.params as { slug: string }
+  const detail = await buildFeatureDetail({
+    projectRoot: PROJECT_ROOT,
+    pluginRoot: PLUGIN_ROOT,
+    featureKey: slug,
+  })
+  if (!detail) {
+    reply.code(404)
+    return { error: 'feature not found' }
+  }
+  return detail
+})
+
+// ---------------------------------------------------------------------------
+// REST: /api/activity?limit=N — ActivityFeed payload
+// ---------------------------------------------------------------------------
+const ActivityQuery = Type.Object({
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+})
+
+app.get('/api/activity', { schema: { querystring: ActivityQuery } }, async (req) => {
+  const { limit } = req.query as { limit?: number }
+  return buildActivity({ projectRoot: PROJECT_ROOT, limit: limit ?? 50 })
 })
 
 // ---------------------------------------------------------------------------
