@@ -1,75 +1,120 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import type { ServerEvent } from '@/types/api'
+import type { MumeiActivityEvent } from '@/types/activity-event'
+import type { MumeiDashboardSSEEvent } from '@/types/sse-event'
+
+const DISCONNECT_THRESHOLD = 5
 
 /**
- * Subscribe to the Fastify SSE feed at `path`. On feature.* events,
- * invalidate the `features` query so TanStack Query refetches; also
- * track which features pulsed in the last 1.5s for visual highlight.
+ * Subscribe to /api/events. Routes feature.update / cost.updated /
+ * activity.added events into TanStack Query cache invalidation +
+ * ActivityFeed prepend.
  *
  * Returns:
- *   - connected: true while the SSE socket is open
- *   - pulses: Set of feature compound-keys that pulsed in the last 1.5s
+ *   - connected: SSE socket is open
+ *   - disconnected: 5+ consecutive errors AND no recent open event,
+ *     used to surface the "Live updates disconnected" banner (REQ-15.22).
+ *     Auto-cleared the next time `open` fires.
+ *   - pulses: Set of feature slugs that pulsed in the last 1.5s for the
+ *     visual highlight on cards.
  */
-export function useEventStream(path: string): {
+export function useEventStream(path = '/api/events'): {
   connected: boolean
+  disconnected: boolean
   pulses: Set<string>
 } {
   const [connected, setConnected] = useState(false)
+  const [disconnected, setDisconnected] = useState(false)
   const [pulses, setPulses] = useState<Set<string>>(new Set())
   const qc = useQueryClient()
-  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const errorCount = useRef(0)
+  const pulseTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
     const es = new EventSource(path)
 
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false)
+    es.onopen = (): void => {
+      errorCount.current = 0
+      setConnected(true)
+      setDisconnected(false)
+    }
 
-    es.onmessage = (msg) => {
-      let evt: ServerEvent
-      try {
-        evt = JSON.parse(msg.data) as ServerEvent
-      } catch {
-        return
-      }
-
-      if (evt.kind === 'heartbeat') return
-
-      if (
-        evt.kind === 'feature.update' ||
-        evt.kind === 'feature.created' ||
-        evt.kind === 'feature.archived' ||
-        evt.kind === 'review.added'
-      ) {
-        // Refetch the feature list.
-        void qc.invalidateQueries({ queryKey: ['features'] })
-
-        // Highlight the affected card for 1.5s.
-        const key = evt.feature
-        setPulses((prev) => new Set(prev).add(key))
-        const existing = timeoutsRef.current.get(key)
-        if (existing) clearTimeout(existing)
-        const t = setTimeout(() => {
-          setPulses((prev) => {
-            const next = new Set(prev)
-            next.delete(key)
-            return next
-          })
-          timeoutsRef.current.delete(key)
-        }, 1500)
-        timeoutsRef.current.set(key, t)
+    es.onerror = (): void => {
+      setConnected(false)
+      errorCount.current += 1
+      if (errorCount.current >= DISCONNECT_THRESHOLD) {
+        setDisconnected(true)
       }
     }
 
-    return () => {
+    es.onmessage = (msg): void => {
+      let evt: MumeiDashboardSSEEvent
+      try {
+        evt = JSON.parse(msg.data) as MumeiDashboardSSEEvent
+      } catch {
+        return
+      }
+      handleEvent(evt, qc, setPulses, pulseTimeouts.current)
+    }
+
+    return (): void => {
       es.close()
-      const timeouts = timeoutsRef.current
+      const timeouts = pulseTimeouts.current
       for (const t of timeouts.values()) clearTimeout(t)
       timeouts.clear()
       setConnected(false)
     }
   }, [path, qc])
 
-  return { connected, pulses }
+  return { connected, disconnected, pulses }
+}
+
+function handleEvent(
+  evt: MumeiDashboardSSEEvent,
+  qc: ReturnType<typeof useQueryClient>,
+  setPulses: (updater: (prev: Set<string>) => Set<string>) => void,
+  timeouts: Map<string, ReturnType<typeof setTimeout>>,
+): void {
+  switch (evt.type) {
+    case 'feature.update': {
+      void qc.invalidateQueries({ queryKey: ['features'] })
+      void qc.invalidateQueries({ queryKey: ['feature', evt.slug, 'detail'] })
+      pulseFor(evt.slug, setPulses, timeouts)
+      return
+    }
+    case 'cost.updated': {
+      void qc.invalidateQueries({ queryKey: ['meta', 'stats'] })
+      void qc.invalidateQueries({ queryKey: ['features'] })
+      if (evt.slug) {
+        void qc.invalidateQueries({ queryKey: ['feature', evt.slug, 'detail'] })
+      }
+      return
+    }
+    case 'activity.added': {
+      void qc.setQueryData<MumeiActivityEvent[]>(['activity', 50], (prev) => {
+        if (!prev) return [evt.event]
+        return [evt.event, ...prev].slice(0, 200)
+      })
+      return
+    }
+  }
+}
+
+function pulseFor(
+  slug: string,
+  setPulses: (updater: (prev: Set<string>) => Set<string>) => void,
+  timeouts: Map<string, ReturnType<typeof setTimeout>>,
+): void {
+  setPulses((prev) => new Set(prev).add(slug))
+  const existing = timeouts.get(slug)
+  if (existing) clearTimeout(existing)
+  const t = setTimeout(() => {
+    setPulses((prev) => {
+      const next = new Set(prev)
+      next.delete(slug)
+      return next
+    })
+    timeouts.delete(slug)
+  }, 1500)
+  timeouts.set(slug, t)
 }

@@ -5,13 +5,13 @@ import { promisify } from 'node:util'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import { Type } from '@sinclair/typebox'
-import { watch } from 'chokidar'
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
+import Fastify from 'fastify'
 
 import { buildActivity } from './activity.ts'
 import { buildFeatureDetail } from './detail.ts'
 import { listFeatures } from './features.ts'
 import { buildMeta, buildMetaStats } from './meta.ts'
+import { registerSse } from './sse.ts'
 import { trendHooks, trendReviews, trendTokens } from './trends.ts'
 
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT ?? path.resolve(import.meta.dirname, '../..')
@@ -239,91 +239,9 @@ app.setErrorHandler((err, req, reply) => {
 export { DocParam, FeatureQuery, SlugParam }
 
 // ---------------------------------------------------------------------------
-// SSE: /events — push feature.* and heartbeat events to subscribers
+// SSE: /api/events — chokidar fs watch + 200ms debounce per (event, slug)
 // ---------------------------------------------------------------------------
-type SseClient = { id: number; reply: FastifyReply }
-const clients = new Set<SseClient>()
-let nextClientId = 1
-
-app.get('/events', (req: FastifyRequest, reply: FastifyReply) => {
-  reply.raw.setHeader('Content-Type', 'text/event-stream')
-  reply.raw.setHeader('Cache-Control', 'no-cache')
-  reply.raw.setHeader('Connection', 'keep-alive')
-  reply.raw.flushHeaders?.()
-
-  const client: SseClient = { id: nextClientId++, reply }
-  clients.add(client)
-  app.log.info({ clientId: client.id, total: clients.size }, 'sse client connected')
-
-  // Initial heartbeat so EventSource transitions to OPEN immediately.
-  reply.raw.write(
-    `data: ${JSON.stringify({ kind: 'heartbeat', ts: new Date().toISOString() })}\n\n`,
-  )
-
-  req.raw.on('close', () => {
-    clients.delete(client)
-    app.log.info({ clientId: client.id, total: clients.size }, 'sse client disconnected')
-  })
-})
-
-function broadcast(event: object): void {
-  const payload = `data: ${JSON.stringify(event)}\n\n`
-  for (const c of clients) {
-    try {
-      c.reply.raw.write(payload)
-    } catch (err) {
-      app.log.warn({ err, clientId: c.id }, 'sse broadcast failed; dropping client')
-      clients.delete(c)
-    }
-  }
-}
-
-// 25s heartbeat to keep proxies / load balancers from idling the socket.
-setInterval(() => {
-  broadcast({ kind: 'heartbeat', ts: new Date().toISOString() })
-}, 25_000)
-
-// ---------------------------------------------------------------------------
-// Watch .mumei/ — push feature.* events on change
-// ---------------------------------------------------------------------------
-const watcher = watch(MUMEI_DIR, {
-  ignored: (target: string) => target.includes('/.hook-stats.jsonl.rotate.lock'),
-  persistent: true,
-  ignoreInitial: true,
-  awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
-})
-
-watcher.on('all', (event, target) => {
-  // Map filesystem path → feature compound-key.
-  // .mumei/specs/REQ-14-foo/state.json → "REQ-14-foo"
-  // .mumei/plans/fix-bug/state.json    → "fix-bug"
-  const rel = path.relative(MUMEI_DIR, target)
-  const segments = rel.split(path.sep)
-  const subroot = segments[0] // 'specs' | 'plans' | 'archive' | 'scratch' | ...
-  const featureKey = segments[1]
-  if (!featureKey) return
-
-  if (subroot === 'specs' || subroot === 'plans') {
-    if (segments[2] === 'reviews' && /\.json$/.test(target)) {
-      broadcast({
-        kind: 'review.added',
-        feature: featureKey,
-        ts: new Date().toISOString(),
-        verdict: 'NEEDS_IMPROVEMENT', // placeholder; client refetches anyway
-      })
-      return
-    }
-    if (event === 'add' || event === 'addDir') {
-      broadcast({ kind: 'feature.created', feature: featureKey, ts: new Date().toISOString() })
-      return
-    }
-    if (event === 'unlinkDir') {
-      broadcast({ kind: 'feature.archived', feature: featureKey, ts: new Date().toISOString() })
-      return
-    }
-    broadcast({ kind: 'feature.update', feature: featureKey, ts: new Date().toISOString() })
-  }
-})
+const sse = registerSse(app, { projectRoot: PROJECT_ROOT })
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -338,7 +256,7 @@ app.listen({ port: PORT, host: '127.0.0.1' }, (err, addr) => {
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, 'shutting down')
-  await watcher.close()
+  await sse.close()
   await app.close()
   process.exit(0)
 }
