@@ -80,11 +80,11 @@ dashboard/
 
 ## Configuration
 
-| Env var                        | Default                   | Effect                                                                  |
-| ------------------------------ | ------------------------- | ----------------------------------------------------------------------- |
-| `MUMEI_DASHBOARD_PORT`         | `3001`                    | Fastify listen port                                                     |
-| `MUMEI_DASHBOARD_LOG_LEVEL`    | `info`                    | Pino log level                                                          |
-| `MUMEI_DASHBOARD_CORS_ORIGINS` | `http://localhost:5173`   | Comma-separated allowlist of origins permitted for `/api/*` and `/api/events` |
+| Env var                        | Default                 | Effect                                                                        |
+| ------------------------------ | ----------------------- | ----------------------------------------------------------------------------- |
+| `MUMEI_DASHBOARD_PORT`         | `3001`                  | Fastify listen port                                                           |
+| `MUMEI_DASHBOARD_LOG_LEVEL`    | `info`                  | Pino log level                                                                |
+| `MUMEI_DASHBOARD_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowlist of origins permitted for `/api/*` and `/api/events` |
 
 ### REST endpoints
 
