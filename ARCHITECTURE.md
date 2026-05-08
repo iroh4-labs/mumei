@@ -47,6 +47,7 @@ mumei/
 │   │   ├── reviewer-prompt.sh # immutable prefix + variable suffix builder for cache-friendly prompts
 │   │   ├── byte-exact.sh   # CRLF / tab advisory for byte-exact-prone file types (REQ-11.12)
 │   │   ├── hook-stats.sh   # hook decision recorder (.mumei/.hook-stats.jsonl)
+│   │   ├── audit-log.sh    # append-only JSONL helper (.mumei/audit-log/*.jsonl)
 │   │   └── log.sh          # mumei_log_info / warn / error / debug
 │   ├── pre-edit-guard.sh   # P1 / P2 / P3 / I1 / I2 / W1 / M1
 │   ├── pre-bash-guard.sh   # I3 / R2 / W2
