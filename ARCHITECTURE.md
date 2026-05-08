@@ -35,7 +35,7 @@ mumei/
 │   ├── review/             # /mumei:review — plan-vehicle review pipeline
 │   └── archive/            # /mumei:archive — move done features to archive/
 ├── hooks/                  # Hook handlers + shared bash library
-│   ├── hooks.json          # PreToolUse / PostToolUse / Stop registration
+│   ├── hooks.json          # 17-event registration: PreToolUse / PostToolUse / Stop / TaskCreated / TaskCompleted / UserPromptSubmit + PreCompact / PostCompact / SessionStart / SessionEnd / FileChanged / CwdChanged / InstructionsLoaded / UserPromptExpansion / ConfigChange / PostToolUseFailure / SubagentStop
 │   ├── _lib/               # shared bash modules
 │   │   ├── state.sh        # .mumei/specs/<feat>/state.json read/write (atomic)
 │   │   ├── tasks.sh        # tasks.md parser (BSD-awk compatible)
@@ -54,7 +54,21 @@ mumei/
 │   ├── post-edit-guard.sh  # I4 (phantom completion)
 │   ├── post-bash-guard.sh  # X1 (advisory: out-of-scope Bash writes) + X3 (Wave auto-advance on git commit, internal)
 │   ├── stop-guard.sh       # R1 / R3 + detector defense line
-│   └── pre-review-detector.sh  # Stage 0 of /mumei:plan review pipeline
+│   ├── pre-review-detector.sh  # Stage 0 of /mumei:plan review pipeline
+│   ├── userprompt-context-hint.sh  # UserPromptSubmit context hint (REQ-11.4)
+│   ├── post-task-event.sh  # TaskCreated / TaskCompleted handler (plan vehicle)
+│   ├── pre-exitplan-guard.sh  # ExitPlanMode plan-vehicle init (L-P1)
+│   ├── pre-compact-state-dump.sh  # PreCompact: inject .mumei/current state into additionalContext (REQ-13.1)
+│   ├── session-start-status.sh  # SessionStart: surface active feature status (REQ-13.2)
+│   ├── post-compact-validate.sh  # PostCompact: re-validate .mumei/current vs filesystem (REQ-13.3)
+│   ├── file-changed-validate.sh  # FileChanged: lint watched files on external edit (REQ-13.4)
+│   ├── cwd-changed-detect.sh  # CwdChanged: notify when entering mumei project (REQ-13.5)
+│   ├── instructions-loaded-audit.sh  # InstructionsLoaded: audit log of CLAUDE.md/rules loads (REQ-13.6)
+│   ├── userprompt-expansion-context.sh  # UserPromptExpansion: enrich /mumei:archive with feature summary (REQ-13.7)
+│   ├── config-change-audit.sh  # ConfigChange: audit + invalid JSON exit 2 (REQ-13.8)
+│   ├── session-end-audit.sh  # SessionEnd: session metadata audit log (REQ-13.9)
+│   ├── post-tool-failure-audit.sh  # PostToolUseFailure: tool failure audit log (REQ-13.10)
+│   └── subagent-cost-log.sh  # SubagentStop: transcript-based usage extraction (REQ-13.11/12)
 ├── scripts/
 │   └── lint-tasks.sh       # X2 (advisory: tasks.md format)
 ├── tests/                  # bats suite (175+ tests, CI on macOS + Ubuntu)
