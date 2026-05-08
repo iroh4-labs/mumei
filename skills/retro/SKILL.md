@@ -1,0 +1,91 @@
+---
+name: retro
+description: Generate a retrospective markdown for an archived (or about-to-be-archived) mumei feature. Reads requirements / design / tasks / spec-reviews / reviews / cost-log and emits retro.md with AC count, Wave count, review iter counts, fix-spiral detection, token cost, cache hit rate, and hook firing breakdown. Triggered by the user invoking /mumei:retro <feature> after /mumei:archive (or before, if explicitly requested). Read-only with respect to feature content; writes only the retro.md output file.
+allowed-tools: [Read, Bash, Glob, Write]
+disable-model-invocation: true
+argument-hint: <feature>
+---
+
+# Retro — auto-generate a feature retrospective
+
+Produce a single markdown document summarising a finished mumei feature so the team builds institutional knowledge instead of forgetting what happened.
+
+## When to use
+
+- The user invokes `/mumei:retro <feature>` after `/mumei:archive`.
+- The user invokes it on a `phase: done` feature before archival (rare; lets them edit the retro before archive moves the docs).
+
+This skill is `disable-model-invocation: true` — only fires on explicit user request. Never auto-trigger.
+
+## Inputs
+
+The skill resolves the feature directory in this order:
+
+1. `.mumei/archive/*/<feature>/` — archived feature
+2. `.mumei/specs/<feature>/` — spec vehicle, not yet archived
+3. `.mumei/plans/<feature>/` — plan vehicle, not yet archived
+
+Refuse with a clear message if none match.
+
+## Method
+
+```bash
+feature="$1"
+[[ -n "$feature" ]] || { echo "usage: /mumei:retro <feature>" >&2; exit 1; }
+
+# Resolve feature dir.
+feature_dir=""
+for candidate in $(find .mumei/archive -maxdepth 3 -type d -name "$feature" 2>/dev/null) \
+                  ".mumei/specs/${feature}" \
+                  ".mumei/plans/${feature}"; do
+  if [[ -d "$candidate" ]]; then
+    feature_dir="$candidate"
+    break
+  fi
+done
+[[ -n "$feature_dir" ]] || { echo "feature not found: $feature" >&2; exit 1; }
+
+# Delegate the heavy lifting to scripts/generate-retro.sh which knows
+# how to read all the input files and produce the markdown.
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/generate-retro.sh" "$feature_dir"
+```
+
+The generator script writes `retro.md` into `feature_dir`. Tell the user the path, then suggest committing it (when the feature lives under archive) or letting `/mumei:archive` carry it along (when it's still under specs/plans).
+
+## Output structure (what generate-retro.sh writes)
+
+```markdown
+# <feature> retrospective
+
+## Metrics
+
+- AC count: N
+- Wave count: M
+- Total tasks: T (X completed, Y pending)
+- Spec review iters: requirements R / design D / tasks K (cap at 3 each)
+- Phase 5 review iters: I (cap reached: yes/no)
+- Total token cost: <input> in / <output> out / <cache_read> cached / <cache_create> new-cache
+- Cache hit rate: <pct>%
+- Wall-clock: created → done
+
+## Patterns detected
+
+- Incremental-fix spirals (iter N introduced a HIGH not in iter N-1): K instances
+- Hook rule firing top 5: ...
+- Files with most edits: ...
+
+## Lessons (free-form, user-edited)
+
+(empty placeholder for the user to fill)
+
+## Process improvements suggested
+
+- (auto-detected suggestions based on patterns)
+```
+
+## Don'ts
+
+- Don't fail when partial data is missing — emit the section with `(no data)` and move on. A feature aborted mid-Phase 1 still benefits from a retro.
+- Don't auto-commit the retro.md. Let the user edit lessons / suggestions, then commit themselves.
+- Don't re-trigger /mumei:archive from here. retro is read-only with respect to the feature lifecycle.
+- Don't overwrite an existing retro.md without confirmation. If `feature_dir/retro.md` exists, suggest a timestamped sibling instead.
