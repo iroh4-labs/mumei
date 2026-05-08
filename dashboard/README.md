@@ -46,7 +46,13 @@ dashboard/
 │   └── mumei-dashboard.mjs   # `npx mumei-dashboard` entry
 ├── server/                   # Fastify backend
 │   ├── index.ts              # routes + SSE + chokidar watcher
-│   └── features.ts           # /api/features summary builder
+│   ├── features.ts           # /api/features summary builder
+│   ├── meta.ts               # /api/meta + /api/meta/stats (TopBar)
+│   ├── trends.ts             # /api/trends/{tokens,reviews,hooks}
+│   ├── detail.ts             # /api/feature/:slug/detail (DetailPanel)
+│   ├── activity.ts           # /api/activity (ActivityFeed)
+│   ├── sse.ts                # /api/events (SSE multiplex, 200ms debounce)
+│   └── lib/                  # path / aggregator / tasks-bridge / fs-watch
 ├── src/                      # Vite + React 19 frontend
 │   ├── App.tsx               # placeholder layout (replace with Claude Design output)
 │   ├── main.tsx              # TanStack Query provider mount
@@ -54,7 +60,7 @@ dashboard/
 │   │   └── useEventStream.ts # SSE subscription
 │   ├── components/           # shadcn/ui components land here
 │   ├── lib/utils.ts          # cn() classname merger
-│   ├── types/                # generated from ../schemas/
+│   ├── types/                # generated from ../schemas/ (do NOT edit by hand)
 │   └── index.css             # Tailwind v4 + shadcn theme tokens
 ├── components.json           # shadcn/ui config (new-york, zinc base)
 ├── tsconfig*.json            # project references (app + node)

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mumei.dev/schemas/feature-summary.schema.json#v0.1.0",
+  "title": "mumei feature summary",
+  "description": "Per-feature roll-up returned by GET /api/features. Computed by dashboard/server/features.ts from .mumei/specs/<f>/state.json + .mumei/plans/<f>/state.json + cost-log.jsonl + git log + tasks.md. Producer: dashboard backend. Consumer: dashboard frontend (CompactDashboard, DetailPanel header). Backward-compatibility: existing fields MUST NOT be renamed or removed (REQ-15.21); add-only.",
+  "type": "object",
+  "required": [
+    "id",
+    "slug",
+    "vehicle",
+    "phase",
+    "nextPhase",
+    "currentWave",
+    "totalWaves",
+    "waveProgress",
+    "lastVerdict",
+    "lastIter",
+    "tokens",
+    "cacheHit",
+    "lastActivityMin",
+    "pulse",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "REQ-N for spec vehicle, equals slug for plan vehicle.",
+      "pattern": "^(REQ-[0-9]+|[a-z0-9][a-z0-9-]*)$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Kebab-case feature name."
+    },
+    "vehicle": {
+      "type": "string",
+      "enum": ["spec", "plan"]
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["plan", "implement", "review", "done"]
+    },
+    "nextPhase": {
+      "type": ["string", "null"],
+      "enum": ["plan", "implement", "review", "done", null],
+      "description": "Predicted next phase under normal flow; null when done."
+    },
+    "currentWave": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Active Wave for spec vehicle. Null for plan vehicle (no Wave concept)."
+    },
+    "totalWaves": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Spec vehicle: count of '## Wave N:' headers in tasks.md. Plan vehicle: task_created_count."
+    },
+    "waveProgress": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Spec vehicle: completed Waves (committed). Plan vehicle: task_completed_count."
+    },
+    "lastVerdict": {
+      "type": ["string", "null"],
+      "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES", null],
+      "description": "Verdict from the most recent review JSON (Phase 5 / /mumei:review). Null when no review has run yet."
+    },
+    "lastIter": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 3
+    },
+    "tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sum of input_tokens + output_tokens from cost-log.jsonl entries (phase=after) for this feature."
+    },
+    "cacheHit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "cache_read_input_tokens / (input_tokens + cache_read_input_tokens). NaN treated as 0."
+    },
+    "lastActivityMin": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Minutes since the most recent of: state.json mtime, latest commit touching feature paths, latest cost-log entry."
+    },
+    "pulse": {
+      "type": "string",
+      "enum": ["active", "idle", "stalled"],
+      "description": "Derived from lastActivityMin: <60 active, <1440 idle, else stalled."
+    },
+    "findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["high", "medium", "low"],
+      "properties": {
+        "high": { "type": "integer", "minimum": 0 },
+        "medium": { "type": "integer", "minimum": 0 },
+        "low": { "type": "integer", "minimum": 0 }
+      },
+      "description": "Surfaced findings count from latest review JSON."
+    }
+  }
+}

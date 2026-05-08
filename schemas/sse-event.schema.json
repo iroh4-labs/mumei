@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mumei.dev/schemas/sse-event.schema.json#v0.1.0",
+  "title": "mumei dashboard SSE event",
+  "description": "Server-Sent Events emitted by dashboard/server/sse.ts on /api/events. All events are debounced 200ms per (event, slug). state.json updates emit BOTH feature.update and activity.added (REQ-15.15 dual-emit). Producer: backend chokidar -> EventEmitter pipeline. Consumer: dashboard/src/hooks/useEventStream.ts.",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["feature.update", "cost.updated", "activity.added"]
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "slug"],
+      "properties": {
+        "type": { "const": "feature.update" },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Feature slug whose state.json changed; useEventStream invalidates ['features'] and ['feature', slug, 'detail']."
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "cost.updated" },
+        "slug": {
+          "type": ["string", "null"],
+          "description": "Feature slug owning the cost-log, or null when the change was project-wide."
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "event"],
+      "properties": {
+        "type": { "const": "activity.added" },
+        "event": {
+          "description": "Mirrors activity-event.schema.json. Inlined because the dashboard generator does not resolve cross-file $ref.",
+          "type": "object",
+          "required": ["ts", "kind"],
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ts", "kind", "ref", "message"],
+              "properties": {
+                "ts": { "type": "string", "format": "date-time" },
+                "kind": { "const": "commit" },
+                "slug": { "type": ["string", "null"] },
+                "ref": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+                "message": { "type": "string" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ts", "kind", "slug", "verdict", "iter"],
+              "properties": {
+                "ts": { "type": "string", "format": "date-time" },
+                "kind": { "const": "review" },
+                "slug": { "type": "string" },
+                "verdict": { "type": "string", "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES"] },
+                "iter": { "type": "integer", "minimum": 1, "maximum": 3 }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ts", "kind", "slug", "from", "to"],
+              "properties": {
+                "ts": { "type": "string", "format": "date-time" },
+                "kind": { "const": "phase" },
+                "slug": { "type": "string" },
+                "from": { "type": "string", "enum": ["plan", "implement", "review", "done"] },
+                "to": { "type": "string", "enum": ["plan", "implement", "review", "done"] }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ts", "kind", "rule_id", "decision"],
+              "properties": {
+                "ts": { "type": "string", "format": "date-time" },
+                "kind": { "const": "hook" },
+                "rule_id": { "type": "string" },
+                "decision": { "type": "string", "enum": ["allow", "deny", "warn", "block", "noop"] }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

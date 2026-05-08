@@ -15,12 +15,18 @@ producer and consumer.
 
 ## Files
 
-| Schema                   | Producer                                         | Consumer                                               |
-| ------------------------ | ------------------------------------------------ | ------------------------------------------------------ |
-| `state.schema.json`      | `hooks/_lib/state.sh`                            | dashboard, `/mumei:retro`                              |
-| `review.schema.json`     | `hooks/_lib/review.sh`, `pre-review-detector.sh` | dashboard, `/mumei:retro`                              |
-| `cost-log.schema.json`   | `hooks/_lib/cost-log.sh`, `subagent-cost-log.sh` | dashboard, `/mumei:retro`, `scripts/aggregate-cost.sh` |
-| `tasks-meta.schema.json` | `skills/plan/SKILL.md` (template)                | `hooks/_lib/tasks.sh`, dashboard                       |
+| Schema                          | Producer                                         | Consumer                                               |
+| ------------------------------- | ------------------------------------------------ | ------------------------------------------------------ |
+| `state.schema.json`             | `hooks/_lib/state.sh`                            | dashboard, `/mumei:retro`                              |
+| `review.schema.json`            | `hooks/_lib/review.sh`, `pre-review-detector.sh` | dashboard, `/mumei:retro`                              |
+| `cost-log.schema.json`          | `hooks/_lib/cost-log.sh`, `subagent-cost-log.sh` | dashboard, `/mumei:retro`, `scripts/aggregate-cost.sh` |
+| `tasks-meta.schema.json`        | `skills/plan/SKILL.md` (template)                | `hooks/_lib/tasks.sh`, dashboard                       |
+| `feature-summary.schema.json`   | `dashboard/server/features.ts`                   | dashboard frontend (CompactDashboard)                  |
+| `meta.schema.json`              | `dashboard/server/meta.ts`                       | dashboard frontend (TopBar)                            |
+| `trends.schema.json`            | `dashboard/server/trends.ts`                     | dashboard frontend (TrendBar)                          |
+| `feature-detail.schema.json`    | `dashboard/server/detail.ts`                     | dashboard frontend (DetailPanel)                       |
+| `activity-event.schema.json`    | `dashboard/server/activity.ts`                   | dashboard frontend (ActivityFeed)                      |
+| `sse-event.schema.json`         | `dashboard/server/sse.ts`                        | dashboard frontend (`useEventStream.ts`)               |
 
 ## How the two sides consume them
 

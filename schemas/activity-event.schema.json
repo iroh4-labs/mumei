@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mumei.dev/schemas/activity-event.schema.json#v0.1.0",
+  "title": "mumei activity event",
+  "description": "Discriminated union of activity entries returned by GET /api/activity?limit=50 and prepended into ActivityFeed via SSE 'activity.added'. Producer: dashboard/server/activity.ts (merging git log + reviews/*.json + state.json mtime + .hook-stats.jsonl, active + archive). Consumer: dashboard/src/components/ActivityFeed.tsx.",
+  "type": "object",
+  "required": ["ts", "kind"],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "kind": {
+      "type": "string",
+      "enum": ["commit", "review", "phase", "hook"]
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "kind", "ref", "message"],
+      "properties": {
+        "ts": { "type": "string", "format": "date-time" },
+        "kind": { "const": "commit" },
+        "slug": { "type": ["string", "null"] },
+        "ref": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$",
+          "description": "git short or full SHA."
+        },
+        "message": { "type": "string", "description": "First line of commit message." }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "kind", "slug", "verdict", "iter"],
+      "properties": {
+        "ts": { "type": "string", "format": "date-time" },
+        "kind": { "const": "review" },
+        "slug": { "type": "string" },
+        "verdict": {
+          "type": "string",
+          "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES"]
+        },
+        "iter": { "type": "integer", "minimum": 1, "maximum": 3 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "kind", "slug", "from", "to"],
+      "properties": {
+        "ts": { "type": "string", "format": "date-time" },
+        "kind": { "const": "phase" },
+        "slug": { "type": "string" },
+        "from": { "type": "string", "enum": ["plan", "implement", "review", "done"] },
+        "to": { "type": "string", "enum": ["plan", "implement", "review", "done"] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "kind", "rule_id", "decision"],
+      "properties": {
+        "ts": { "type": "string", "format": "date-time" },
+        "kind": { "const": "hook" },
+        "rule_id": { "type": "string" },
+        "decision": {
+          "type": "string",
+          "enum": ["allow", "deny", "warn", "block", "noop"]
+        }
+      }
+    }
+  ]
+}
