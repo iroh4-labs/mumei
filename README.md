@@ -40,32 +40,12 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 
 ## Workflow
 
-```mermaid
-flowchart TD
-  B["/mumei:brainstorm<br/>(optional) Q&A to clarify the feature"] -.-> P
-  P["/mumei:plan"] --> V{"spec or plan?"}
-
-  V -->|"spec — larger feature"| S["draft requirements → design → tasks<br/>AI reviewers auto-check up to 3×"]
-  S --> A{"you approve once"}
-  A -->|OK| I["implement Wave by Wave<br/>(1 Wave = 1 commit, Hook-gated)"]
-  I --> R["final review<br/>(security scan + AI reviewers)"]
-
-  V -->|"plan — small fix"| PM["enter plan mode<br/>(Shift+Tab × 2)"]
-  PM --> TL["TaskCreate manages tasks<br/>all done → review pending"]
-  TL --> RV["/mumei:review<br/>(same final review)"]
-
-  R -->|OK| D["done → /mumei:archive"]
-  RV -->|OK| D
-  R -->|issues found| I
-  RV -->|issues found| TL
-
-  classDef gate fill:#fff3cd,stroke:#856404
-  classDef done fill:#d4edda,stroke:#155724
-  classDef pick fill:#e7e0ff,stroke:#4b3f8a
-  class A gate
-  class D done
-  class V pick
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/flow_en_dark.svg">
+    <img src="./assets/flow_en.svg" alt="mumei workflow" width="720" />
+  </picture>
+</div>
 
 ## Features
 

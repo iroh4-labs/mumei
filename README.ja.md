@@ -40,32 +40,12 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 
 ## ワークフロー
 
-```mermaid
-flowchart TD
-  B["/mumei:brainstorm<br/>(任意) Q&A で要件を整理"] -.-> P
-  P["/mumei:plan"] --> V{"spec or plan?"}
-
-  V -->|"spec — 大きめの feature"| S["要件 → 設計 → タスク を起草<br/>AI reviewer が最大 3 回チェック"]
-  S --> A{"あなたが 1 度だけ承認"}
-  A -->|OK| I["Wave 単位で実装<br/>(1 Wave = 1 commit、Hook で gate)"]
-  I --> R["最終レビュー<br/>(セキュリティスキャン + AI レビュー)"]
-
-  V -->|"plan — 小さい修正"| PM["plan mode に入る<br/>(Shift+Tab × 2)"]
-  PM --> TL["TaskCreate でタスク管理<br/>全完了で review 待ち"]
-  TL --> RV["/mumei:review<br/>(同じ最終レビュー)"]
-
-  R -->|OK| D["完了 → /mumei:archive"]
-  RV -->|OK| D
-  R -->|問題あり| I
-  RV -->|問題あり| TL
-
-  classDef gate fill:#fff3cd,stroke:#856404
-  classDef done fill:#d4edda,stroke:#155724
-  classDef pick fill:#e7e0ff,stroke:#4b3f8a
-  class A gate
-  class D done
-  class V pick
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/flow_ja_dark.svg">
+    <img src="./assets/flow_ja.svg" alt="mumei ワークフロー" width="720" />
+  </picture>
+</div>
 
 ## Features
 
