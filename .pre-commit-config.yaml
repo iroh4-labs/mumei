@@ -4,6 +4,19 @@
 # Update with `pre-commit autoupdate`.
 
 repos:
+  # Prep stage — chmod +x newly-authored shebang files and shfmt -w
+  # them BEFORE the validators below run. Eliminates the manual
+  # `shfmt -w` and `chmod +x` round-trip that used to be needed on
+  # the first commit of a new shell file.
+  - repo: local
+    hooks:
+      - id: prep-bash-shebang
+        name: prep-bash-shebang (chmod +x + shfmt -w on staged shell files)
+        entry: bash scripts/prep-bash-shebang.sh
+        language: system
+        types: [shell]
+        require_serial: true
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

@@ -14,49 +14,10 @@ setup() {
   source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/log-rotate.sh"
 }
 
-# Build a JSONL file of N lines under .mumei/audit-log/test.jsonl.
-# Each line is a small valid JSON object with a sequence number so we
-# can verify which records survived a truncate.
-_make_jsonl() {
-  local count="$1"
-  local target="${2:-.mumei/audit-log/test.jsonl}"
-  mkdir -p "$(dirname "$target")"
-  : >"$target"
-  local i
-  for ((i = 1; i <= count; i++)); do
-    printf '{"seq":%d}\n' "$i" >>"$target"
-  done
-}
-
-# Pad a JSONL file to roughly N MB by appending bulky filler records
-# (one per line). Used to push files past size thresholds quickly —
-# emits a 100-record block per inner loop and runs entirely in awk
-# instead of a bash printf loop, which keeps the test runtime under a
-# second even for double-digit MB targets.
-_pad_jsonl_to_mb() {
-  local target="$1" target_mb="$2"
-  mkdir -p "$(dirname "$target")"
-  local cur
-  cur="$(wc -c <"$target" 2>/dev/null | tr -d ' ')"
-  cur="${cur:-0}"
-  local target_bytes=$((target_mb * 1024 * 1024))
-  ((cur >= target_bytes)) && return 0
-  local need=$((target_bytes - cur))
-  awk -v need="$need" '
-    BEGIN {
-      filler = ""
-      for (i = 0; i < 400; i++) filler = filler "X"
-      written = 0
-      seq = 0
-      while (written < need) {
-        seq++
-        line = sprintf("{\"pad\":%d,\"x\":\"%s\"}", seq, filler)
-        print line
-        written += length(line) + 1
-      }
-    }
-  ' >>"$target"
-}
+# `_make_jsonl` and `_pad_jsonl_to_mb` are provided by tests/test_helper.bash
+# (loaded above). Both are awk-based and complete in well under a second
+# even for double-digit MB targets — earlier bash-printf-loop variants
+# routinely deadlocked the bats runner.
 
 @test "kuroko gate: returns 0 silently when .mumei/ is absent" {
   rm -rf .mumei

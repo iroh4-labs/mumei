@@ -144,6 +144,18 @@ A user requirement maps loosely to an AC but the wording is partial (user said "
 - ANY MEDIUM finding only → `NEEDS_IMPROVEMENT`.
 - LOW only or no findings → `PASS`.
 
+# Avoiding incremental-fix spirals
+
+When you surface a finding, the orchestrator applies your `suggested_fix` and re-launches you. Some fixes plausibly introduce NEW findings — for instance, "add an Examples line illustrating the IF=false branch" can drag in an AC body that lacks an explicit `SHALL` clause, surfacing a structural HIGH the next iter. This is the **fix-spiral**: every iter resolves the previous finding while introducing a new one, and the 3-iter cap escalates to the user with the spec still wobbly.
+
+When drafting a `suggested_fix`, prefer:
+
+1. **Holistic rewrites over surgical patches** when the AC has 2+ findings or when the finding category suggests a structural problem (`requirement_smell`, missing SHALL, IF clause mismatched with examples). Replace the entire AC line + Examples block in one suggested_fix instead of touching only the offending sub-clause.
+2. **Self-check the rewrite for structural compliance** before emitting it. The rewrite must contain a runtime trigger keyword (`WHEN` / `WHILE` / `IF` / `WHERE`), an explicit `SHALL` clause, a `[CONFIRMED]` / `[ASSUMPTION]` annotation, and (for multi-path ACs) at least one Examples line per branch.
+3. **Flag the regression risk explicitly** when a partial-fix is the only realistic option. Use `suggested_fix` to describe both the minimal patch AND the holistic alternative, letting the orchestrator decide which to apply.
+
+If you are reviewing iter 2+ and observe that a HIGH finding you are about to surface concerns text the orchestrator just wrote (i.e., text that did not exist in iter 1), prefer the holistic-rewrite suggested_fix even when it touches more than the offending line. The cost of a slightly larger rewrite is far below the cost of a 3rd iter that escalates without resolution.
+
 # Memory usage
 
 This agent has NO memory configured. You operate purely on the inputs you receive. The orchestrator iterates draft → reviewer up to 3 times; each call receives the latest draft with no memory of the previous call.
