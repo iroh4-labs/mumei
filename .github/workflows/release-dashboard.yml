@@ -1,13 +1,14 @@
 name: release-dashboard
 
-# npm publish for @mumei/dashboard. Triggered by pushing a
+# npm publish for mumei-dashboard. Triggered by pushing a
 # `dashboard-vX.Y.Z` tag. Build + test + provenance + publish in one
 # pass. The mumei plugin tarball workflow (release.yml) is independent.
 #
 # Setup prerequisites (one-time, repo Settings → Secrets and variables):
-#   NPM_TOKEN — npm automation token with publish rights to @mumei/*
-#               organisation. Generate via npm UI: Tokens → Granular
-#               token scoped to publish on `@mumei/dashboard`.
+#   NPM_TOKEN — npm automation token with publish rights to the
+#               unscoped `mumei-dashboard` package. Generate via npm
+#               UI: Tokens → Granular token scoped to publish on
+#               `mumei-dashboard`.
 #
 # Required: a `release` Environment with `required_reviewers` (matches
 # the plugin release flow). Approval gates the publish step.

@@ -78,7 +78,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 
 ## Companion tools
 
-- **[@mumei/dashboard](./dashboard/README.md)** — local realtime browser dashboard. Watches `.mumei/` and renders feature phases, Wave progress, review verdicts, token cost, and hook firing trends. Runs via `npx @mumei/dashboard` from any project. Distributed separately as an npm package; not bundled in the plugin tarball.
+- **[mumei-dashboard](./dashboard/README.md)** — local realtime browser dashboard. Watches `.mumei/` and renders feature phases, Wave progress, review verdicts, token cost, and hook firing trends. Runs via `npx mumei-dashboard` from any project. Distributed separately as an npm package; not bundled in the plugin tarball.
 
 ## Documentation
 

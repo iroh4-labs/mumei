@@ -13,7 +13,7 @@ import { listFeatures } from './features.ts'
 const exec = promisify(execFile)
 
 // CWD when started: the user's project root. We read .mumei/ relative
-// to it. The `cwd` arg lets `npx @mumei/dashboard` work from any path.
+// to it. The `cwd` arg lets `npx mumei-dashboard` work from any path.
 const PROJECT_ROOT = process.cwd()
 const MUMEI_DIR = path.join(PROJECT_ROOT, '.mumei')
 const PORT = Number(process.env.MUMEI_DASHBOARD_PORT ?? '3001')

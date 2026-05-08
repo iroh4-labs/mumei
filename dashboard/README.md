@@ -1,4 +1,4 @@
-# @mumei/dashboard
+# mumei-dashboard
 
 Local realtime dashboard for [mumei](../README.md). Watches `.mumei/` in
 your project and renders a browser UI showing feature phases, Wave
@@ -8,7 +8,7 @@ progress, review verdicts, token cost, and hook firing trends.
 
 ```bash
 # In any project that has used mumei:
-npx @mumei/dashboard
+npx mumei-dashboard
 ```
 
 The dashboard binds to `http://127.0.0.1:3001` for the API and watches
@@ -43,7 +43,7 @@ npm run dev              # spawns Fastify (server) + Vite (frontend)
 ```text
 dashboard/
 ├── bin/
-│   └── mumei-dashboard.mjs   # `npx @mumei/dashboard` entry
+│   └── mumei-dashboard.mjs   # `npx mumei-dashboard` entry
 ├── server/                   # Fastify backend
 │   ├── index.ts              # routes + SSE + chokidar watcher
 │   └── features.ts           # /api/features summary builder
@@ -83,5 +83,5 @@ dashboard/
 
 The dashboard ships as an npm package distinct from the mumei plugin
 tarball. The mumei plugin itself does not bundle the dashboard;
-running `npx @mumei/dashboard` is the supported entry point. See
+running `npx mumei-dashboard` is the supported entry point. See
 `schemas/README.md` for the shared-schema contract.
