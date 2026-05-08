@@ -287,7 +287,7 @@ As a <role>, I want <feature>, so that <benefit>.
 - REQ-N.2 [CONFIRMED] WHILE <state>, the system SHALL <response>.
   Examples:
   - <happy path example>
-    ...
+  - <edge or negative path example, optional>
 
 ## Out of Scope
 
@@ -322,6 +322,16 @@ For each AC, emit an inline `Examples:` block of zero, one, or two natural-langu
 
 This applies whether the user came via `/mumei:brainstorm` (scratch attached, ACs imported with their existing Examples) or invoked `/mumei:plan` directly (ACs drafted here for the first time). Both paths produce the same AC + Examples shape.
 
+#### Scratch → Phase 1.2 Examples handoff rule
+
+When a scratch is attached and an AC is imported from it, follow this deterministic rule for the AC's `Examples:` block:
+
+- If the scratch AC carries a non-empty `Examples:` block, **preserve it exactly** as drafted in brainstorm; do not re-draft.
+- If the scratch AC carries an empty `Examples:` block (header present, zero items), **preserve the empty block as-is**. The user explicitly chose to leave it blank in brainstorm; honour that choice. The downstream `requirements-reviewer` will surface findings if the AC is high-risk.
+- If the scratch AC has no `Examples:` line at all (line missing entirely), **draft 0–2 Examples now** under the same rules as a direct-path AC.
+
+This rule prevents silent overwrites of user-authored Examples and keeps the upstream/downstream contract observable.
+
 ### Phase 1.3 — requirements-reviewer (auto-iter, max 3)
 
 Launch the reviewer:
@@ -341,10 +351,22 @@ echo "$reviewer_output" > ".mumei/specs/${feature}/spec-reviews/${ts}-requiremen
 Branch on `verdict`:
 
 - **`PASS`** → proceed to Phase 2.
-- **REQ-7.6 — LOW-only PASS short-circuit (iter >= 2)**: when `verdict == "NEEDS_IMPROVEMENT"` AND `current_iter >= 2` AND all surfaced findings have `severity == "LOW"`, treat as `PASS`, do NOT launch iter 3, and proceed to Phase 2.
+- **REQ-12.9 — `MUMEI_BYPASS=1` demotion of `examples_coverage` / `requirement_smell`**: when `${MUMEI_BYPASS:-0}` is `"1"`, `examples_coverage` and `requirement_smell` findings of any severity are demoted to informational only — they do NOT contribute to the blocking severity tally. Apply this demotion BEFORE the REQ-7.6 LOW-only check below so other categories (coverage_gap / hallucination / structural / vague / out_of_scope / style) still gate normally.
 
   ```bash
   verdict="$(jq -r '.verdict' <<<"$reviewer_output")"
+  if [[ "${MUMEI_BYPASS:-0}" == "1" ]]; then
+    blocking="$(jq -r '[.findings[] | select(.category != "examples_coverage" and .category != "requirement_smell" and .severity != "LOW")] | length' <<<"$reviewer_output")"
+    if [[ "$blocking" == "0" ]]; then
+      echo "MUMEI_BYPASS=1: examples_coverage / requirement_smell demoted to informational → PASS (REQ-12.9)"
+      verdict="PASS"
+    fi
+  fi
+  ```
+
+- **REQ-7.6 — LOW-only PASS short-circuit (iter >= 2)**: when `verdict == "NEEDS_IMPROVEMENT"` AND `current_iter >= 2` AND all surfaced findings have `severity == "LOW"`, treat as `PASS`, do NOT launch iter 3, and proceed to Phase 2.
+
+  ```bash
   if [[ "$verdict" == "NEEDS_IMPROVEMENT" && "$current_iter" -ge 2 ]]; then
     high_med="$(jq -r '[.findings[] | select(.severity != "LOW")] | length' <<<"$reviewer_output")"
     if [[ "$high_med" == "0" ]]; then
@@ -354,7 +376,7 @@ Branch on `verdict`:
   fi
   ```
 
-- **`NEEDS_IMPROVEMENT`** or **`MAJOR_ISSUES`** (after the LOW-only check above) → apply each finding's `suggested_fix` to `requirements.md` (edit the spec — DO NOT ask the user). Then re-launch the reviewer. Up to **3 iterations total**.
+- **`NEEDS_IMPROVEMENT`** or **`MAJOR_ISSUES`** (after the bypass demotion + LOW-only check above) → apply each finding's `suggested_fix` to `requirements.md` (edit the spec — DO NOT ask the user). Then re-launch the reviewer. Up to **3 iterations total**.
 - After 3 iterations still not `PASS`: **escalate to user**. Show the remaining findings, and ask one of:
   - "Apply these specific fixes I propose: ..." (Claude proposes concrete edits, user accepts/edits/rejects).
   - "Override and proceed" (requires `MUMEI_BYPASS=1` per the don'ts below, or explicit user "proceed anyway" decision).
