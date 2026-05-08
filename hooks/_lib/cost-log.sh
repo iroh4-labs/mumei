@@ -12,6 +12,11 @@
 # block (input_tokens / output_tokens / cache_read_input_tokens /
 # cache_creation_input_tokens). Pass `{}` if usage cannot be observed.
 # Aggregation is provided by scripts/aggregate-cost.sh.
+#
+# Per-feature cost-log.jsonl is intentionally NOT a target of
+# log-rotate.sh (REQ-14.12): the file moves with the feature into
+# .mumei/archive/ via /mumei:archive, so its lifecycle is bounded by
+# the feature itself rather than by long-lived disk pressure.
 
 set -u
 

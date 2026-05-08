@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Append-only JSONL size-based truncate helper for mumei (REQ-14.4 — REQ-14.12).
+#
+# Caller pattern:
+#
+#   source "$(dirname "${BASH_SOURCE[0]}")/log-rotate.sh"
+#   mumei_log_rotate_check_and_truncate "$target_path"
+#   printf '%s\n' "$json_line" >>"$target_path"
+#
+# When the target's current size exceeds MUMEI_LOG_MAX_MB (default 10),
+# the helper retains the last MUMEI_LOG_MAX_LINES (fixed 5000) lines
+# and atomically replaces the file so concurrent appenders never see a
+# half-written state. MUMEI_BYPASS=1 silently skips the check; the
+# kuroko stance keeps mumei out of unrelated projects.
+#
+# `cost-log.jsonl` (per-feature, archived with the feature) is NOT a
+# target of this helper — see REQ-14.12.
+
+set -u
+
+if ! declare -F mumei_log_info >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
+fi
+
+# Portable file-size lookup. macOS / BSD use `stat -f %z`; GNU coreutils
+# use `stat -c %s`. Echo the byte count or "0" when the file is missing.
+_mumei_log_rotate_filesize() {
+  local target="$1"
+  [[ -f "$target" ]] || {
+    printf '0'
+    return 0
+  }
+  if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == *BSD* ]]; then
+    stat -f %z "$target" 2>/dev/null || printf '0'
+  else
+    stat -c %s "$target" 2>/dev/null || printf '0'
+  fi
+}
+
+# Check the target's current size; truncate to the latest 5000 lines
+# when it exceeds MUMEI_LOG_MAX_MB (default 10 MB). Returns 0 in every
+# observable path — failures are logged but never propagated, so the
+# caller's append path stays uninterrupted.
+mumei_log_rotate_check_and_truncate() {
+  local target="$1"
+
+  # REQ-14.7: MUMEI_BYPASS=1 silently skips.
+  [[ "${MUMEI_BYPASS:-0}" == "1" ]] && return 0
+  # REQ-14.9: kuroko stance — no-op when the project has not opted in.
+  [[ -d .mumei ]] || return 0
+  # No file yet → nothing to rotate.
+  [[ -f "$target" ]] || return 0
+
+  local max_mb="${MUMEI_LOG_MAX_MB:-10}"
+  # Reject non-numeric overrides; fall back to the default.
+  if ! [[ "$max_mb" =~ ^[0-9]+$ ]]; then
+    max_mb=10
+  fi
+  local max_bytes=$((max_mb * 1024 * 1024))
+  local max_lines=5000
+
+  local size
+  size="$(_mumei_log_rotate_filesize "$target")"
+  [[ "$size" =~ ^[0-9]+$ ]] || return 0
+  ((size <= max_bytes)) && return 0
+
+  local size_before_mb
+  size_before_mb="$(awk -v b="$size" 'BEGIN { printf "%.1f", b / 1048576 }')"
+
+  # Atomic rename: write the tail to a sibling tmp file, then mv. Any
+  # concurrent append lands either on the original (pre-mv) inode or on
+  # the new file (post-mv); both paths are valid JSONL.
+  local tmp
+  tmp="$(mktemp "${target}.XXXXXX" 2>/dev/null)" || return 0
+
+  if ! tail -n "$max_lines" "$target" >"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    return 0
+  fi
+
+  if ! mv "$tmp" "$target" 2>/dev/null; then
+    rm -f "$tmp"
+    return 0
+  fi
+
+  local size_after
+  size_after="$(_mumei_log_rotate_filesize "$target")"
+  local size_after_mb
+  size_after_mb="$(awk -v b="$size_after" 'BEGIN { printf "%.1f", b / 1048576 }')"
+
+  local kept_lines
+  kept_lines="$(wc -l <"$target" 2>/dev/null | tr -d ' ')"
+  [[ -z "$kept_lines" ]] && kept_lines="$max_lines"
+
+  # REQ-14.5: informational stderr emit. mumei_log_info already routes
+  # to stderr with the [mumei] prefix.
+  mumei_log_info "auto-cleanup ${target} (size ${size_before_mb}MB → ${size_after_mb}MB, kept ${kept_lines} latest entries)"
+  return 0
+}

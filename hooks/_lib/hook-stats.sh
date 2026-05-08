@@ -3,7 +3,7 @@
 # is appended as one JSONL record to .mumei/.hook-stats.jsonl so the user
 # can observe which rules fire and how often.
 #
-# Append-only by design (no rotation in this REQ — see REQ-11.13 Assumption).
+# Size-based truncate runs lazily on each append via log-rotate.sh.
 # Aggregation lives in scripts/aggregate-hook-stats.sh.
 
 set -u
@@ -13,6 +13,11 @@ if ! declare -F mumei_log_info >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
+if ! declare -F mumei_log_rotate_check_and_truncate >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/log-rotate.sh"
+fi
+
 # Append a single record. Silent on success, never raises an error
 # (the hook's primary job is its decision; telemetry must not derail it).
 #
@@ -20,6 +25,7 @@ fi
 mumei_hook_stats_record() {
   local hook_id="$1" decision="$2" tool_name="$3" reason="$4"
   mkdir -p .mumei 2>/dev/null || return 0
+  mumei_log_rotate_check_and_truncate ".mumei/.hook-stats.jsonl"
   jq -nc \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg hook_id "$hook_id" \

@@ -17,6 +17,11 @@ if ! declare -F mumei_log_warn >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
+if ! declare -F mumei_log_rotate_check_and_truncate >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/log-rotate.sh"
+fi
+
 # Append a single JSONL record. Caller passes a JSON object already
 # rendered to a one-line string (no embedded newlines). On any failure,
 # emit a stderr warning and return non-zero so the caller can decide.
@@ -78,6 +83,7 @@ mumei_audit_log_append() {
   fi
 
   local target="${audit_dir}/${event_name}.jsonl"
+  mumei_log_rotate_check_and_truncate "$target"
   if ! printf '%s\n' "$json_line" >>"$target" 2>/dev/null; then
     mumei_log_warn "[mumei] audit-log append failed: cannot write ${target}"
     return 1
