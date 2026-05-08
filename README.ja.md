@@ -16,6 +16,8 @@ Claude Code 用の Quality Enforcement Layer。
 
 spec の phase、Wave 単位の commit、review を Hook で物理的に強制します。プロンプトでお願いするのではなく、エージェントが回避できない OS の境界で tool の呼び出しを止めます。
 
+Claude Code 上の **harness** — skill / agent への指示は advisory に留め、エージェントの意図は untrusted input として OS layer で検証します。SDD phase / Wave commit / review pipeline は Hook で物理強制されます。
+
 [English README](./README.md)
 
 ## インストール
@@ -49,6 +51,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 
 ## Features
 
+- **Harness — prompt ではなく Hook で強制** — phase / Wave / commit / push の各 gate は Claude Code Hook で tool 呼び出しの段階で enforce されます。エージェントの意図は untrusted input として OS layer で検証。
 - **Hook で phase を物理強制** — phase / Wave / commit / push の遷移を tool 呼び出しの段階で deny します。エージェントは prompt-level で回避できません。
 - **決定論的なセキュリティ ground-truth** — `semgrep` と `osv-scanner` を LLM reviewer の前に走らせ、HIGH の finding が出たら verdict を `MAJOR_ISSUES` に固定します。
 - **3 つの spec reviewer + 4 段階の review pipeline** — `requirements` / `design` / `tasks` reviewer が fresh context で独立に走り、最大 3 回まで自動 iterate。続けて `spec-compliance` と `security` を並列、`adversarial` を直列、最後に per-issue validator が回ります。

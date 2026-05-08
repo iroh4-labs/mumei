@@ -16,6 +16,8 @@ Quality Enforcement Layer for Claude Code.
 
 Hook-enforced spec phases, Wave commits, and reviews — at the OS boundary, not via prompt-level instructions the agent can ignore.
 
+A Claude Code **harness** — physical enforcement of SDD phases, Wave commits, and review pipelines via Hooks. Skill / agent instructions are advisory; mumei treats the agent's intent as untrusted input and validates at the OS layer.
+
 [日本語版 README](./README.ja.md)
 
 ## Installation
@@ -49,6 +51,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 
 ## Features
 
+- **Harness, not just prompts** — every phase / Wave / commit / push gate is enforced via Claude Code Hooks at the tool-call boundary. mumei treats the agent's intent as untrusted input and validates at the OS layer.
 - **Hook-enforced phases** — phase / Wave / commit / push transitions are denied at the tool-call boundary; the agent cannot prompt its way around them.
 - **Deterministic security ground-truth** — `semgrep` + `osv-scanner` run before LLM reviewers. HIGH findings pin the verdict to `MAJOR_ISSUES`.
 - **3 spec reviewers + 4-stage review pipeline** — independent `requirements` / `design` / `tasks` reviewers on fresh contexts (auto-iter ≤ 3); `spec-compliance` + `security` parallel, then `adversarial`, then per-issue validator. `requirements-reviewer` audits AC `examples_coverage` (zero examples on high-risk AC, actor-trigger inconsistency) and `requirement_smell` (ambiguity / vagueness / incompleteness).
