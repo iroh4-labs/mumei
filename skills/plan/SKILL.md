@@ -281,8 +281,13 @@ As a <role>, I want <feature>, so that <benefit>.
 ## Acceptance Criteria
 
 - REQ-N.1 [CONFIRMED] WHEN <trigger>, the system SHALL <response>.
+  Examples:
+  - <happy path example, natural language>
+  - <edge or negative path example, optional>
 - REQ-N.2 [CONFIRMED] WHILE <state>, the system SHALL <response>.
-  ...
+  Examples:
+  - <happy path example>
+    ...
 
 ## Out of Scope
 
@@ -303,6 +308,19 @@ As a <role>, I want <feature>, so that <benefit>.
 ```
 
 Tag each AC with `[CONFIRMED]`, `[ASSUMPTION]`, or `[NEEDS CLARIFICATION: ...]`. By the time clarification (Phase 1.1) finishes, there should be no `[NEEDS CLARIFICATION]` left in scope. If any remain, they should be moved to `## Open Questions` (deferred to design phase) or revisited with the user before drafting.
+
+#### Inline Examples per AC
+
+For each AC, emit an inline `Examples:` block of zero, one, or two natural-language list items beneath the AC line:
+
+- **Cap at 2** — never more. If a third example feels needed, the AC is under-specified; split it into two ACs instead.
+- **Single-path ACs MAY have zero examples**: an AC with no `IF` / `UNLESS` / `WHILE` clause that describes one unconditional action.
+- **When two examples are produced**, the first SHOULD illustrate the happy path and the second SHOULD illustrate an edge or negative case.
+- **Examples body language MUST match the AC body language** (see [Language conventions](#language-conventions-applies-to-all-spec-drafts-requirements--design--tasks) above). Japanese AC body → Japanese examples; English AC body → English examples. EARS keywords stay in English regardless.
+- **Do NOT prompt the user via `AskUserQuestion` for each Example**. Draft examples directly from the AC's intent in a single pass; the user edits the markdown if corrections are needed.
+- **Keep actor and trigger consistent**: the actor named in each example MUST agree with the User Story actor; the trigger described MUST agree with the AC's `WHEN` / `WHILE` / `IF` / `WHERE` clause. `requirements-reviewer` flags `examples_coverage` HIGH findings on disagreement.
+
+This applies whether the user came via `/mumei:brainstorm` (scratch attached, ACs imported with their existing Examples) or invoked `/mumei:plan` directly (ACs drafted here for the first time). Both paths produce the same AC + Examples shape.
 
 ### Phase 1.3 — requirements-reviewer (auto-iter, max 3)
 

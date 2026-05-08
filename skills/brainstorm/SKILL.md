@@ -51,6 +51,17 @@ Pick the axes from Round 1 that ended in `[ASSUMPTION]` or `[NEEDS CLARIFICATION
 
 Only if the user did not signal closure. 5 questions max.
 
+### Examples generation (during AC draft)
+
+When drafting Acceptance Criteria, emit an inline `Examples:` block beneath each AC:
+
+- Generate 0–2 natural-language examples per AC. **Cap at 2** — do not exceed.
+- Single-path ACs (no `IF` / `UNLESS` / `WHILE` clause, describes one unconditional action) MAY have zero examples.
+- When two examples are produced, the first SHOULD illustrate the happy path and the second SHOULD illustrate an edge or negative case.
+- Render Example body in the same language as the AC body (Japanese AC → Japanese examples, English AC → English examples), per Language conventions.
+- Do **NOT** ask the user about each Example via `AskUserQuestion`. Draft Examples directly from the AC's intent; the user edits the markdown if corrections are needed.
+- Keep actor and trigger consistent with the User Story actor and AC `WHEN` / `WHILE` / `IF` / `WHERE` clause respectively.
+
 ## Stop conditions
 
 Stop and write the scratch file when ANY of these is true:
@@ -108,7 +119,15 @@ Confidence: [CONFIRMED]
 #### Acceptance Criteria (EARS, draft)
 
 - [Event] WHEN ..., the system SHALL ...
+  Examples:
+  - <happy path example, natural language>
+  - <edge or negative path example, optional>
 - [Unwanted] IF ..., then the system SHALL ...
+  Examples:
+  - <happy path example>
+  - <edge or negative path example, optional>
+
+Each AC carries an inline `Examples:` block of zero, one, or two natural-language list items. AC が単純 (`IF` / `UNLESS` / `WHILE` 節を持たない、unconditional な単一動作) なら 0 例も可。最大 2 例まで (BDD 崩壊ライン: feature あたり 3-7 scenario が高パフォーマンス、20+ で崩壊)。Examples body は AC body と同一言語で書く (Language conventions に従う)。
 
 ## Rejected Alternatives
 
@@ -147,3 +166,5 @@ Tell the user:
 - Don't skip the `Out of Scope` section. Closing scope is the strongest defense against scope creep.
 - Don't write a scratch file longer than the user actually answered. If only 2 rounds happened, the file should be short.
 - Don't proceed directly to `/mumei:plan`. Hand off via the scratch file and tell the user to invoke `/mumei:plan` themselves.
+- Don't paste the entire scratch file directly to external channels (Slack / email / tickets). The scratch contains internal meta (Confidence Distribution, Interview Record, Rejected Alternatives) that may leak rejected-vendor names or unverified assumptions. Extract only the sections you intend to share.
+- Don't emit more than 2 Examples per AC. If you feel a third example is needed, the AC is probably under-specified — split it into two ACs instead.
