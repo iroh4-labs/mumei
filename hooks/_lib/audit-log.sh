@@ -49,14 +49,26 @@ mumei_audit_log_append() {
 
   # PIPE_BUF safety: keep total line under 400 bytes so the trailing
   # newline still fits inside the 512-byte atomic write window. If the
-  # rendered line is larger, truncate string fields to fit and add a
-  # truncated marker.
+  # rendered line is larger, truncate string fields. After truncation,
+  # re-measure in BYTES (jq's `.[:N]` slices by Unicode code point, so
+  # multibyte UTF-8 like Japanese can re-cross 400B even after slicing).
+  # If still oversized, drop to a minimal fixed-shape record.
   local line_bytes
   line_bytes="$(printf '%s' "$json_line" | wc -c | tr -d ' ')"
   if [[ "$line_bytes" -gt 400 ]]; then
     local truncated
     truncated="$(jq -c 'with_entries(if (.value | type) == "string" and (.value | length) > 80 then .value |= (.[:80] + "…[truncated]") else . end) + {truncated: true}' <<<"$json_line" 2>/dev/null || echo "$json_line")"
     json_line="$truncated"
+    line_bytes="$(printf '%s' "$json_line" | wc -c | tr -d ' ')"
+    if [[ "$line_bytes" -gt 400 ]]; then
+      # Multibyte content survived the char-slice; fall back to a minimal
+      # fixed-shape record that is guaranteed under 200 bytes.
+      local fallback_ts
+      fallback_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      json_line="$(jq -n -c --arg ts "$fallback_ts" --arg event "$event_name" \
+        '{ts: $ts, event: $event, truncated: true, dropped: true, reason: "line exceeded PIPE_BUF after slice"}' 2>/dev/null || true)"
+      [[ -z "$json_line" ]] && return 1
+    fi
   fi
 
   local audit_dir=".mumei/audit-log"
