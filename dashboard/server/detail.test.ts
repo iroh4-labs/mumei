@@ -4,7 +4,11 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildFeatureDetail } from './detail.ts'
 
-const PLUGIN_ROOT = '/Users/shunichi/.claude/plugins/cache/mumei/mumei/0.3.6'
+// Resolve plugin root from the repo (mumei dev — hooks/_lib lives at
+// <repo>/hooks/_lib). Falls back to a sentinel that triggers the
+// graceful empty-array path so tests still succeed in environments
+// without the bash helpers.
+const PLUGIN_ROOT = path.resolve(import.meta.dirname, '../..')
 
 describe('buildFeatureDetail', () => {
   let projectRoot: string

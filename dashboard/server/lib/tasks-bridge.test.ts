@@ -4,7 +4,8 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetMemoForTests, buildWaveplan } from './tasks-bridge.ts'
 
-const PLUGIN_ROOT = '/Users/shunichi/.claude/plugins/cache/mumei/mumei/0.3.6'
+// Resolve plugin root from the repo (hooks/_lib lives at <repo>/hooks/_lib).
+const PLUGIN_ROOT = path.resolve(import.meta.dirname, '../../..')
 
 const TASKS_MD = `# demo Implementation Plan
 
