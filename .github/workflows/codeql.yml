@@ -31,7 +31,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions]
+        # `actions` covers .github/workflows/ for script-injection,
+        # untrusted-input flows, missing permission scopes.
+        # `javascript-typescript` covers dashboard/ — the React 19 +
+        # Fastify 5 + Node 22 monorepo subproject. CodeQL is the
+        # security-grade complement to Biome's lint pass.
+        language: [actions, javascript-typescript]
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
