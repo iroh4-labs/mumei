@@ -179,7 +179,8 @@ function HoverRow({
       <HoverCardContent
         className="w-96 max-w-[90vw] border-zinc-700 bg-zinc-900 text-zinc-200 space-y-1.5"
         align="start"
-        side="left"
+        side="bottom"
+        sideOffset={6}
       >
         {detail}
       </HoverCardContent>

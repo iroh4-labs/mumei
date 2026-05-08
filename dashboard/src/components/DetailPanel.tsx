@@ -1,6 +1,5 @@
 import { type ReactElement, type ReactNode, Suspense } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDetail } from '@/hooks/useDetail'
@@ -10,7 +9,6 @@ import { VerdictBadge } from './primitives'
 
 interface DetailPanelProps {
   slug: string | null
-  onClose: () => void
 }
 
 type Tab = 'timeline' | 'acs' | 'waveplan' | 'reviews' | 'cost'
@@ -27,13 +25,13 @@ const TABS: { id: Tab; label: string }[] = [
  * Renders the detail panel for the selected feature. Suspense-driven
  * loading; the parent wires its own ErrorBoundary fallback.
  */
-export function DetailPanel({ slug, onClose }: DetailPanelProps): ReactElement {
+export function DetailPanel({ slug }: DetailPanelProps): ReactElement {
   if (!slug) {
     return <DetailEmpty />
   }
   return (
     <Suspense fallback={<DetailSkeleton />}>
-      <DetailContent slug={slug} onClose={onClose} />
+      <DetailContent slug={slug} />
     </Suspense>
   )
 }
@@ -57,7 +55,7 @@ function DetailSkeleton(): ReactElement {
   )
 }
 
-function DetailContent({ slug, onClose }: { slug: string; onClose: () => void }): ReactElement {
+function DetailContent({ slug }: { slug: string }): ReactElement {
   const detail = useDetail(slug).data
   return (
     <Tabs defaultValue="timeline" className="h-full flex flex-col gap-0">
@@ -68,15 +66,6 @@ function DetailContent({ slug, onClose }: { slug: string; onClose: () => void })
             {detail.planVehicle ? 'plan vehicle' : 'spec vehicle'}
           </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onClose}
-          aria-label="close detail"
-        >
-          close
-        </Button>
       </header>
       <div className="border-b border-zinc-800 px-2 py-1.5 overflow-x-auto bg-zinc-900/50">
         <TabsList className="bg-transparent">

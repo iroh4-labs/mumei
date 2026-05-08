@@ -95,7 +95,7 @@ export function CompactDashboard(): ReactElement {
           className="hidden md:flex flex-col basis-[30%] min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 overflow-hidden"
         >
           <ErrorBoundarySection name="detail">
-            <DetailPanel slug={selected} onClose={() => setSelected(null)} />
+            <DetailPanel slug={selected} />
           </ErrorBoundarySection>
         </section>
 
@@ -200,7 +200,7 @@ function TopBar({
   const meta = useMeta().data
   const stats = useMetaStats().data
   return (
-    <header className="shrink-0 border-b border-zinc-800">
+    <header className="shrink-0">
       {disconnected && (
         <div
           role="alert"
@@ -222,11 +222,10 @@ function TopBar({
             mumei
           </span>
         </div>
-        <div className="hidden sm:flex flex-1 items-center gap-2 max-w-md font-mono text-[17px] min-w-0">
+        <div className="hidden sm:flex items-center gap-2 max-w-md font-mono text-[17px] min-w-0">
           <span className="text-zinc-200 truncate">{meta.projectLabel}</span>
         </div>
-        <div className="flex-1 sm:flex-none" />
-        <div className="flex items-center gap-3 lg:gap-4 font-mono text-[17px]">
+        <div className="ml-auto flex items-center gap-3 lg:gap-4 font-mono text-[17px] shrink-0 flex-wrap justify-end">
           <CompactStat n={String(stats.activeCount)} label="active" />
           <CompactStat n={formatTokens(stats.monthTokens)} label="tokens" />
           <CompactStat
@@ -493,8 +492,8 @@ function TrendBar(): ReactElement {
           : ('warn' as const),
   }))
   return (
-    <footer className="rounded-lg border border-zinc-800 bg-zinc-900/30 h-64 lg:h-[320px] flex overflow-x-auto snap-x snap-mandatory lg:snap-none">
-      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 px-3 sm:px-4 py-2.5 border-r border-zinc-800/60 min-w-[280px]">
+    <footer className="h-64 lg:h-[320px] flex gap-3 overflow-x-auto snap-x snap-mandatory lg:snap-none">
+      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]">
         <div className="flex items-center justify-between mb-1">
           <div className="font-mono text-[16px] uppercase tracking-wider text-zinc-500">
             Tokens / day
@@ -505,7 +504,7 @@ function TrendBar(): ReactElement {
         </div>
         <LineChart data={tokens} h={240} />
       </section>
-      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 px-3 sm:px-4 py-2.5 border-r border-zinc-800/60 min-w-[280px]">
+      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]">
         <div className="flex items-center justify-between mb-1">
           <div className="font-mono text-[16px] uppercase tracking-wider text-zinc-500">
             Review outcomes
@@ -518,7 +517,7 @@ function TrendBar(): ReactElement {
         </div>
         <StackedBar data={reviews} h={240} />
       </section>
-      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 px-3 sm:px-4 py-2.5 min-w-[280px]">
+      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]">
         <div className="flex items-center justify-between mb-1">
           <div className="font-mono text-[16px] uppercase tracking-wider text-zinc-500">
             Hooks · top 10
@@ -533,11 +532,11 @@ function TrendBar(): ReactElement {
 
 function TrendBarSkeleton(): ReactElement {
   return (
-    <footer className="rounded-lg border border-zinc-800 bg-zinc-900/30 h-64 lg:h-[320px] flex">
+    <footer className="h-64 lg:h-[320px] flex gap-3">
       {Array.from({ length: 3 }, (_, i) => i).map((i) => (
         <section
           key={i}
-          className="flex-1 px-3 sm:px-4 py-2.5 border-r border-zinc-800/60 min-w-[280px]"
+          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]"
         >
           <Skeleton className="h-4 w-32 mb-2" />
           <Skeleton className="h-[240px] w-full" />
