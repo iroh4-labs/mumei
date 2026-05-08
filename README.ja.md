@@ -38,25 +38,26 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 
 前提ツール: review-phase の detector 用に `semgrep` と `osv-scanner` が必要です。インストール手順は [docs/getting-started.ja.md → 前提ツール](./docs/getting-started.ja.md#前提ツール) を参照。
 
-## 30 秒で全体像
+## ワークフロー
 
 ```mermaid
-flowchart LR
-  B["/mumei:brainstorm<br/>(任意)"] --> P
-  P["/mumei:plan<br/>vehicle picker<br/>spec / plan"] --> V{"vehicle?"}
+flowchart TD
+  B["/mumei:brainstorm<br/>(任意) Q&A で要件を整理"] -.-> P
+  P["/mumei:plan"] --> V{"spec or plan?"}
 
-  V -->|spec| S["requirements / design / tasks<br/>各 auto-iter ≤ 3 ×<br/>3 spec reviewer"]
-  S --> A{"単一の<br/>user 承認 gate"}
-  A -->|approve| I["implement<br/>Wave 1 → N<br/>Hook gated commits<br/>(W1 / W2 / I3 / I4)"]
-  I --> R["review (Phase 5)<br/>Stage 0: detector<br/>Stage 1: 2 reviewer ‖<br/>Stage 2: adversarial<br/>Stage 4: per-issue validator ‖"]
-  R -->|verdict PASS| D["phase=done<br/>/mumei:archive"]
-  R -->|MAJOR_ISSUES| I
+  V -->|"spec — 大きめの feature"| S["要件 → 設計 → タスク を起草<br/>AI reviewer が最大 3 回チェック"]
+  S --> A{"あなたが 1 度だけ承認"}
+  A -->|OK| I["Wave 単位で実装<br/>(1 Wave = 1 commit、Hook で gate)"]
+  I --> R["最終レビュー<br/>(セキュリティスキャン + AI レビュー)"]
 
-  V -->|plan| PM["plan mode<br/>(Shift+Tab × 2)<br/>ExitPlanMode capture"]
-  PM --> TL["TaskCreate / TaskUpdate<br/>L-T1 / L-T2 counter<br/>full で pending_review"]
-  TL --> RV["/mumei:review<br/>Stage 0 + security ‖ adversarial<br/>+ per-issue validator"]
-  RV -->|verdict PASS| D
-  RV -->|MAJOR_ISSUES| TL
+  V -->|"plan — 小さい修正"| PM["plan mode に入る<br/>(Shift+Tab × 2)"]
+  PM --> TL["TaskCreate でタスク管理<br/>全完了で review 待ち"]
+  TL --> RV["/mumei:review<br/>(同じ最終レビュー)"]
+
+  R -->|OK| D["完了 → /mumei:archive"]
+  RV -->|OK| D
+  R -->|問題あり| I
+  RV -->|問題あり| TL
 
   classDef gate fill:#fff3cd,stroke:#856404
   classDef done fill:#d4edda,stroke:#155724

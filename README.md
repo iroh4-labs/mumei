@@ -38,25 +38,26 @@ Uninstall: `/plugin uninstall mumei@mumei` (the `.mumei/` directory in your proj
 
 Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [docs/getting-started.md → Prerequisites](./docs/getting-started.md#prerequisites) for install commands.
 
-## 30-second tour
+## Workflow
 
 ```mermaid
-flowchart LR
-  B["/mumei:brainstorm<br/>(optional)"] --> P
-  P["/mumei:plan<br/>vehicle picker<br/>spec / plan"] --> V{"vehicle?"}
+flowchart TD
+  B["/mumei:brainstorm<br/>(optional) Q&A to clarify the feature"] -.-> P
+  P["/mumei:plan"] --> V{"spec or plan?"}
 
-  V -->|spec| S["requirements / design / tasks<br/>each auto-iter ≤ 3 ×<br/>3 spec reviewers"]
-  S --> A{"single user<br/>approval gate"}
-  A -->|approve| I["implement<br/>Wave 1 → N<br/>Hook-gated commits<br/>(W1 / W2 / I3 / I4)"]
-  I --> R["review (Phase 5)<br/>Stage 0: detectors<br/>Stage 1: 2 reviewers ‖<br/>Stage 2: adversarial<br/>Stage 4: per-issue validator ‖"]
-  R -->|verdict PASS| D["phase=done<br/>/mumei:archive"]
-  R -->|MAJOR_ISSUES| I
+  V -->|"spec — larger feature"| S["draft requirements → design → tasks<br/>AI reviewers auto-check up to 3×"]
+  S --> A{"you approve once"}
+  A -->|OK| I["implement Wave by Wave<br/>(1 Wave = 1 commit, Hook-gated)"]
+  I --> R["final review<br/>(security scan + AI reviewers)"]
 
-  V -->|plan| PM["plan mode<br/>(Shift+Tab × 2)<br/>ExitPlanMode capture"]
-  PM --> TL["TaskCreate / TaskUpdate<br/>L-T1 / L-T2 counters<br/>pending_review on full"]
-  TL --> RV["/mumei:review<br/>Stage 0 + security ‖ adversarial<br/>+ per-issue validator"]
-  RV -->|verdict PASS| D
-  RV -->|MAJOR_ISSUES| TL
+  V -->|"plan — small fix"| PM["enter plan mode<br/>(Shift+Tab × 2)"]
+  PM --> TL["TaskCreate manages tasks<br/>all done → review pending"]
+  TL --> RV["/mumei:review<br/>(same final review)"]
+
+  R -->|OK| D["done → /mumei:archive"]
+  RV -->|OK| D
+  R -->|issues found| I
+  RV -->|issues found| TL
 
   classDef gate fill:#fff3cd,stroke:#856404
   classDef done fill:#d4edda,stroke:#155724
