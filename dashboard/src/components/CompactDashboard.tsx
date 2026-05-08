@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -415,14 +416,26 @@ function CompactCard({
   const progressPct = f.totalWaves > 0 ? Math.round((f.waveProgress / f.totalWaves) * 100) : 0
   return (
     <PulseRing active={pulse}>
-      <button
-        type="button"
+      <Card
+        role="button"
+        tabIndex={0}
+        aria-pressed={selected}
         onClick={() => onSelect(f.slug)}
-        style={selected ? { borderColor: '#000000', borderWidth: 1 } : undefined}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onSelect(f.slug)
+          }
+        }}
+        style={
+          selected
+            ? { borderColor: 'var(--mumei-text)', borderWidth: '2px', borderStyle: 'solid' }
+            : undefined
+        }
         className={cn(
-          'w-full text-left rounded-2xl bg-zinc-900/70 hover:bg-zinc-900 transition-colors flex flex-col cursor-pointer',
+          'gap-0 py-0 rounded-2xl bg-zinc-900/70 hover:bg-zinc-900 transition-colors cursor-pointer shadow-none',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60',
-          selected ? 'border' : 'border border-zinc-800 hover:border-zinc-700',
+          selected ? '' : 'border border-zinc-800 hover:border-zinc-700',
         )}
       >
         <div className="px-3 h-[42px] flex items-center gap-2">
@@ -473,7 +486,7 @@ function CompactCard({
           </span>
           <span className="text-zinc-600">{relTime(f.lastActivityMin)}</span>
         </div>
-      </button>
+      </Card>
     </PulseRing>
   )
 }

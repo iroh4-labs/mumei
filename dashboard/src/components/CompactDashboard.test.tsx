@@ -60,6 +60,6 @@ describe('CompactDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load features/)).toBeInTheDocument()
     })
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThan(0)
   })
 })

@@ -21,3 +21,7 @@ yarn-error.log*
 
 # Type-check incremental info
 *.tsbuildinfo
+
+# Stray .mumei/ created if dashboard ever runs from this dir before
+# the walk-up resolver kicks in (defence in depth).
+.mumei/
