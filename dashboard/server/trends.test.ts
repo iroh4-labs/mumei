@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -69,14 +69,15 @@ describe('trendReviews', () => {
     const reviewsArchive = path.join(mumeiDir, 'archive', '2026-04', 'REQ-0-old', 'reviews')
     await mkdir(reviewsActive, { recursive: true })
     await mkdir(reviewsArchive, { recursive: true })
-    await writeFile(
-      path.join(reviewsActive, '20260508T100000Z.json'),
-      JSON.stringify({ verdict: 'PASS' }),
-    )
-    await writeFile(
-      path.join(reviewsArchive, '20260508T100100Z.json'),
-      JSON.stringify({ verdict: 'NEEDS_IMPROVEMENT' }),
-    )
+    const fp1 = path.join(reviewsActive, '20260508T100000Z.json')
+    const fp2 = path.join(reviewsArchive, '20260508T100100Z.json')
+    await writeFile(fp1, JSON.stringify({ verdict: 'PASS' }))
+    await writeFile(fp2, JSON.stringify({ verdict: 'NEEDS_IMPROVEMENT' }))
+    // Pin mtime to NOW so the bucket-day filter (which prefers file
+    // mtime as a stable timestamp) lands these on `today` regardless
+    // of wall-clock when the test physically runs.
+    await utimes(fp1, NOW, NOW)
+    await utimes(fp2, NOW, NOW)
     const buckets = await trendReviews({ projectRoot, days: 14, now: NOW })
     const today = buckets[buckets.length - 1]
     expect(today?.PASS).toBe(1)

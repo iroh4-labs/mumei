@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -162,18 +162,17 @@ describe('aggregateReviewsByDay', () => {
   it('counts verdicts and skips detector reports', async () => {
     const reviewsDir = path.join(dir, 'reviews')
     await mkdir(reviewsDir, { recursive: true })
-    await writeFile(
-      path.join(reviewsDir, '20260508T100000Z.json'),
-      JSON.stringify({ verdict: 'PASS' }),
-    )
-    await writeFile(
-      path.join(reviewsDir, '20260508T100001Z.json'),
-      JSON.stringify({ verdict: 'MAJOR_ISSUES' }),
-    )
-    await writeFile(
-      path.join(reviewsDir, '20260508T100002Z-detectors.json'),
-      JSON.stringify({ verdict: 'IGNORED' }),
-    )
+    const fp1 = path.join(reviewsDir, '20260508T100000Z.json')
+    const fp2 = path.join(reviewsDir, '20260508T100001Z.json')
+    const fp3 = path.join(reviewsDir, '20260508T100002Z-detectors.json')
+    await writeFile(fp1, JSON.stringify({ verdict: 'PASS' }))
+    await writeFile(fp2, JSON.stringify({ verdict: 'MAJOR_ISSUES' }))
+    await writeFile(fp3, JSON.stringify({ verdict: 'IGNORED' }))
+    // Pin mtime to NOW so the bucket-day filter lands these on
+    // `today` regardless of when the test physically runs.
+    await utimes(fp1, NOW, NOW)
+    await utimes(fp2, NOW, NOW)
+    await utimes(fp3, NOW, NOW)
     const buckets = await aggregateReviewsByDay([reviewsDir], 14, NOW)
     const today = buckets[buckets.length - 1]
     expect(today?.PASS).toBe(1)
