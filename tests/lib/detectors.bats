@@ -142,3 +142,117 @@ JSON
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "self-test: PASS"
 }
+
+# ─── REQ-17.12 / REQ-17.13 — detector version warn ────────────
+
+@test "version_compare: 1.50.0 < 1.100.0 returns lt (semantic, not lexical)" {
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_compare 1.50.0 1.100.0
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "lt" ]
+}
+
+@test "version_compare: 1.162.0 > 1.100.0 returns gt" {
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_compare 1.162.0 1.100.0
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "gt" ]
+}
+
+@test "version_compare: 2.0.0 == 2.0.0 returns eq" {
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_compare 2.0.0 2.0.0
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "eq" ]
+}
+
+@test "version_compare: extracts version from fancy semgrep output (Semgrep CE v1.162.0)" {
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_compare 'Semgrep CE v1.162.0' 1.100.0
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "gt" ]
+}
+
+@test "version_compare: extracts version from osv-scanner v2.3.5 output" {
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_compare 'osv-scanner v2.3.5 (commit abcd)' 2.0.0
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "gt" ]
+}
+
+@test "version_compare: unparsable version returns unknown (no false alarm)" {
+  run bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_compare '' 1.100.0
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "unknown" ]
+}
+
+@test "version_check: missing binary is silent (early return)" {
+  run --separate-stderr bash -c "
+    source \"\$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh\"
+    mumei_detector_version_check no-such-binary-xyz 9.9.9
+  "
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}
+
+@test "version_check: stub semgrep returning lower version emits stderr warn" {
+  local stub_dir="${BATS_TEST_TMPDIR}/stub-bin"
+  mkdir -p "$stub_dir"
+  cat >"${stub_dir}/semgrep" <<'STUB'
+#!/usr/bin/env bash
+echo "1.50.0"
+STUB
+  chmod +x "${stub_dir}/semgrep"
+  PATH="${stub_dir}:$PATH" run --separate-stderr bash -c '
+    source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh"
+    mumei_detector_version_check semgrep 1.100.0
+  '
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"semgrep 1.50.0"* ]]
+  [[ "$stderr" == *"below recommended minimum 1.100.0"* ]]
+}
+
+@test "version_check: stub semgrep at recommended version is silent" {
+  local stub_dir="${BATS_TEST_TMPDIR}/stub-bin-ok"
+  mkdir -p "$stub_dir"
+  cat >"${stub_dir}/semgrep" <<'STUB'
+#!/usr/bin/env bash
+echo "1.162.0"
+STUB
+  chmod +x "${stub_dir}/semgrep"
+  PATH="${stub_dir}:$PATH" run --separate-stderr bash -c '
+    source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh"
+    mumei_detector_version_check semgrep 1.100.0
+  '
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}
+
+@test "version_check: stub binary printing unparsable output is silent (false-alarm suppression)" {
+  local stub_dir="${BATS_TEST_TMPDIR}/stub-bin-garbage"
+  mkdir -p "$stub_dir"
+  cat >"${stub_dir}/semgrep" <<'STUB'
+#!/usr/bin/env bash
+echo "Some Tool (no version printed here)"
+STUB
+  chmod +x "${stub_dir}/semgrep"
+  PATH="${stub_dir}:$PATH" run --separate-stderr bash -c '
+    source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/detectors.sh"
+    mumei_detector_version_check semgrep 1.100.0
+  '
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}

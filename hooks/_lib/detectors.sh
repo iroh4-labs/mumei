@@ -15,6 +15,18 @@ fi
 # Per-detector timeout in seconds. semgrep on large repos can take minutes.
 MUMEI_DETECTOR_TIMEOUT="${MUMEI_DETECTOR_TIMEOUT:-600}"
 
+# REQ-17.12 / REQ-17.13 — minimum recommended versions for silent-degradation
+# detection. Both are warn-only thresholds (Stage 0 still runs even on older
+# binaries; user is nudged to update via stderr).
+#
+# Baselines:
+#   - semgrep 1.100.0: 2025 mid-stable, widely available on Homebrew + apt.
+#   - osv-scanner 2.0.0: 2025 V2 release introduced layer-aware container scan
+#     and guided remediation; ecosystems we care about (Python / Node / Go)
+#     all benefit.
+MUMEI_DETECTOR_SEMGREP_MIN="${MUMEI_DETECTOR_SEMGREP_MIN:-1.100.0}"
+MUMEI_DETECTOR_OSV_SCANNER_MIN="${MUMEI_DETECTOR_OSV_SCANNER_MIN:-2.0.0}"
+
 # Check that required detector binaries are on PATH.
 # Prints missing binary names (one per line) on stdout. Returns 0 when all
 # are present, 1 when one or more are missing.
@@ -31,6 +43,68 @@ mumei_detector_check_binaries() {
     return 1
   fi
   return 0
+}
+
+# Compare two semver-style version strings (X.Y.Z, possibly with extra junk).
+# Echoes "lt" / "eq" / "gt" for $1 vs $2. Parse failures echo "unknown" and
+# exit 0 — caller treats unknown as "skip the version check" (false-alarm
+# suppression: we never want a corrupted version string to spam warns).
+mumei_detector_version_compare() {
+  local v1="$1" v2="$2"
+  # Extract first occurrence of N.N.N (greedy on each digit run).
+  local re='([0-9]+)\.([0-9]+)\.([0-9]+)'
+  if [[ ! "$v1" =~ $re ]]; then
+    printf 'unknown\n'
+    return 0
+  fi
+  local a1="${BASH_REMATCH[1]}" b1="${BASH_REMATCH[2]}" c1="${BASH_REMATCH[3]}"
+  if [[ ! "$v2" =~ $re ]]; then
+    printf 'unknown\n'
+    return 0
+  fi
+  local a2="${BASH_REMATCH[1]}" b2="${BASH_REMATCH[2]}" c2="${BASH_REMATCH[3]}"
+  if ((a1 < a2)); then
+    printf 'lt\n'
+  elif ((a1 > a2)); then
+    printf 'gt\n'
+  elif ((b1 < b2)); then
+    printf 'lt\n'
+  elif ((b1 > b2)); then
+    printf 'gt\n'
+  elif ((c1 < c2)); then
+    printf 'lt\n'
+  elif ((c1 > c2)); then
+    printf 'gt\n'
+  else
+    printf 'eq\n'
+  fi
+}
+
+# Run a detector's --version, parse the output, and emit a single
+# mumei_log_warn line on stderr if the version is below the configured
+# minimum. Never blocks (REQ-17.13). Parse failures are silent — we don't
+# want a fancy / new --version format ("Semgrep CE v1.162.0") to spam warns.
+# Args:
+#   $1: binary name ("semgrep" or "osv-scanner")
+#   $2: minimum version string
+mumei_detector_version_check() {
+  local binary="$1" minimum="$2"
+  command -v "$binary" >/dev/null 2>&1 || return 0
+  local version_output
+  version_output="$("$binary" --version 2>&1)"
+  local cmp
+  cmp="$(mumei_detector_version_compare "$version_output" "$minimum")"
+  case "$cmp" in
+  lt)
+    # Extract the version we matched in version_output for the warn message.
+    local re='([0-9]+\.[0-9]+\.[0-9]+)' matched=""
+    if [[ "$version_output" =~ $re ]]; then
+      matched="${BASH_REMATCH[1]}"
+    fi
+    mumei_log_warn "${binary} ${matched:-(version unknown)} is below recommended minimum ${minimum}; consider updating to reduce silent-degradation risk in Stage 0 detector findings"
+    ;;
+  unknown | eq | gt) ;; # silent — version OK or unparsable
+  esac
 }
 
 # Translate a raw severity from a specific detector to mumei's

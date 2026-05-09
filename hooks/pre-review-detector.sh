@@ -52,6 +52,13 @@ if [[ -n "$missing_bins" ]]; then
   exit 2
 fi
 
+# REQ-17.12 / REQ-17.13 — version warning (warn-only, never blocks).
+# Both detector binaries are present (we passed the check above), so verify
+# they're at least at the recommended baseline. Old versions still run; the
+# user just sees a stderr nudge to update.
+mumei_detector_version_check semgrep "$MUMEI_DETECTOR_SEMGREP_MIN"
+mumei_detector_version_check osv-scanner "$MUMEI_DETECTOR_OSV_SCANNER_MIN"
+
 # 2.4 — Resolve active feature and target output path. Vehicle-aware:
 # spec vehicle (`.mumei/specs/<feature>/`) wins on dual-state but plan
 # vehicle (`.mumei/plans/<slug>/`) is supported via the same code path
