@@ -13,3 +13,24 @@ updates:
       - "dependencies"
       - "github-actions"
     open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/dashboard"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 5
+    groups:
+      dashboard-dev:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
