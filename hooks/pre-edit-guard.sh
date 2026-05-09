@@ -47,24 +47,17 @@ if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
-# --- M1: deny direct write to reviewer MEMORY.md (vehicle/feature independent) ---
-# Memory entries flow through memory-curator + the orchestrator's atomic
-# helpers in hooks/_lib/memory.sh. M1 is placed BEFORE the FEATURE check and
-# the vehicle dispatch because:
-#   - reviewer agent-memory protection is global (spec or plan vehicle, or
-#     even no-active-feature sessions like post-archive): it must never be
-#     writable by an LLM agent regardless of mumei session state.
-#   - Path canonicalization handles `./` prefixes, `..` traversal, and
-#     absolute paths so glob bypass via non-normalized inputs is closed.
-# The orchestrator's mumei_memory_apply_operation uses Bash file ops
-# (mv/awk pipelines), which do not pass through this hook.
-mumei_m1_canonicalize_path() {
+# --- Path canonicalization helper (shared by M1 and S1) ---
+# Resolves symlinks, `./` prefixes, `..` traversal, and absolute paths so
+# glob bypass via non-normalized inputs is closed for any deny rule that
+# matches on a path pattern.
+mumei_state_canonicalize_path() {
   local p="$1"
   # Resolve ALL components (including the leaf basename) via realpath /
   # python3 os.path.realpath. Without leaf resolution a symlink whose
-  # target points into .claude/agent-memory/<r>/MEMORY.md would slip
-  # past the case-glob deny — the OS Edit/Write follows the symlink and
-  # the protected file gets clobbered (review iter 1 adv-F-002).
+  # target points into a protected path would slip past a case-glob deny —
+  # the OS Edit/Write follows the symlink and the protected file gets
+  # clobbered (review iter 1 adv-F-002).
   if command -v realpath >/dev/null 2>&1; then
     realpath -m "$p" 2>/dev/null && return 0
   fi
@@ -75,7 +68,7 @@ mumei_m1_canonicalize_path() {
   # depends on realpath/python3 availability — if neither is on PATH we
   # log a warn but still produce a useful result so the hook can match
   # at least the literal path).
-  mumei_log_warn "M1 leaf-symlink check skipped: realpath / python3 missing on PATH"
+  mumei_log_warn "state-protection leaf-symlink check skipped: realpath / python3 missing on PATH"
   case "$p" in
   /*)
     local p_dir p_base
@@ -98,8 +91,18 @@ mumei_m1_canonicalize_path() {
     ;;
   esac
 }
-M1_CANON="$(mumei_m1_canonicalize_path "$FILE_PATH")"
-if [[ "$M1_CANON" =~ /\.claude/agent-memory/[^/]+/MEMORY\.md$ ]]; then
+
+# --- M1: deny direct write to reviewer MEMORY.md (vehicle/feature independent) ---
+# Memory entries flow through memory-curator + the orchestrator's atomic
+# helpers in hooks/_lib/memory.sh. M1 is placed BEFORE the FEATURE check and
+# the vehicle dispatch because:
+#   - reviewer agent-memory protection is global (spec or plan vehicle, or
+#     even no-active-feature sessions like post-archive): it must never be
+#     writable by an LLM agent regardless of mumei session state.
+# The orchestrator's mumei_memory_apply_operation uses Bash file ops
+# (mv/awk pipelines), which do not pass through this hook.
+CANON_PATH="$(mumei_state_canonicalize_path "$FILE_PATH")"
+if [[ "$CANON_PATH" =~ /\.claude/agent-memory/[^/]+/MEMORY\.md$ ]]; then
   if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
@@ -107,6 +110,35 @@ if [[ "$M1_CANON" =~ /\.claude/agent-memory/[^/]+/MEMORY\.md$ ]]; then
   fi
   jq -n --arg r "Direct write to ${FILE_PATH} is denied. Reviewer memory flows through memory-curator + the orchestrator (hooks/_lib/memory.sh)." \
     --arg c "Emit candidate entries via the memory_candidates array in your review output (max 5 per review). The curator scores each against the 7-axis rubric (>=15/21 → ADD or UPDATE) and the orchestrator persists ADD/UPDATE atomically. Set MUMEI_BYPASS=1 only for emergency manual edits." \
+    '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
+  exit 0
+fi
+
+# --- S1: deny direct write to mumei harness internal state (vehicle/feature independent) ---
+# Protected paths (canonicalised before matching):
+#   1. .mumei/current                               — active feature pointer
+#   2. .mumei/{specs,plans}/<f>/state.json          — phase / wave / counter state
+#   3. .mumei/specs/<f>/spec-reviews/*.json         — spec reviewer audit trail
+#   4. .mumei/{specs,plans}/<f>/reviews/*.json      — Phase 5 / /mumei:review audit trail
+# Same placement rationale as M1: harness state protection must hold
+# regardless of mumei session state. The orchestrator's bash mutators
+# (mumei_state_set / mumei_review_persist / etc.) use file ops that do
+# not pass through this hook, so the legitimate write path is unaffected.
+# Out of scope (intentionally NOT denied): requirements.md / design.md /
+# tasks.md — orchestrator must edit these via Write. archive/ paths are
+# also out of scope (post-archive audit immutability is enforced by git
+# history, not this hook).
+if [[ "$CANON_PATH" =~ /\.mumei/current$ ]] ||
+  [[ "$CANON_PATH" =~ /\.mumei/(specs|plans)/[^/]+/state\.json$ ]] ||
+  [[ "$CANON_PATH" =~ /\.mumei/specs/[^/]+/spec-reviews/[^/]+\.json$ ]] ||
+  [[ "$CANON_PATH" =~ /\.mumei/(specs|plans)/[^/]+/reviews/[^/]+\.json$ ]]; then
+  if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+    mumei_hook_stats_record "S1" "deny" "${TOOL_NAME:-Edit}" "Direct write to mumei harness state denied"
+  fi
+  jq -n --arg r "Direct write to ${FILE_PATH} is denied. mumei harness internal state (current pointer / state.json / spec-reviews / reviews) flows through orchestrator helpers in hooks/_lib/state.sh and hooks/_lib/review.sh." \
+    --arg c "Use /mumei:plan or /mumei:review to mutate state legitimately. Edits to requirements.md / design.md / tasks.md are not covered by this rule. Set MUMEI_BYPASS=1 only for emergency manual edits." \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
   exit 0
 fi
