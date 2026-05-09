@@ -54,6 +54,24 @@
   --color-sky-300: #9cbbb7;
   --color-sky-400: #7ea3a0;
   --color-sky-500: #5e8a85;
+
+  /* shadcn/ui chart tokens — series colors for ChartContainer.
+     Hue order matches dashboard accent palette (mauve / sage / ochre /
+     terracotta / teal). OKLCH lightness chosen against the warm cream
+     surface to keep WCAG 2.2 contrast >= 3:1 for non-text graphics. */
+  --chart-1: oklch(0.55 0.05 340);
+  --chart-2: oklch(0.6 0.06 130);
+  --chart-3: oklch(0.65 0.08 70);
+  --chart-4: oklch(0.6 0.1 30);
+  --chart-5: oklch(0.6 0.04 195);
+}
+
+.dark {
+  --chart-1: oklch(0.65 0.06 340);
+  --chart-2: oklch(0.7 0.07 130);
+  --chart-3: oklch(0.75 0.09 70);
+  --chart-4: oklch(0.7 0.11 30);
+  --chart-5: oklch(0.7 0.05 195);
 }
 
 :root {

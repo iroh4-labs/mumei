@@ -1,113 +1,16 @@
 import type { ReactElement } from 'react'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts'
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart'
 import { formatTokens } from '@/lib/format'
-
-/**
- * Hand-drawn SVG charts — kept inline rather than reaching for Recharts
- * because the design calls for very specific tick placement, axis label
- * styling, and column widths that the Claude Design canvas pins down
- * precisely. Recharts can come back if we need interactive tooltips
- * across many chart variants.
- */
 
 export interface SeriesPoint {
   d: string
   v: number
-}
-
-export function LineChart({
-  data,
-  w = 480,
-  h = 140,
-  accent = '#876680',
-  format = formatTokens,
-}: {
-  data: SeriesPoint[]
-  w?: number
-  h?: number
-  accent?: string
-  format?: (n: number | null | undefined) => string
-}): ReactElement {
-  const pad = { l: 28, r: 8, t: 12, b: 20 }
-  const iw = w - pad.l - pad.r
-  const ih = h - pad.t - pad.b
-  // Guard against all-zero data: max=0 → ys() divides by zero → NaN
-  // path. Floor max at 1 so ticks/curve render flat at the baseline.
-  const rawMax = Math.max(...data.map((d) => d.v))
-  const max = Math.max(rawMax, 1) * 1.15
-  const xs = (i: number) => (data.length <= 1 ? pad.l : pad.l + (i / (data.length - 1)) * iw)
-  const ys = (v: number) => pad.t + ih - (v / max) * ih
-  const path = data
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs(i).toFixed(1)} ${ys(d.v).toFixed(1)}`)
-    .join(' ')
-  const area = `${path} L ${xs(data.length - 1).toFixed(1)} ${pad.t + ih} L ${xs(0).toFixed(1)} ${pad.t + ih} Z`
-  const ticks = [0, 0.5, 1].map((t) => max * t)
-  return (
-    <svg
-      width="100%"
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      className="overflow-visible"
-      role="img"
-      aria-label="Tokens per day trend"
-    >
-      <defs>
-        <linearGradient id="lc-grad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={accent} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={accent} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {ticks.map((t, ti) => (
-        // Combined index + value key — ticks 0..1 may collide on
-        // value alone when max is small; including the index makes
-        // the key unique without flagging biome's noArrayIndexKey.
-        // biome-ignore lint/suspicious/noArrayIndexKey: tick array is fixed-length [0,0.5,1] — order is the identity
-        <g key={`tick-${ti}-${t.toFixed(3)}`}>
-          <line
-            x1={pad.l}
-            x2={w - pad.r}
-            y1={ys(t)}
-            y2={ys(t)}
-            stroke="#d8cdb1"
-            strokeDasharray="2 3"
-          />
-          <text
-            x={pad.l - 6}
-            y={ys(t) + 3}
-            fontSize="11"
-            fill="#8e8470"
-            textAnchor="end"
-            fontFamily="JetBrains Mono, monospace"
-          >
-            {format(t)}
-          </text>
-        </g>
-      ))}
-      <path d={area} fill="url(#lc-grad)" />
-      <path d={path} fill="none" stroke={accent} strokeWidth="1.5" />
-      {data.map((d, i) => (
-        <circle key={`pt-${d.d}`} cx={xs(i)} cy={ys(d.v)} r="1.8" fill={accent} />
-      ))}
-      {data.map((d, i) => {
-        const isLast = i === data.length - 1
-        const isStride = i % 3 === 0
-        const collidesWithLast = i === data.length - 2
-        if (!(isStride || isLast) || (isStride && collidesWithLast)) return null
-        return (
-          <text
-            key={`xl-${d.d}`}
-            x={xs(i)}
-            y={h - 4}
-            fontSize="11"
-            fill="#8e8470"
-            textAnchor="middle"
-            fontFamily="JetBrains Mono, monospace"
-          >
-            {d.d.slice(5)}
-          </text>
-        )
-      })}
-    </svg>
-  )
 }
 
 export interface ReviewPoint {
@@ -117,200 +20,155 @@ export interface ReviewPoint {
   MI: number
 }
 
-export function StackedBar({
-  data,
-  w = 480,
-  h = 140,
-}: {
-  data: ReviewPoint[]
-  w?: number
-  h?: number
-}): ReactElement {
-  const pad = { l: 22, r: 8, t: 12, b: 20 }
-  const iw = w - pad.l - pad.r
-  const ih = h - pad.t - pad.b
-  const totals = data.map((d) => d.PASS + d.NI + d.MI)
-  const max = Math.max(...totals, 8) * 1.1
-  const bw = (iw / data.length) * 0.7
-  const gap = (iw / data.length) * 0.3
-  const ys = (v: number) => pad.t + ih - (v / max) * ih
-  return (
-    <svg
-      width="100%"
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      role="img"
-      aria-label="Review outcome distribution"
-    >
-      {[0, 0.5, 1].map((t, ti) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: gridline tick array is fixed-length [0,0.5,1] — order is the identity
-        <g key={`grid-${ti}-${t}`}>
-          <line
-            x1={pad.l}
-            x2={w - pad.r}
-            y1={ys(max * t)}
-            y2={ys(max * t)}
-            stroke="#d8cdb1"
-            strokeDasharray="2 3"
-          />
-          <text
-            x={pad.l - 6}
-            y={ys(max * t) + 3}
-            fontSize="11"
-            fill="#8e8470"
-            textAnchor="end"
-            fontFamily="JetBrains Mono, monospace"
-          >
-            {Math.round(max * t)}
-          </text>
-        </g>
-      ))}
-      {data.map((d, i) => {
-        const x = pad.l + i * (bw + gap) + gap / 2
-        const yPass = ys(d.PASS)
-        const yNI = ys(d.PASS + d.NI)
-        const yMI = ys(d.PASS + d.NI + d.MI)
-        const yBase = ys(0)
-        return (
-          <g key={d.d}>
-            <rect
-              x={x}
-              y={yPass}
-              width={bw}
-              height={Math.max(0, yBase - yPass)}
-              fill="#6e8e64"
-              opacity="0.9"
-            />
-            <rect
-              x={x}
-              y={yNI}
-              width={bw}
-              height={Math.max(0, yPass - yNI)}
-              fill="#a88347"
-              opacity="0.9"
-            />
-            <rect
-              x={x}
-              y={yMI}
-              width={bw}
-              height={Math.max(0, yNI - yMI)}
-              fill="#b86a55"
-              opacity="0.9"
-            />
-            {(() => {
-              const isLast = i === data.length - 1
-              const isStride = i % 3 === 0
-              const collidesWithLast = i === data.length - 2
-              if (!(isStride || isLast) || (isStride && collidesWithLast)) return null
-              return (
-                <text
-                  x={x + bw / 2}
-                  y={h - 4}
-                  fontSize="11"
-                  fill="#8e8470"
-                  textAnchor="middle"
-                  fontFamily="JetBrains Mono, monospace"
-                >
-                  {d.d.slice(5)}
-                </text>
-              )
-            })()}
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
 export interface HBarRow {
   id: string
   n: number
   decision: 'pass' | 'warn' | 'deny'
 }
 
-export function HBar({
+const tokensConfig = {
+  v: { label: 'Tokens', color: 'var(--chart-1)' },
+} satisfies ChartConfig
+
+const reviewsConfig = {
+  PASS: { label: 'PASS', color: 'var(--chart-2)' },
+  NI: { label: 'NEEDS_IMPROVEMENT', color: 'var(--chart-3)' },
+  MI: { label: 'MAJOR_ISSUES', color: 'var(--chart-4)' },
+} satisfies ChartConfig
+
+const hookConfig = {
+  pass: { label: 'allow / pass', color: 'var(--chart-2)' },
+  warn: { label: 'warn / noop', color: 'var(--chart-5)' },
+  deny: { label: 'deny / block', color: 'var(--chart-4)' },
+} satisfies ChartConfig
+
+function EmptyChartFrame({ height, label }: { height: number; label: string }): ReactElement {
+  return (
+    <div
+      className="flex w-full items-center justify-center rounded-md border border-dashed border-zinc-700/40 text-xs text-zinc-500 font-mono"
+      style={{ height }}
+      role="img"
+      aria-label={label}
+    >
+      {label}
+    </div>
+  )
+}
+
+const xAxisTickFormatter = (s: string): string => s.slice(5)
+
+export function LineChart({
   data,
-  w = 360,
-  h = 200,
+  h = 140,
+  format = formatTokens,
 }: {
-  data: HBarRow[]
-  w?: number
+  data: SeriesPoint[]
   h?: number
+  format?: (n: number | null | undefined) => string
 }): ReactElement {
-  const pad = { l: 8, r: 8, t: 8, b: 8 }
-  // Floor max at 1 to avoid divide-by-zero NaN when data is empty or
-  // all rows have count 0.
-  const max = Math.max(1, ...data.map((d) => d.n))
-  const rowH = data.length > 0 ? (h - pad.t - pad.b) / data.length : 0
-  const colorFor = (d: HBarRow) =>
-    d.decision === 'deny' ? '#b86a55' : d.decision === 'pass' ? '#6e8e64' : '#8e8470'
   if (data.length === 0) {
-    return (
-      <svg
-        width="100%"
-        height={h}
-        viewBox={`0 0 ${w} ${h}`}
-        role="img"
-        aria-label="Hook firing top 10"
-      >
-        <text
-          x={w / 2}
-          y={h / 2}
-          fontSize="12"
-          fill="#8e8470"
-          textAnchor="middle"
-          fontFamily="JetBrains Mono, monospace"
-        >
-          No hook firings in this window
-        </text>
-      </svg>
-    )
+    return <EmptyChartFrame height={h} label="No token usage in this window" />
+  }
+  const yTickFormatter = (v: number): string => format(v)
+  return (
+    <ChartContainer
+      config={tokensConfig}
+      className="w-full"
+      style={{ height: h, aspectRatio: 'auto' }}
+    >
+      <AreaChart data={data} accessibilityLayer margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
+        <CartesianGrid vertical={false} strokeDasharray="2 3" stroke="#d8cdb1" />
+        <XAxis
+          dataKey="d"
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={xAxisTickFormatter}
+          minTickGap={24}
+        />
+        <YAxis tickLine={false} axisLine={false} width={40} tickFormatter={yTickFormatter} />
+        <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+        <Area
+          dataKey="v"
+          type="monotone"
+          stroke="var(--color-v)"
+          fill="var(--color-v)"
+          fillOpacity={0.35}
+          strokeWidth={1.5}
+        />
+      </AreaChart>
+    </ChartContainer>
+  )
+}
+
+export function StackedBar({ data, h = 140 }: { data: ReviewPoint[]; h?: number }): ReactElement {
+  if (data.length === 0) {
+    return <EmptyChartFrame height={h} label="No reviews in this window" />
   }
   return (
-    <svg
-      width="100%"
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      role="img"
-      aria-label="Hook firing top 10"
+    <ChartContainer
+      config={reviewsConfig}
+      className="w-full"
+      style={{ height: h, aspectRatio: 'auto' }}
     >
-      {data.map((d, i) => {
-        const y = pad.t + i * rowH
-        const labelW = 132
-        const barW = (w - pad.l - pad.r - labelW - 36) * (d.n / max)
-        return (
-          <g key={d.id}>
-            <text
-              x={pad.l}
-              y={y + rowH / 2 + 3}
-              fontSize="15"
-              fill="#4a4234"
-              fontFamily="JetBrains Mono, monospace"
-            >
-              {d.id}
-            </text>
-            <rect
-              x={pad.l + labelW}
-              y={y + rowH / 2 - 5}
-              width={barW}
-              height={10}
-              fill={colorFor(d)}
-              opacity="0.85"
-              rx="2"
-            />
-            <text
-              x={pad.l + labelW + barW + 6}
-              y={y + rowH / 2 + 3}
-              fontSize="15"
-              fill="#8e8470"
-              fontFamily="JetBrains Mono, monospace"
-            >
-              {d.n}
-            </text>
-          </g>
-        )
-      })}
-    </svg>
+      <BarChart data={data} accessibilityLayer margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
+        <CartesianGrid vertical={false} strokeDasharray="2 3" stroke="#d8cdb1" />
+        <XAxis
+          dataKey="d"
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={xAxisTickFormatter}
+          minTickGap={24}
+        />
+        <YAxis tickLine={false} axisLine={false} width={32} allowDecimals={false} />
+        <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+        <Bar dataKey="PASS" stackId="r" fill="var(--color-PASS)" radius={[0, 0, 0, 0]} />
+        <Bar dataKey="NI" stackId="r" fill="var(--color-NI)" radius={[0, 0, 0, 0]} />
+        <Bar dataKey="MI" stackId="r" fill="var(--color-MI)" radius={[2, 2, 0, 0]} />
+      </BarChart>
+    </ChartContainer>
+  )
+}
+
+export function HBar({ data, h = 200 }: { data: HBarRow[]; h?: number }): ReactElement {
+  if (data.length === 0) {
+    return <EmptyChartFrame height={h} label="No hook firings in this window" />
+  }
+  // Recharts horizontal bar = layout="vertical" (counterintuitive). One row per hook.
+  return (
+    <ChartContainer
+      config={hookConfig}
+      className="w-full"
+      style={{ height: h, aspectRatio: 'auto' }}
+    >
+      <BarChart
+        data={data}
+        layout="vertical"
+        accessibilityLayer
+        margin={{ top: 4, right: 32, bottom: 4, left: 4 }}
+      >
+        <CartesianGrid horizontal={false} strokeDasharray="2 3" stroke="#d8cdb1" />
+        <XAxis type="number" hide allowDecimals={false} />
+        <YAxis
+          type="category"
+          dataKey="id"
+          tickLine={false}
+          axisLine={false}
+          width={140}
+          tick={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fill: '#4a4234' }}
+        />
+        <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+        <Bar dataKey="n" radius={[0, 4, 4, 0]} fill={`var(--color-${data[0]?.decision ?? 'pass'})`}>
+          <LabelList
+            dataKey="n"
+            position="right"
+            offset={6}
+            fontFamily="JetBrains Mono, monospace"
+            fontSize={13}
+            fill="#8e8470"
+          />
+        </Bar>
+      </BarChart>
+    </ChartContainer>
   )
 }
 
