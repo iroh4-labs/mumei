@@ -102,8 +102,7 @@ for the user-facing verification commands.
   Environment with required-reviewer approval.
 - **Branch protection** — `allow_force_pushes=false`,
   `enforce_admins=true`, `required_signatures=true`, status checks
-  cover all CI + security workflows. See
-  [`.github/branch-protection.md`](./.github/branch-protection.md).
+  cover all CI + security workflows.
 - **Maintainer hygiene** — MFA on the GitHub account, fine-grained
   PATs scoped to single repo with ≤ 90-day expiry, signed tags
   via the maintainer's SSH key registered with GitHub.
