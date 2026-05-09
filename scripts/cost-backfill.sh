@@ -65,29 +65,45 @@ if [[ ! -d "$projects_root" ]]; then
   printf '[mumei] cost-backfill: partial backfill only: %s missing\n' "$projects_root" >&2
   exit 0
 fi
-project_top=""
+# Build candidate encodings in priority order. Claude Code encodes the
+# session cwd LITERALLY (each `/` → `-`), so a monorepo subdir launch
+# (e.g. `cd dashboard && claude`) lands logs under the subdir-encoded
+# path, not the git-toplevel one. F-201 fix: try git-toplevel, the
+# .mumei ancestor, AND the literal pwd, picking whichever resolves to
+# an existing session dir.
+candidate_tops=()
 if t="$(git rev-parse --show-toplevel 2>/dev/null)" && [[ -n "$t" ]]; then
-  project_top="$t"
-else
-  d="$(pwd)"
-  while [[ "$d" != "/" ]]; do
-    if [[ -d "${d}/.mumei" ]]; then
-      project_top="$d"
-      break
-    fi
-    d="$(dirname "$d")"
-  done
+  candidate_tops+=("$t")
 fi
-[[ -z "$project_top" ]] && project_top="$(pwd)"
-project_encoded="$(printf '%s' "$project_top" | sed 's|/|-|g')"
-project_root="${projects_root}/${project_encoded}"
-if [[ ! -d "$project_root" ]]; then
-  printf '[mumei] cost-backfill: partial backfill only: project session dir not found (%s) — backfill scoped to current project to prevent cross-project contamination\n' "$project_root" >&2
+d="$PWD"
+while [[ "$d" != "/" ]]; do
+  if [[ -d "${d}/.mumei" ]]; then
+    candidate_tops+=("$d")
+    break
+  fi
+  d="$(dirname "$d")"
+done
+candidate_tops+=("$PWD")
+project_root=""
+for cand in "${candidate_tops[@]}"; do
+  encoded="$(printf '%s' "$cand" | sed 's|/|-|g')"
+  if [[ -d "${projects_root}/${encoded}" ]]; then
+    project_root="${projects_root}/${encoded}"
+    break
+  fi
+done
+if [[ -z "$project_root" ]]; then
+  tried=""
+  for cand in "${candidate_tops[@]}"; do
+    enc="$(printf '%s' "$cand" | sed 's|/|-|g')"
+    tried="${tried}${tried:+, }${projects_root}/${enc}"
+  done
+  printf '[mumei] cost-backfill: partial backfill only: project session dir not found (tried %s) — backfill scoped to current project to prevent cross-project contamination\n' "$tried" >&2
   exit 0
 fi
 
 # Convert ISO timestamps to epoch seconds for the mtime filter.
-_to_epoch() {
+_mumei_to_epoch() {
   local iso="$1"
   [[ -z "$iso" ]] && {
     printf '0'
@@ -102,8 +118,8 @@ _to_epoch() {
   fi
 }
 
-epoch_from="$(_to_epoch "$created_at")"
-epoch_to="$(_to_epoch "$updated_at")"
+epoch_from="$(_mumei_to_epoch "$created_at")"
+epoch_to="$(_mumei_to_epoch "$updated_at")"
 
 # F-102 fix: when an operator-supplied override fails to parse, refuse
 # instead of silently coercing to 0 / now (which re-opened F-003).

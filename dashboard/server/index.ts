@@ -323,28 +323,60 @@ function renderBanner(addr: string): string {
   const mascotW = Math.max(...mascotLines.map((l) => l.length))
   const SEP = '  '
   const combinedW = logoW + SEP.length + mascotW
-  const totalH = Math.max(logoLines.length, mascotLines.length)
-  const logoTop = Math.floor((totalH - logoLines.length) / 2)
-  const mascotTop = Math.floor((totalH - mascotLines.length) / 2)
+  // Prefer the live TTY width; fall back to COLUMNS env (useful for
+  // non-TTY contexts like CI or piped invocations) and finally to 80.
+  const envCols = Number(process.env.COLUMNS ?? '0')
+  const termW =
+    process.stdout.columns && process.stdout.columns > 0
+      ? process.stdout.columns
+      : envCols > 0
+        ? envCols
+        : 80
+
   const padLine = (arr: string[], top: number, w: number, i: number): string => {
     const idx = i - top
     const line = idx >= 0 && idx < arr.length ? arr[idx] : undefined
     return (line ?? '').padEnd(w)
   }
-  const termW = process.stdout.columns && process.stdout.columns > 0 ? process.stdout.columns : 80
-  const leftPad = ' '.repeat(Math.max(0, Math.floor((termW - combinedW) / 2)))
-  const rows: string[] = []
-  for (let i = 0; i < totalH; i++) {
-    const l = padLine(logoLines, logoTop, logoW, i)
-    const m = padLine(mascotLines, mascotTop, mascotW, i)
-    rows.push(`${leftPad}${l}${SEP}${m}`.replace(/\s+$/, ''))
+
+  // Center a multi-line block of equal-width rows in the terminal.
+  const center = (lines: string[], blockW: number): string[] => {
+    const left = ' '.repeat(Math.max(0, Math.floor((termW - blockW) / 2)))
+    return lines.map((l) => `${left}${l}`.replace(/\s+$/, ''))
   }
+
   const info = [
-    `${leftPad}Dashboard:    ${addr}`,
-    `${leftPad}Project root: ${PROJECT_ROOT}`,
-    `${leftPad}.mumei dir:   ${MUMEI_DIR}`,
-  ].join('\n')
-  return `\n${rows.join('\n')}\n\n${info}\n\n`
+    `Dashboard:    ${addr}`,
+    `Project root: ${PROJECT_ROOT}`,
+    `.mumei dir:   ${MUMEI_DIR}`,
+  ]
+  const infoW = Math.max(...info.map((l) => l.length))
+
+  let drawing: string[]
+  let infoCentered: string[]
+  if (termW >= combinedW + 2) {
+    // Wide terminal: side-by-side logo + mascot, vertically centered.
+    const totalH = Math.max(logoLines.length, mascotLines.length)
+    const logoTop = Math.floor((totalH - logoLines.length) / 2)
+    const mascotTop = Math.floor((totalH - mascotLines.length) / 2)
+    const rows: string[] = []
+    for (let i = 0; i < totalH; i++) {
+      const l = padLine(logoLines, logoTop, logoW, i)
+      const m = padLine(mascotLines, mascotTop, mascotW, i)
+      rows.push(`${l}${SEP}${m}`)
+    }
+    drawing = center(rows, combinedW)
+    infoCentered = center(info, combinedW)
+  } else {
+    // Narrow terminal (< 73 cols by default): stack logo above mascot
+    // so neither wraps. Each block centered to its own width.
+    const logoCentered = center(logoLines, logoW)
+    const mascotCentered = center(mascotLines, mascotW)
+    drawing = [...logoCentered, '', ...mascotCentered]
+    infoCentered = center(info, Math.max(infoW, mascotW, logoW))
+  }
+
+  return `\n${drawing.join('\n')}\n\n${infoCentered.join('\n')}\n\n`
 }
 
 // Suppress Fastify's default `Server listening at ...` info log so the
