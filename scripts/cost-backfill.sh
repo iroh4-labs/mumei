@@ -50,19 +50,36 @@ if [[ -z "$created_at" ]] && [[ -z "${MUMEI_BACKFILL_FROM:-}" ]]; then
   printf '[mumei] cost-backfill: partial backfill only: state.json missing created_at, cannot bound window (set MUMEI_BACKFILL_FROM=<ISO> to override)\n' >&2
   exit 0
 fi
-[[ -n "${MUMEI_BACKFILL_FROM:-}" ]] && created_at="$MUMEI_BACKFILL_FROM"
-[[ -n "${MUMEI_BACKFILL_TO:-}" ]] && updated_at="$MUMEI_BACKFILL_TO"
+override_from="${MUMEI_BACKFILL_FROM:-}"
+override_to="${MUMEI_BACKFILL_TO:-}"
+[[ -n "$override_from" ]] && created_at="$override_from"
+[[ -n "$override_to" ]] && updated_at="$override_to"
 
-# F-001 fix: scope the walk to the cwd's encoded project dir instead
-# of ~/.claude/projects/* (which catches every feature ever worked on
-# across every repo). Claude Code encodes the cwd by replacing each `/`
-# with `-`. Scan only the current project's session subagents.
+# F-001 fix: scope the walk to the project's session log dir, not
+# ~/.claude/projects/* (which catches every feature across every repo).
+# F-105 fix: derive project root from git toplevel (or .mumei ancestor)
+# so the encoded path stays correct when the operator runs the script
+# from a project subdir.
 projects_root="${HOME}/.claude/projects"
 if [[ ! -d "$projects_root" ]]; then
   printf '[mumei] cost-backfill: partial backfill only: %s missing\n' "$projects_root" >&2
   exit 0
 fi
-project_encoded="$(pwd | sed 's|/|-|g')"
+project_top=""
+if t="$(git rev-parse --show-toplevel 2>/dev/null)" && [[ -n "$t" ]]; then
+  project_top="$t"
+else
+  d="$(pwd)"
+  while [[ "$d" != "/" ]]; do
+    if [[ -d "${d}/.mumei" ]]; then
+      project_top="$d"
+      break
+    fi
+    d="$(dirname "$d")"
+  done
+fi
+[[ -z "$project_top" ]] && project_top="$(pwd)"
+project_encoded="$(printf '%s' "$project_top" | sed 's|/|-|g')"
 project_root="${projects_root}/${project_encoded}"
 if [[ ! -d "$project_root" ]]; then
   printf '[mumei] cost-backfill: partial backfill only: project session dir not found (%s) — backfill scoped to current project to prevent cross-project contamination\n' "$project_root" >&2
@@ -87,6 +104,19 @@ _to_epoch() {
 
 epoch_from="$(_to_epoch "$created_at")"
 epoch_to="$(_to_epoch "$updated_at")"
+
+# F-102 fix: when an operator-supplied override fails to parse, refuse
+# instead of silently coercing to 0 / now (which re-opened F-003).
+# Only allow updated_at to coerce to "now" when it is genuinely empty
+# (no override, no value in state.json).
+if [[ -n "$override_from" ]] && [[ "$epoch_from" -eq 0 ]]; then
+  printf '[mumei] cost-backfill: partial backfill only: MUMEI_BACKFILL_FROM=%s failed to parse as ISO 8601 (use 2026-05-09T00:00:00Z form)\n' "$override_from" >&2
+  exit 0
+fi
+if [[ -n "$override_to" ]] && [[ "$epoch_to" -eq 0 ]]; then
+  printf '[mumei] cost-backfill: partial backfill only: MUMEI_BACKFILL_TO=%s failed to parse as ISO 8601 (use 2026-05-09T00:00:00Z form)\n' "$override_to" >&2
+  exit 0
+fi
 [[ "$epoch_to" -eq 0 ]] && epoch_to=$(date +%s)
 
 appended=0

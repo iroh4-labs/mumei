@@ -115,3 +115,24 @@ _run_agg() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"42"* ]]
 }
+
+@test "REQ-16 iter3 F-103: dedup is max-merge per token + last-non-null for wave/iteration" {
+  # Two records collide on (agent, ts): one from the SubagentStop hook
+  # (wave/iteration null, input=100, cache_read=1000) and one from the
+  # orchestrator wrap (wave=1, iteration=2, input=150, cache_read=900).
+  # Max-merge picks 150 / 1000; last-non-null picks wave=1 / iteration=2.
+  log="/tmp/mumei-test-merge-$$.jsonl"
+  cat >"$log" <<'JSONL'
+{"ts":"2026-05-09T01:00:00Z","feature":"REQ-1","agent":"spec-compliance-reviewer","phase":"after","wave":null,"iteration":null,"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":1000,"cache_creation_input_tokens":200}
+{"ts":"2026-05-09T01:00:00Z","feature":"REQ-1","agent":"spec-compliance-reviewer","phase":"after","wave":1,"iteration":2,"input_tokens":150,"output_tokens":30,"cache_read_input_tokens":900,"cache_creation_input_tokens":250}
+JSONL
+  run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/aggregate-cost.sh" --json -f "$log"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.records' <<<"$output")" = "1" ]
+  [ "$(jq -r '.totals.input' <<<"$output")" = "150" ]
+  [ "$(jq -r '.totals.output' <<<"$output")" = "50" ]
+  [ "$(jq -r '.totals.cache_read' <<<"$output")" = "1000" ]
+  [ "$(jq -r '.totals.cache_create' <<<"$output")" = "250" ]
+  [ "$(jq -r '.by_iteration[0].iteration' <<<"$output")" = "2" ]
+  rm -f "$log"
+}

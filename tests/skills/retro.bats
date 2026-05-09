@@ -107,3 +107,19 @@ _make_subagent() {
   [[ "$stderr" == *"partial backfill only"* ]]
   [ ! -f "${feature_dir}/cost-log.jsonl" ]
 }
+
+@test "REQ-16 iter3 F-102: bad MUMEI_BACKFILL_FROM aborts instead of widening window" {
+  _setup_fake_home
+  # state.json without created_at; supply a malformed override.
+  feature_dir=".mumei/specs/REQ-no-created"
+  mkdir -p "$feature_dir"
+  jq -nc '{id:"REQ-99",slug:"x",phase:"review",current_wave:1}' >"${feature_dir}/state.json"
+  _make_subagent agent-eee mumei:tasks-reviewer 1778000000
+
+  run --separate-stderr env MUMEI_BACKFILL_FROM="not-a-date" \
+    bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"failed to parse as ISO 8601"* ]]
+  # Refuse-to-backfill must NOT collapse to all-of-history.
+  [ ! -f "${feature_dir}/cost-log.jsonl" ]
+}

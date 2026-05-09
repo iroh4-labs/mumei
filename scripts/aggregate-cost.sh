@@ -65,18 +65,32 @@ fi
 # JSON output for dashboard consumption. Emits per-agent / per-iter
 # breakdown plus totals plus cache hit ratio. One JSON object on stdout.
 #
-# `_coalesce_dedup` collapses (agent, ts) duplicates by MERGING them
-# (object-multiply `*` keeps non-null fields from any record). This
-# protects against the small overlap between the SubagentStop hook
-# (REQ-16, writes wave/iteration as null) and the optional orchestrator
-# wrap mumei_cost_log_after (writes them as numbers). A naive first-
-# wins dedup would silently drop the orchestrator's metadata; the
-# merge preserves whichever record carries values.
+# `_coalesce_dedup` collapses (agent, ts) duplicates by MAX-MERGING the
+# four token fields and last-non-null-wins for metadata (wave, iteration).
+# This MUST match `dashboard/server/features.ts loadCost`'s `Math.max`
+# strategy so the CLI and dashboard agree on totals when the SubagentStop
+# hook (writes wave/iter null) and the optional orchestrator wrap
+# mumei_cost_log_after collide on (agent, ts).
 if [[ "$json_mode" == "1" ]]; then
   jq -s --arg feature "${feature:-unknown}" '
+    def _max_or:
+      reduce .[] as $v (0; if (($v // 0) > .) then ($v // 0) else . end);
+    def _last_non_null:
+      reduce .[] as $v (null; if $v == null then . else $v end);
     def _coalesce_dedup:
       group_by([.agent, .ts])
-      | map(reduce .[] as $r ({}; . * ($r | with_entries(select(.value != null)))));
+      | map({
+          ts: .[0].ts,
+          feature: .[0].feature,
+          agent: .[0].agent,
+          phase: "after",
+          wave: ([.[] | .wave] | _last_non_null),
+          iteration: ([.[] | .iteration] | _last_non_null),
+          input_tokens: ([.[] | .input_tokens] | _max_or),
+          output_tokens: ([.[] | .output_tokens] | _max_or),
+          cache_read_input_tokens: ([.[] | .cache_read_input_tokens] | _max_or),
+          cache_creation_input_tokens: ([.[] | .cache_creation_input_tokens] | _max_or)
+        });
 
     [.[] | select(.phase == "after")]
     | _coalesce_dedup as $rows
@@ -124,9 +138,24 @@ _mumei_pivot() {
   {
     printf 'bucket\tinput\toutput\tcache_read\tcache_create\tcount\n'
     jq -sr --arg k "$key" '
+      def _max_or:
+        reduce .[] as $v (0; if (($v // 0) > .) then ($v // 0) else . end);
+      def _last_non_null:
+        reduce .[] as $v (null; if $v == null then . else $v end);
       def _coalesce_dedup:
         group_by([.agent, .ts])
-        | map(reduce .[] as $r ({}; . * ($r | with_entries(select(.value != null)))));
+        | map({
+            ts: .[0].ts,
+            feature: .[0].feature,
+            agent: .[0].agent,
+            phase: "after",
+            wave: ([.[] | .wave] | _last_non_null),
+            iteration: ([.[] | .iteration] | _last_non_null),
+            input_tokens: ([.[] | .input_tokens] | _max_or),
+            output_tokens: ([.[] | .output_tokens] | _max_or),
+            cache_read_input_tokens: ([.[] | .cache_read_input_tokens] | _max_or),
+            cache_creation_input_tokens: ([.[] | .cache_creation_input_tokens] | _max_or)
+          });
 
       [.[] | select(.phase == "after")]
       | _coalesce_dedup
@@ -163,9 +192,24 @@ _mumei_pivot "wave"
 
 # Final summary line.
 totals="$(jq -s '
+  def _max_or:
+    reduce .[] as $v (0; if (($v // 0) > .) then ($v // 0) else . end);
+  def _last_non_null:
+    reduce .[] as $v (null; if $v == null then . else $v end);
   def _coalesce_dedup:
     group_by([.agent, .ts])
-    | map(reduce .[] as $r ({}; . * ($r | with_entries(select(.value != null)))));
+    | map({
+        ts: .[0].ts,
+        feature: .[0].feature,
+        agent: .[0].agent,
+        phase: "after",
+        wave: ([.[] | .wave] | _last_non_null),
+        iteration: ([.[] | .iteration] | _last_non_null),
+        input_tokens: ([.[] | .input_tokens] | _max_or),
+        output_tokens: ([.[] | .output_tokens] | _max_or),
+        cache_read_input_tokens: ([.[] | .cache_read_input_tokens] | _max_or),
+        cache_creation_input_tokens: ([.[] | .cache_creation_input_tokens] | _max_or)
+      });
   [.[] | select(.phase == "after")] | _coalesce_dedup | {
   count: length,
   input: (map(.input_tokens // 0) | add),

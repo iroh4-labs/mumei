@@ -234,8 +234,7 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-cost-log-start.sh\"",
-            "timeout": 5,
-            "async": true
+            "timeout": 5
           }
         ]
       }
