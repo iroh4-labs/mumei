@@ -196,45 +196,13 @@ Procedure:
 4. Run `gh run watch` on the PR's CI; `sha256sum -c -` will fail loudly if
    the hash is wrong.
 
-## Maintainer-only — Claude Code subprocess signing limitation
+## Maintainer-only — commit & tag signing
 
-If your `gpg.format` is `ssh` and your `user.signingkey` is fronted by a
-**GUI signing helper** (1Password's `op-ssh-sign`, Secretive, KeePassXC's
-SSH agent with prompts, sshd-with-`pam_u2f`, etc.), Claude Code's `Bash`
-tool cannot drive the helper. The signing process expects an interactive
-GUI / Touch ID prompt, but subprocess context has no UI surface, so the
-commit silently lands **unsigned** even though `commit.gpgsign=true`.
-
-Workarounds:
-
-1. **Recommended**: never let Claude run `git commit` against this
-   repository. Reserve commits for the maintainer's own terminal. The
-   `mumei` orchestrator (`/mumei:plan`) follows this rule by leaving
-   commits to the user.
-2. If a commit has already landed unsigned, run
-   `git commit --amend --no-edit -S` from your own terminal — the GUI
-   helper will prompt, you approve, and the SHA is replaced with the
-   signed version.
-
-`git log -1 --show-signature` reports `No signature` even for correctly
-signed commits when `gpg.ssh.allowedSignersFile` is unset locally.
-GitHub still verifies the signature server-side; do not rely on the
-local `%G?` field as ground truth.
-
-## Maintainer-only — release tag signing
-
-Release tags are signed with the maintainer's SSH key. To set up signing on a
-new machine:
-
-```bash
-git config --global gpg.format ssh
-git config --global user.signingkey ~/.ssh/id_ed25519.pub
-# Verify the key is registered as a Signing Key in GitHub
-gh ssh-key list
-```
-
-After setup, `git tag -s` (used by the bundled `release` skill) produces a
-verifiable tag. End users can verify with `git tag -v <tag>`.
+mumei does not require signed commits or tags. `commit.gpgsign` is `false`
+globally and the bundled `release` / `release-dashboard` skills create
+unsigned annotated tags (`git tag -a`, no `-s`). End-user trust comes from
+the release artifacts (Sigstore keyless signature on the tarball + SLSA
+provenance + SBOM), not from the tag itself.
 
 ## Maintainer-only — social preview image
 
