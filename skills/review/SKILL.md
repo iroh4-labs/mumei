@@ -167,26 +167,45 @@ detector_reused_from="$(jq -r '.detector_reused_from // empty' <<<"$summary")"
 
 If the detector reports `bypassed: true` (set when `MUMEI_BYPASS=1`), treat `high_count` as `0` and continue.
 
-### Step 6 — Launch reviewers (REQ-9.18)
+### Step 6 — Launch reviewers (REQ-9.18 / REQ-17.6)
 
-`spec-compliance-reviewer` is **not** launched for plan vehicle (REQ-9.18 / scratch Section 7.1: there is no requirements.md / tasks.md to compare against). Launch the remaining reviewers:
+Plan vehicle launches the same reviewer set as spec vehicle, including
+`spec-compliance-reviewer` with a `scope_source=plan.md` parameter
+(REQ-17.6 — generalized post-REQ-17 to compare diff against the
+user-approved plan markdown instead of requirements.md).
 
 - iter 1 baseline:
-  - if `high_count == 0`: launch `security-reviewer` and `adversarial-reviewer` in parallel.
-  - if `high_count > 0`: skip `security-reviewer` (detector ground truth has already produced HIGH findings) and launch only `adversarial-reviewer`.
-- iter 2+ focused: read the previous review JSON's `next_iter_reviewers` field and launch only the listed reviewers (always includes `adversarial`; `spec-compliance` is already filtered out for plan vehicle).
+  - if `high_count == 0`: launch `spec-compliance-reviewer`,
+    `security-reviewer`, and `adversarial-reviewer` in parallel.
+  - if `high_count > 0`: skip `security-reviewer` (detector ground truth
+    has already produced HIGH findings) and launch
+    `spec-compliance-reviewer` + `adversarial-reviewer`.
+- iter 2+ focused: read the previous review JSON's `next_iter_reviewers`
+  field and launch only the listed reviewers (always includes
+  `adversarial`).
 
 For each reviewer, use the Task tool with the appropriate subagent_type:
 
 ```text
+Task(subagent_type: "spec-compliance-reviewer",
+     prompt: "Review plan-vehicle feature ${slug}. Wave: all. scope_source=.mumei/plans/${slug}/plan.md. Diff: $(git diff $(git merge-base origin/main HEAD)). ${detector_block_if_any}")
+
 Task(subagent_type: "security-reviewer",
      prompt: "Review plan-vehicle feature ${slug}. Diff: $(git diff $(git merge-base origin/main HEAD)). Plan: .mumei/plans/${slug}/plan.md. ${detector_block_if_any}")
 
 Task(subagent_type: "adversarial-reviewer",
-     prompt: "Review plan-vehicle feature ${slug}. Diff: ... . Prior findings: ${security_findings_json}.")
+     prompt: "Review plan-vehicle feature ${slug}. Diff: ... . Prior findings: ${prior_findings_json}.")
 ```
 
-When `high_count > 0`, inject the HIGH detector findings into both prompts as a `<detector_findings ground_truth="true">` block exactly as Phase 5 does (see `skills/plan/SKILL.md` Stage 1).
+The `spec-compliance-reviewer` agent body branches on the `scope_source`
+extension: `requirements.md` → spec-vehicle EARS comparison;
+`plan.md` → plan-vehicle natural-language plan comparison
+(scope_creep / silent_reinterpretation findings only, no
+ac_drift / missing_ac).
+
+When `high_count > 0`, inject the HIGH detector findings into all running
+reviewer prompts as a `<detector_findings ground_truth="true">` block
+exactly as Phase 5 does (see `skills/plan/SKILL.md` Stage 1).
 
 ### Step 7 — Per-issue validation (REQ-9.19)
 
@@ -257,13 +276,14 @@ via `mumei_memory_validate_curator_output` and on validator pass applies the ope
 to `.claude/agent-memory/<reviewer>/MEMORY.md` via `mumei_memory_apply_operation`.
 Failure of any single candidate is non-blocking — the orchestrator emits
 `[mumei] curator output invalid: <reason>` to stderr, treats that candidate as SKIP,
-and continues. Plan vehicle's reviewer set is `security` + `adversarial` (no
-spec-compliance for plan vehicle).
+and continues. Plan vehicle's reviewer set post-REQ-17 is the full
+`spec-compliance` + `security` + `adversarial` triple, identical to spec
+vehicle (REQ-17.6 — generalized via `scope_source=plan.md`).
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/memory.sh"
 : "${MUMEI_CURATOR_TIMEOUT_S:=30}"
-for reviewer in security adversarial; do
+for reviewer in spec-compliance security adversarial; do
   output_json="${reviewer_outputs[$reviewer]:-}"
   [[ -n "$output_json" ]] || continue
   reviewer_dir=".claude/agent-memory/${reviewer}-reviewer"

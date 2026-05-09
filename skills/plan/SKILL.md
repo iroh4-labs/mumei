@@ -868,6 +868,11 @@ Pass each reviewer:
 - The active feature slug
 - The git diff for the Wave under review (or for the whole feature if reviewing at end)
 - Read access to spec files
+- **For `spec-compliance-reviewer`**: a `scope_source` parameter equal to
+  `.mumei/specs/${feature}/requirements.md`. Append this to the reviewer
+  prompt as a literal `scope_source=<path>` suffix. The reviewer dispatches
+  on this parameter to select spec-vehicle vs plan-vehicle scope-comparison
+  logic (REQ-17.5). Spec vehicle always uses requirements.md.
 - **HIGH detector findings** (only when `high_count > 0`) injected into the
   prompt as a `<detector_findings ground_truth="true">` block. The block
   contains the JSON array from `.findings.HIGH` of the detectors report.
