@@ -87,41 +87,77 @@ jobs:
             exit 1
           fi
 
-          # Match by prefix so future codeql matrix expansions (e.g.
-          # adding `actions` or `python`) are auto-included in the gate.
+          # Race: tag-push and main-push fire near-simultaneously, so the
+          # release workflow can start while ci.yml's codeql / scorecards
+          # are still in_progress / queued. Poll up to 20 minutes for each
+          # required check-run, accepting in_progress / queued as
+          # transient and only failing on (completed AND not-success) or
+          # genuine absence.
           # `codeql (` covers every CodeQL language (post-CI-consolidation
           # job names live under ci.yml as `codeql (actions)` /
           # `codeql (javascript-typescript)`). `scorecard analysis` is
           # the literal Scorecards run name.
-          for check_prefix in "codeql (" "scorecard analysis"; do
-            err="$(mktemp)"
-            payload="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag_sha}/check-runs" \
-              --paginate --jq ".check_runs[] | select(.name | startswith(\"${check_prefix}\")) | {name, status, conclusion}" 2>"$err")"
-            rc=$?
-            if [ "$rc" -ne 0 ]; then
-              echo "::error::gh api failed for check prefix '${check_prefix}' on ${tag_sha}: $(cat "$err")"
-              rm -f "$err"
-              exit 1
-            fi
-            rm -f "$err"
-
-            if [ -z "$payload" ]; then
-              echo "::error::no check-run starting with '${check_prefix}' has reported on ${tag_sha} yet; wait for codeql/scorecards to complete on this commit and retry"
-              exit 1
-            fi
-
-            # Walk every match (matrix entries produce one row each) and
-            # require ALL to be completed + success.
-            while IFS= read -r row; do
-              [ -n "$row" ] || continue
-              name="$(printf '%s' "$row" | jq -r '.name')"
-              status="$(printf '%s' "$row" | jq -r '.status')"
-              concl="$(printf '%s' "$row" | jq -r '.conclusion // ""')"
-              if [ "$status" != "completed" ] || [ "$concl" != "success" ]; then
-                echo "::error::check '${name}' on ${tag_sha} is not green (status=${status} conclusion=${concl})"
-                exit 1
+          poll_check_prefix() {
+            local prefix="$1"
+            local deadline=$(( $(date +%s) + 1200 )) # 20 min
+            local payload err name status concl row sleep_for=15
+            while :; do
+              err="$(mktemp)"
+              if ! payload="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag_sha}/check-runs" \
+                --paginate --jq ".check_runs[] | select(.name | startswith(\"${prefix}\")) | {name, status, conclusion}" 2>"$err")"; then
+                echo "::warning::gh api transient failure for prefix '${prefix}': $(cat "$err")"
+                rm -f "$err"
+                if [ "$(date +%s)" -gt "$deadline" ]; then
+                  echo "::error::timeout polling check prefix '${prefix}' on ${tag_sha}"
+                  return 1
+                fi
+                sleep "$sleep_for"
+                continue
               fi
-            done <<<"$payload"
+              rm -f "$err"
+
+              # No matching check-runs yet — codeql/scorecards has not
+              # registered on this commit. Wait and retry.
+              if [ -z "$payload" ]; then
+                if [ "$(date +%s)" -gt "$deadline" ]; then
+                  echo "::error::no check-run starting with '${prefix}' on ${tag_sha} after 20 min"
+                  return 1
+                fi
+                echo "waiting for '${prefix}' to register on ${tag_sha}..."
+                sleep "$sleep_for"
+                continue
+              fi
+
+              # Walk matches; if any are not yet completed, wait. If any
+              # completed-but-not-success, fail immediately.
+              local pending=0
+              while IFS= read -r row; do
+                [ -n "$row" ] || continue
+                name="$(printf '%s' "$row" | jq -r '.name')"
+                status="$(printf '%s' "$row" | jq -r '.status')"
+                concl="$(printf '%s' "$row" | jq -r '.conclusion // ""')"
+                if [ "$status" != "completed" ]; then
+                  pending=$((pending + 1))
+                elif [ "$concl" != "success" ]; then
+                  echo "::error::check '${name}' on ${tag_sha} is not green (status=${status} conclusion=${concl})"
+                  return 1
+                fi
+              done <<<"$payload"
+              if [ "$pending" -eq 0 ]; then
+                echo "all '${prefix}' check-runs on ${tag_sha} are green"
+                return 0
+              fi
+              if [ "$(date +%s)" -gt "$deadline" ]; then
+                echo "::error::timeout: ${pending} '${prefix}' check-run(s) still pending on ${tag_sha} after 20 min"
+                return 1
+              fi
+              echo "waiting (${pending} pending) for '${prefix}' to complete on ${tag_sha}..."
+              sleep "$sleep_for"
+            done
+          }
+
+          for check_prefix in "codeql (" "scorecard analysis"; do
+            poll_check_prefix "$check_prefix" || exit 1
           done
 
   validate-manifest:
