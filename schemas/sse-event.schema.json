@@ -15,13 +15,19 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "slug"],
+      "required": ["type"],
       "properties": {
         "type": { "const": "feature.update" },
         "slug": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]*$",
-          "description": "Feature slug whose state.json changed; useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']."
+          "description": "Feature slug whose state.json or review changed; useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']. Omit when the change is project-wide (e.g. .hook-stats.jsonl) and only `affects` is meaningful."
+        },
+        "affects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["hooks", "reviews", "tokens"] },
+          "description": "Trend kinds whose underlying data changed. useEventStream invalidates `['trend', kind, ...]` for each entry, in addition to the slug-scoped invalidations above. Omit when no trend is affected."
         }
       }
     },

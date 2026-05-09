@@ -78,8 +78,14 @@ describe('classify', () => {
     expect(classify(ROOT, path.join(ROOT, 'specs/REQ-15-foo/random.txt'))).toBeNull()
   })
 
-  it('returns null for tasks.md (not a watched event source)', () => {
-    expect(classify(ROOT, path.join(ROOT, 'specs/REQ-15-foo/tasks.md'))).toBeNull()
+  it('classifies tasks.md as a tasks event for the owning feature', () => {
+    const filePath = path.join(ROOT, 'specs/REQ-15-foo/tasks.md')
+    expect(classify(ROOT, filePath)).toEqual({
+      kind: 'tasks',
+      slug: 'REQ-15-foo',
+      subroot: 'specs',
+      filePath,
+    })
   })
 })
 

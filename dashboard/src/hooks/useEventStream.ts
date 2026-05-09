@@ -80,17 +80,26 @@ function handleEvent(
 ): void {
   switch (evt.type) {
     case 'feature.update': {
-      void qc.invalidateQueries({ queryKey: ['features'] })
-      void qc.invalidateQueries({ queryKey: ['feature', evt.slug, 'detail'] })
-      // TopBar counters (activeCount, eventCount24h, hooksPerSec) derive
-      // from feature/state aggregates; refresh them too.
-      void qc.invalidateQueries({ queryKey: ['meta', 'stats'] })
-      pulseFor(evt.slug, setPulses, timeouts)
+      // Slug-scoped invalidations only fire when the update is feature-scoped.
+      // Project-wide trend updates (e.g. hook-stats) omit slug.
+      if (evt.slug) {
+        void qc.invalidateQueries({ queryKey: ['features'] })
+        void qc.invalidateQueries({ queryKey: ['feature', evt.slug, 'detail'] })
+        void qc.invalidateQueries({ queryKey: ['meta', 'stats'] })
+        pulseFor(evt.slug, setPulses, timeouts)
+      }
+      // Trend invalidations: each kind in `affects` triggers refetch of the
+      // matching `['trend', kind, ...]` queries.
+      for (const kind of evt.affects ?? []) {
+        void qc.invalidateQueries({ queryKey: ['trend', kind] })
+      }
       return
     }
     case 'cost.updated': {
       void qc.invalidateQueries({ queryKey: ['meta', 'stats'] })
       void qc.invalidateQueries({ queryKey: ['features'] })
+      // Cost-log entries land in the daily tokens bucket; refresh the trend.
+      void qc.invalidateQueries({ queryKey: ['trend', 'tokens'] })
       if (evt.slug) {
         void qc.invalidateQueries({ queryKey: ['feature', evt.slug, 'detail'] })
       }

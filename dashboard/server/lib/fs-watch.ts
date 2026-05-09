@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import { type FSWatcher, watch } from 'chokidar'
 
-export type RawEventKind = 'state' | 'review' | 'cost-log' | 'hook-stats'
+export type RawEventKind = 'state' | 'review' | 'cost-log' | 'hook-stats' | 'tasks'
 
 export interface RawFsEvent {
   kind: RawEventKind
@@ -106,6 +106,9 @@ export function classify(mumeiDir: string, absPath: string): RawFsEvent | null {
   }
   if (tailJoined === 'cost-log.jsonl') {
     return { kind: 'cost-log', slug: finalSlug, subroot, filePath: absPath }
+  }
+  if (tailJoined === 'tasks.md') {
+    return { kind: 'tasks', slug: finalSlug, subroot, filePath: absPath }
   }
   if (tail[0] === 'reviews' && /\.json$/.test(tail[1] ?? '')) {
     return { kind: 'review', slug: finalSlug, subroot, filePath: absPath }

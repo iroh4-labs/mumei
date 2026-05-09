@@ -14,9 +14,13 @@ export type MumeiDashboardSSEEvent = {
   | {
       type: "feature.update";
       /**
-       * Feature slug whose state.json changed; useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats'].
+       * Feature slug whose state.json or review changed; useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']. Omit when the change is project-wide (e.g. .hook-stats.jsonl) and only `affects` is meaningful.
        */
-      slug: string;
+      slug?: string;
+      /**
+       * Trend kinds whose underlying data changed. useEventStream invalidates `['trend', kind, ...]` for each entry, in addition to the slug-scoped invalidations above. Omit when no trend is affected.
+       */
+      affects?: ("hooks" | "reviews" | "tokens")[];
     }
   | {
       type: "cost.updated";

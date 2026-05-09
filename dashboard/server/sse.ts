@@ -148,7 +148,7 @@ export function registerSse(
 
 function handleRawEvent(
   raw: RawFsEvent,
-  projectRoot: string,
+  _projectRoot: string,
   emit: EmitFn,
   debouncer: Debouncer,
   debounceMs: number,
@@ -157,12 +157,11 @@ function handleRawEvent(
     case 'state': {
       if (!raw.slug) return
       const slug = raw.slug
-      // state.json updates affect FeatureGrid (lastActivityMin / pulse)
-      // and the activity feed (phase change). Emit feature.update so
-      // the grid + detail refetch, and activity.changed so the feed
-      // refetches /api/activity. Separate debounce keys per kind so
-      // a busy session (state + review + hook-stats firing in the same
-      // 200ms window) does not starve any one event.
+      // state.json updates affect FeatureGrid (lastActivityMin / pulse) and
+      // the activity feed (phase change). No trend data underneath state.json
+      // so `affects` is omitted. Separate debounce keys per kind so a busy
+      // session (state + review + hook-stats firing in the same 200ms window)
+      // does not starve any one event.
       debouncer.schedule(`feature.update::${slug}`, debounceMs, () =>
         emit({ type: 'feature.update', slug }),
       )
@@ -180,10 +179,10 @@ function handleRawEvent(
     case 'review': {
       if (!raw.slug) return
       const slug = raw.slug
-      // Reviews change a feature's lastVerdict in the FeatureGrid AND
-      // append a row to the ActivityFeed.
+      // Reviews change a feature's lastVerdict in the FeatureGrid, append a row
+      // to the ActivityFeed, AND change the daily reviews trend bucket.
       debouncer.schedule(`feature.update::${slug}`, debounceMs, () =>
-        emit({ type: 'feature.update', slug }),
+        emit({ type: 'feature.update', slug, affects: ['reviews'] }),
       )
       debouncer.schedule('activity.changed::review', debounceMs, () =>
         emit({ type: 'activity.changed' }),
@@ -191,13 +190,31 @@ function handleRawEvent(
       return
     }
     case 'hook-stats': {
-      // Project-wide hook firings; emit only a marker, client refetches.
+      // Project-wide hook firings: invalidate the hooks trend (top 10 + daily
+      // counts) by emitting feature.update with no slug. The activity feed
+      // also refetches because its hook-events source is the same jsonl.
+      debouncer.schedule('feature.update::hooks', debounceMs, () =>
+        emit({ type: 'feature.update', affects: ['hooks'] }),
+      )
       debouncer.schedule('activity.changed::hook', debounceMs, () =>
         emit({ type: 'activity.changed' }),
       )
       return
     }
+    case 'tasks': {
+      if (!raw.slug) return
+      const slug = raw.slug
+      // tasks.md edits flip [ ] ↔ [x] and add new task lines, both of
+      // which the waveplan tab reads from the feature detail payload.
+      // Existing ['feature', slug, 'detail'] invalidation drives the
+      // refresh; no trend data is affected.
+      debouncer.schedule(`feature.update::${slug}`, debounceMs, () =>
+        emit({ type: 'feature.update', slug }),
+      )
+      debouncer.schedule('activity.changed::tasks', debounceMs, () =>
+        emit({ type: 'activity.changed' }),
+      )
+      return
+    }
   }
-  // unreachable
-  void projectRoot
 }
