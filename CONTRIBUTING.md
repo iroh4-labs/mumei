@@ -153,9 +153,12 @@ repo.
 
 The protection rule applies to administrators as well — there is no
 `bypass` list. To temporarily relax the rule for an emergency repair, the
-maintainer disables protection via `gh api -X DELETE
-/repos/<owner>/<repo>/branches/main/protection`, makes the change, and
-re-applies protection in the same session.
+maintainer disables protection, makes the change, and re-applies protection
+in the same session:
+
+```bash
+gh api -X DELETE /repos/<owner>/<repo>/branches/main/protection
+```
 
 ## Spec-driven changes
 
