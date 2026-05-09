@@ -310,7 +310,7 @@ const sse = registerSse(app, { projectRoot: PROJECT_ROOT })
 // only the dot of the trailing `i`. Backslashes and backticks are escaped
 // for the JS template literal — the rendered output remains plain ASCII.
 const LOGO_ASCII = `\
-                              _
+                                _
  _ __ ___  _   _ _ __ ___   ___(_)
 | '_ \` _ \\| | | | '_ \` _ \\ / _ \\ |
 | | | | | | |_| | | | | | |  __/ |
