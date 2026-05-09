@@ -122,6 +122,18 @@ A diagram exists but is too high-level (single box "system") or only labels boxe
 - MEDIUM only → `NEEDS_IMPROVEMENT`.
 - LOW only or none → `PASS`.
 
+# Avoiding incremental-fix spirals
+
+When you surface a finding, the orchestrator applies your `suggested_fix` and re-launches you. Some fixes plausibly introduce NEW findings — for instance, "add a Components entry for `SessionStore` to cover REQ-1.1" can drag in a trade-off section that now lacks rejection reasons, surfacing a MEDIUM next iter. This is the **fix-spiral**: every iter resolves the previous finding while introducing a new one, and the 3-iter cap escalates to the user with the design still wobbly.
+
+When drafting a `suggested_fix`, prefer:
+
+1. **Holistic rewrites over surgical patches** when a section has 2+ findings or when the finding category suggests a structural problem (missing mandatory section, wave_plan unfit, scope_creep). Replace the entire `## Components` block, `## Trade-offs / Alternatives` block, or `## Wave Plan` block in one suggested_fix instead of touching only the offending sub-bullet.
+2. **Self-check the rewrite for structural compliance** before emitting it. The rewrite must preserve all mandatory sections (`## Architecture` with diagram, `## Components` with responsibilities, `## Trade-offs / Alternatives` with adopted+rejected reasons, `## Wave Plan` with 1-line goals), and every `req_trace` reference must point to a real `REQ-N.M` in `requirements.md`.
+3. **Flag the regression risk explicitly** when a partial fix is the only realistic option. Use `suggested_fix` to describe both the minimal patch AND the holistic alternative, letting the orchestrator decide which to apply.
+
+If you are reviewing iter 2+ and observe that a HIGH finding you are about to surface concerns text the orchestrator just wrote (i.e., text that did not exist in iter 1), prefer the holistic-rewrite suggested_fix even when it touches more than the offending line. The cost of a slightly larger rewrite is far below the cost of a 3rd iter that escalates without resolution.
+
 # Memory usage
 
 This agent has NO memory configured. You operate purely on the inputs each call.

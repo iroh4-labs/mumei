@@ -100,3 +100,45 @@ load '../test_helper'
   ! find "$CLAUDE_PLUGIN_ROOT/agents" -maxdepth 1 -name 'plan-compliance*.md' -type f |
     grep -q .
 }
+
+# ─── REQ-17.14 / REQ-17.15 — fix-spiral guidance mirror ──────
+
+@test "design-reviewer body has 'Avoiding incremental-fix spirals' section" {
+  grep -q '^# Avoiding incremental-fix spirals' \
+    "$CLAUDE_PLUGIN_ROOT/agents/design-reviewer.md"
+}
+
+@test "design-reviewer body documents holistic-rewrite preference (point 1)" {
+  grep -q 'Holistic rewrites over surgical patches' \
+    "$CLAUDE_PLUGIN_ROOT/agents/design-reviewer.md"
+}
+
+@test "design-reviewer body documents self-check structural compliance (point 2)" {
+  grep -q 'Self-check the rewrite for structural compliance' \
+    "$CLAUDE_PLUGIN_ROOT/agents/design-reviewer.md"
+}
+
+@test "design-reviewer body documents regression-risk flagging (point 3)" {
+  grep -q 'Flag the regression risk explicitly' \
+    "$CLAUDE_PLUGIN_ROOT/agents/design-reviewer.md"
+}
+
+@test "tasks-reviewer body has 'Avoiding incremental-fix spirals' section" {
+  grep -q '^# Avoiding incremental-fix spirals' \
+    "$CLAUDE_PLUGIN_ROOT/agents/tasks-reviewer.md"
+}
+
+@test "tasks-reviewer body documents holistic-rewrite preference (point 1)" {
+  grep -q 'Holistic rewrites over surgical patches' \
+    "$CLAUDE_PLUGIN_ROOT/agents/tasks-reviewer.md"
+}
+
+@test "tasks-reviewer body documents self-check structural compliance (point 2)" {
+  grep -q 'Self-check the rewrite for structural compliance' \
+    "$CLAUDE_PLUGIN_ROOT/agents/tasks-reviewer.md"
+}
+
+@test "tasks-reviewer body documents regression-risk flagging (point 3)" {
+  grep -q 'Flag the regression risk explicitly' \
+    "$CLAUDE_PLUGIN_ROOT/agents/tasks-reviewer.md"
+}

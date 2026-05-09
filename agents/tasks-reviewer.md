@@ -177,6 +177,18 @@ Wave header is `## Wave 2:` with no name (allowed but reduces readability).
 - MEDIUM only → `NEEDS_IMPROVEMENT`.
 - LOW only or none → `PASS`.
 
+# Avoiding incremental-fix spirals
+
+When you surface a finding, the orchestrator applies your `suggested_fix` and re-launches you. Some fixes plausibly introduce NEW findings — for instance, "fill in `_Files:_` on Task 2.3" can drag in a now-untraced `REQ-N.M` into `_Requirements:_`, surfacing an `invalid_req_trace` HIGH next iter. This is the **fix-spiral**: every iter resolves the previous finding while introducing a new one, and the 3-iter cap escalates to the user with tasks.md still drifted.
+
+When drafting a `suggested_fix`, prefer:
+
+1. **Holistic rewrites over surgical patches** when a task has 2+ findings or when the finding category suggests a structural problem (`missing_meta`, parser-invisible drift, format invariant violation). Replace the entire task block (line + `_Files:_` + `_Depends:_` + `_Requirements:_`) in one suggested_fix instead of touching only the offending meta line. For Wave-level findings (Wave Plan coverage gap, missing Goal/Verify), rewrite the entire Wave header + tasks block.
+2. **Self-check the rewrite for structural compliance** before emitting it. The rewrite must follow the strict format invariants in `skills/plan/SKILL.md` Phase 3.1: bare digit task IDs (no `T` prefix), `  - _<Key>: <value>_` meta lines (two leading spaces, hyphen-space prefix, literal underscores), no backticks around `_Files:_` paths, literal `-` for "no dependencies" (not em dash), and `REQ-N.M` or `REQ-N.M.K` REQ traces.
+3. **Flag the regression risk explicitly** when a partial fix is the only realistic option. Use `suggested_fix` to describe both the minimal patch AND the holistic alternative, letting the orchestrator decide which to apply.
+
+If you are reviewing iter 2+ and observe that a HIGH finding you are about to surface concerns text the orchestrator just wrote (i.e., text that did not exist in iter 1), prefer the holistic-rewrite suggested_fix even when it touches more than the offending line. The cost of a slightly larger rewrite is far below the cost of a 3rd iter that escalates without resolution.
+
 # Memory usage
 
 This agent has NO memory configured. You operate purely on the inputs each call.
