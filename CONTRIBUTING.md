@@ -179,10 +179,13 @@ Maintainers do **not** run a manual `/release` command; instead:
    the eventual semver bump.
 2. The `release-please` workflow (`.github/workflows/release-please.yml`)
    maintains one **release pull request per package**:
+
    - `chore(main): release v<X.Y.Z>` for the plugin (root)
    - `chore(main): release dashboard-v<X.Y.Z>` for the dashboard
-     The body of each release PR is the auto-generated CHANGELOG covering
-     all commits landed since the previous release tag.
+
+   The body of each release PR is the auto-generated CHANGELOG covering
+   all commits landed since the previous release tag.
+
 3. When a release PR is merged, release-please pushes the corresponding
    tag (`v<X.Y.Z>` or `dashboard-v<X.Y.Z>`). The existing tag-triggered
    workflows (`release.yml`, `release-dashboard.yml`) take over from
@@ -200,10 +203,32 @@ Version sources of truth:
 `RELEASE_PLEASE_TOKEN` (PAT) setup is required so the release PR
 triggers branch-protection-required CI runs. With the default
 `GITHUB_TOKEN`, GitHub deliberately suppresses workflow runs on PRs
-authored by an action, leaving the release PR unmergeable. Generate a
-fine-grained PAT with `contents: write` + `pull_requests: write` on
-this repository, then add it under Settings → Secrets → Actions as
-`RELEASE_PLEASE_TOKEN`.
+authored by an action, leaving the release PR unmergeable. To
+provision the PAT:
+
+1. Go to **GitHub → Settings → Developer settings → Personal access
+   tokens → Fine-grained tokens** and click **Generate new token**.
+2. Set **Repository access** to "Only select repositories" and pick
+   `hir4ta/mumei`.
+3. Under **Repository permissions**, grant:
+   - **Contents**: Read and write
+   - **Pull requests**: Read and write
+4. Copy the generated token and register it on
+   **`hir4ta/mumei` → Settings → Secrets and variables → Actions** as
+   a new repository secret named `RELEASE_PLEASE_TOKEN`.
+
+The PAT is required for two compounding reasons:
+
+- This workflow intentionally runs with **read-only `GITHUB_TOKEN`**
+  (`permissions: contents: read`, no `pull-requests: write`). Without
+  `RELEASE_PLEASE_TOKEN` the action has no credentials to push the
+  release branch or open the release PR, and the run fails outright.
+- Even if `GITHUB_TOKEN` were elevated, GitHub suppresses workflow
+  runs on PRs authored by an action (re-entrancy guard), so the
+  release PR could never satisfy the required status checks under
+  branch protection.
+
+Supplying the PAT sidesteps both constraints simultaneously.
 
 ## Maintainer-only — bumping pinned external binaries
 
