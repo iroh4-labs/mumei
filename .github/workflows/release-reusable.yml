@@ -275,6 +275,12 @@ jobs:
           format: cyclonedx-json
           output-file: mumei-sbom.cdx.json
           path: .
+          # The downstream `publish` job uploads the SBOM (and tarball
+          # + signature) to the GitHub Release in a single atomic step
+          # via `gh release upload`. Letting sbom-action also upload
+          # would (a) duplicate work and (b) require contents:write on
+          # this job, which we deliberately avoid (least privilege).
+          upload-release-assets: false
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
