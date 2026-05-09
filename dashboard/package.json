@@ -40,9 +40,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write ."
   },
-  "dependencies": {
-    "radix-ui": "^1.4.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
     "@fastify/cors": "^10.0.2",
@@ -73,6 +71,7 @@
     "msw": "^2.7.0",
     "pino-pretty": "^13.0.0",
     "pngjs": "^7.0.0",
+    "radix-ui": "^1.4.3",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.8.0",
