@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/hir4ta/mumei/compare/v0.4.0...v0.4.1) (2026-05-09)
+
+
+### Bug Fixes
+
+* **ci:** release pipeline — sbom-action upload-release-assets:false + release-please component-in-tag per-package ([#28](https://github.com/hir4ta/mumei/issues/28)) ([7b19fef](https://github.com/hir4ta/mumei/commit/7b19fef64b3f2838744f04749066a5f62c72cc65))
+
 ## [0.4.0](https://github.com/hir4ta/mumei/compare/v0.3.9...v0.4.0) (2026-05-09)
 
 
