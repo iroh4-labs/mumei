@@ -1,25 +1,20 @@
 name: ci
 
-# Consolidated CI hub. Replaces the per-tool workflows (codeql.yml,
-# scorecards.yml) that previously ran in parallel on every push. Each
-# job below has its own `if:` gate so push / pull_request /
-# branch_protection_rule / schedule fire the right subset.
+# Consolidated CI hub. Replaces the per-tool codeql.yml that previously
+# ran in parallel on every push. scorecards.yml stays standalone because
+# the scorecard action rejects workflows with global env / defaults.
 #
 # Push main / PR (developer flow) → lint, lint-extra, bats, codeql
-# Schedule weekly                 → codeql + scorecards (security audit)
-# branch_protection_rule          → scorecards (badge refresh)
+# Schedule weekly (Mon 03:00 UTC) → codeql security audit
 
 on:
   push:
     branches: [main]
   pull_request:
-  branch_protection_rule:
   schedule:
     # Mon 03:00 UTC — CodeQL weekly. Off-peak vs. scorecards (04:00) and
     # the gitleaks-weekly run (05:00) per scripts/check-workflow-cron.sh.
     - cron: "0 3 * * 1"
-    # Mon 04:00 UTC — OpenSSF Scorecard weekly badge refresh.
-    - cron: "0 4 * * 1"
 
 # Default least-privilege: every job below performs only read-only
 # inspection (shellcheck / bash -n / lint / typos / link check / SAST
@@ -319,40 +314,3 @@ jobs:
         uses: github/codeql-action/analyze@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3
         with:
           category: "/language:${{ matrix.language }}"
-
-  # ─────────────────────────────────────────
-  # OpenSSF Scorecards (formerly scorecards.yml). Publishes a SARIF
-  # report to GitHub's Security tab and a JSON results file. Runs on
-  # push to main, weekly schedule, and branch_protection_rule changes —
-  # NOT on pull_request, since the action runs against the default
-  # branch only.
-  # ─────────────────────────────────────────
-  scorecards:
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'branch_protection_rule'
-    name: scorecards
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      id-token: write
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          persist-credentials: false
-      - name: Run analysis
-        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
-        with:
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: true
-      - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: SARIF file
-          path: results.sarif
-          retention-days: 5
-      - name: Upload to code-scanning
-        uses: github/codeql-action/upload-sarif@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3
-        with:
-          sarif_file: results.sarif
