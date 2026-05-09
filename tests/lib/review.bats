@@ -87,18 +87,67 @@ EOF
   [ "$rules" = "lint-hook-ids,lint-docs-drift" ]
 }
 
-@test "structural_check: missing plugin_root -> empty array (no-op)" {
-  out="$(mumei_review_structural_check "/nonexistent/plugin/root" "$MUMEI_TEST_TMPDIR")"
-  [ "$out" = '[]' ]
+@test "structural_check: missing plugin_root -> 1 MEDIUM finding (REQ-17.8)" {
+  # Helper uses ${1:-${CLAUDE_PLUGIN_ROOT:-}} so we must unset both the
+  # arg AND the env var to actually exercise the empty-plugin-root branch.
+  CLAUDE_PLUGIN_ROOT="" out="$(mumei_review_structural_check "" "$MUMEI_TEST_TMPDIR")"
+  count="$(jq 'length' <<<"$out")"
+  [ "$count" = "1" ]
+  severity="$(jq -r '.[0].severity' <<<"$out")"
+  [ "$severity" = "MEDIUM" ]
+  rule="$(jq -r '.[0].rule' <<<"$out")"
+  [ "$rule" = "plugin_root_unset" ]
 }
 
-@test "structural_check: only lint-hook-ids exists, lint-docs-drift missing -> empty array" {
+@test "structural_check: only lint-hook-ids exists, lint-docs-drift missing -> 1 MEDIUM finding (REQ-17.8)" {
   local root="${MUMEI_TEST_TMPDIR}/partial"
   mkdir -p "${root}/scripts"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/scripts/lint-hook-ids.sh"
   chmod +x "${root}/scripts/lint-hook-ids.sh"
 
   out="$(mumei_review_structural_check "$root" "$MUMEI_TEST_TMPDIR")"
+  count="$(jq 'length' <<<"$out")"
+  [ "$count" = "1" ]
+  severity="$(jq -r '.[0].severity' <<<"$out")"
+  [ "$severity" = "MEDIUM" ]
+  rule="$(jq -r '.[0].rule' <<<"$out")"
+  [ "$rule" = "lint-docs-drift" ]
+  msg="$(jq -r '.[0].message' <<<"$out")"
+  [[ "$msg" == *"not found"* ]]
+}
+
+@test "structural_check: both linter scripts missing -> 2 MEDIUM findings (REQ-17.8)" {
+  local root="${MUMEI_TEST_TMPDIR}/empty"
+  mkdir -p "${root}/scripts"
+
+  out="$(mumei_review_structural_check "$root" "$MUMEI_TEST_TMPDIR")"
+  count="$(jq 'length' <<<"$out")"
+  [ "$count" = "2" ]
+  # Both findings are severity MEDIUM
+  high_count="$(jq '[.[] | select(.severity == "HIGH")] | length' <<<"$out")"
+  [ "$high_count" = "0" ]
+  # Order: hook-ids first, docs-drift second
+  rules="$(jq -r '[.[].rule] | join(",")' <<<"$out")"
+  [ "$rules" = "lint-hook-ids,lint-docs-drift" ]
+}
+
+@test "structural_check: only lint-hook-ids missing while drift exists -> 1 MEDIUM (drift runs)" {
+  local root="${MUMEI_TEST_TMPDIR}/partial2"
+  mkdir -p "${root}/scripts"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/scripts/lint-docs-drift.sh"
+  chmod +x "${root}/scripts/lint-docs-drift.sh"
+
+  out="$(mumei_review_structural_check "$root" "$MUMEI_TEST_TMPDIR")"
+  count="$(jq 'length' <<<"$out")"
+  [ "$count" = "1" ]
+  severity="$(jq -r '.[0].severity' <<<"$out")"
+  [ "$severity" = "MEDIUM" ]
+  rule="$(jq -r '.[0].rule' <<<"$out")"
+  [ "$rule" = "lint-hook-ids" ]
+}
+
+@test "structural_check: both scripts present and pass -> empty array (no findings) — happy path preserved" {
+  out="$(mumei_review_structural_check "$CLAUDE_PLUGIN_ROOT" "$CLAUDE_PLUGIN_ROOT")"
   [ "$out" = '[]' ]
 }
 

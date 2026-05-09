@@ -361,22 +361,50 @@ mumei_review_structural_check() {
   local repo_root="${2:-.}"
   local findings_jq='[]'
 
-  # Both scripts must exist; otherwise treat as no-op (mumei is loaded
-  # in a partial install or pre-Wave-1 state).
-  if [[ -z "$plugin_root" ]] ||
-    [[ ! -f "${plugin_root}/scripts/lint-hook-ids.sh" ]] ||
-    [[ ! -f "${plugin_root}/scripts/lint-docs-drift.sh" ]]; then
-    printf '[]'
+  # Per-script existence check. A missing script no longer silently
+  # short-circuits to an empty array — that path hid the structural
+  # check from the verdict whenever scripts/ was incomplete (REQ-17.8).
+  # Instead emit a MEDIUM finding per missing script so the review JSON
+  # records "Stage 6.6 ran but could not check rule X". The verdict is
+  # NOT escalated to MAJOR_ISSUES (MEDIUM does not pin), but the user
+  # sees the gap.
+  if [[ -z "$plugin_root" ]]; then
+    findings_jq="$(jq -nc \
+      '[{
+        source: "structural-integrity",
+        severity: "MEDIUM",
+        category: "structural",
+        rule: "plugin_root_unset",
+        location: "(plugin_root)",
+        message: "CLAUDE_PLUGIN_ROOT is unset; structural-integrity check could not locate scripts/."
+      }]')"
+    printf '%s' "$findings_jq"
     return 0
   fi
 
   local script
   for script in lint-hook-ids lint-docs-drift; do
+    local script_path="${plugin_root}/scripts/${script}.sh"
+    if [[ ! -f "$script_path" ]]; then
+      findings_jq="$(jq -nc \
+        --arg rule "$script" \
+        --arg path "$script_path" \
+        --argjson cur "$findings_jq" \
+        '$cur + [{
+          source: "structural-integrity",
+          severity: "MEDIUM",
+          category: "structural",
+          rule: $rule,
+          location: ("scripts/" + $rule + ".sh"),
+          message: ("structural-integrity script not found: " + $path)
+        }]')"
+      continue
+    fi
     local out rc
-    out="$(bash "${plugin_root}/scripts/${script}.sh" "$repo_root" 2>&1)"
+    out="$(bash "$script_path" "$repo_root" 2>&1)"
     rc=$?
     if ((rc != 0)); then
-      findings_jq="$(jq -n \
+      findings_jq="$(jq -nc \
         --arg rule "$script" \
         --arg msg "$out" \
         --argjson cur "$findings_jq" \

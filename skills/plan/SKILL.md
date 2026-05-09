@@ -1172,20 +1172,31 @@ If the array is non-empty:
 ```bash
 structural_findings="$(mumei_review_structural_check "$CLAUDE_PLUGIN_ROOT" "$(pwd)")"
 if [[ "$(jq 'length' <<<"$structural_findings")" -gt 0 ]]; then
-  # Rewrite the review JSON written in Stage 6: prepend structural findings,
-  # set verdict=MAJOR_ISSUES.
+  # Rewrite the review JSON written in Stage 6: prepend structural findings.
   latest_review="$(mumei_review_latest "$review_dir")"
-  jq --argjson sf "$structural_findings" \
-     '.findings_surfaced = ($sf + (.findings_surfaced // []))
-      | .verdict = "MAJOR_ISSUES"' \
-     <"$latest_review" >"${latest_review}.tmp"
+  high_count_in_structural="$(jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' <<<"$structural_findings")"
+  if [[ "$high_count_in_structural" -gt 0 ]]; then
+    # Severity HIGH/CRITICAL — escalate verdict to MAJOR_ISSUES
+    # (deterministic structural defects supersede LLM verdict).
+    jq --argjson sf "$structural_findings" \
+       '.findings_surfaced = ($sf + (.findings_surfaced // []))
+        | .verdict = "MAJOR_ISSUES"' \
+       <"$latest_review" >"${latest_review}.tmp"
+  else
+    # MEDIUM only (e.g., REQ-17.8 missing script case) — warn, no escalate.
+    jq --argjson sf "$structural_findings" \
+       '.findings_surfaced = ($sf + (.findings_surfaced // []))' \
+       <"$latest_review" >"${latest_review}.tmp"
+  fi
   mv "${latest_review}.tmp" "$latest_review"
 fi
 ```
 
-The structural check is no-op when the linter scripts are missing (mumei
-loaded in a partial install or pre-Wave-1 state), so this stage cannot
-regress on older mumei versions.
+When a linter script is missing, the helper now emits a `severity: MEDIUM`
+finding instead of silently returning an empty array (REQ-17.8). The
+Stage 6.6 caller above splits on severity: HIGH/CRITICAL findings still
+override the verdict to `MAJOR_ISSUES`; MEDIUM findings are surfaced in
+`findings_surfaced` but do not escalate the verdict.
 
 If `verdict == PASS`:
 

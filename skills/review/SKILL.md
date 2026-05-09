@@ -345,17 +345,26 @@ same way Stage 0 detector HIGH findings supersede `security-reviewer`.
 structural_findings="$(mumei_review_structural_check "$CLAUDE_PLUGIN_ROOT" "$(pwd)")"
 if [[ "$(jq 'length' <<<"$structural_findings")" -gt 0 ]]; then
   latest_review="$(mumei_review_latest "$review_dir")"
-  jq --argjson sf "$structural_findings" \
-     '.findings_surfaced = ($sf + (.findings_surfaced // []))
-      | .verdict = "MAJOR_ISSUES"' \
-     <"$latest_review" >"${latest_review}.tmp"
+  high_count_in_structural="$(jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' <<<"$structural_findings")"
+  if [[ "$high_count_in_structural" -gt 0 ]]; then
+    jq --argjson sf "$structural_findings" \
+       '.findings_surfaced = ($sf + (.findings_surfaced // []))
+        | .verdict = "MAJOR_ISSUES"' \
+       <"$latest_review" >"${latest_review}.tmp"
+    verdict="MAJOR_ISSUES"
+  else
+    jq --argjson sf "$structural_findings" \
+       '.findings_surfaced = ($sf + (.findings_surfaced // []))' \
+       <"$latest_review" >"${latest_review}.tmp"
+  fi
   mv "${latest_review}.tmp" "$latest_review"
-  verdict="MAJOR_ISSUES"
 fi
 ```
 
-The structural check is no-op when the linter scripts are missing (mumei loaded
-in a partial install), so older plan-vehicle reviews cannot regress.
+Per REQ-17.8, missing linter scripts produce `severity: MEDIUM`
+findings instead of silent no-op. The caller branches on severity:
+HIGH/CRITICAL escalates verdict to `MAJOR_ISSUES`; MEDIUM is surfaced
+without escalation.
 
 ### Step 9 — Phase transition + user prompt (REQ-9.21 / REQ-9.22 / REQ-9.23 / REQ-9.33.2)
 
