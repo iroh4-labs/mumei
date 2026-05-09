@@ -1,0 +1,185 @@
+name: pr
+
+# Consolidated PR-time guards. Each job below was previously its own
+# workflow file (signed-commit-verify / mutable-tag-guard /
+# pull-request-target-guard). Bundling them as jobs of a single PR
+# workflow keeps `gh run list` for a PR to one row per workflow rather
+# than three, while preserving each guard's independent pass/fail
+# status as a job within the PR run.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # ─────────────────────────────────────────
+  # Verify every commit on PRs targeting `main` carries a verified GPG
+  # or SSH signature. GitHub's verified-signatures branch protection
+  # gates merge, not review; running on PR open/sync surfaces unsigned
+  # commits before merge time.
+  # ─────────────────────────────────────────
+  signed-commit-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+      - name: Verify signatures on every PR commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO_FULL: ${{ github.repository }}
+        run: |
+          set -u
+          mapfile -t shas < <(git rev-list --no-merges "${PR_BASE_SHA}..${PR_HEAD_SHA}")
+          if [ "${#shas[@]}" -eq 0 ]; then
+            echo "no commits to verify (PR base == head)"
+            exit 0
+          fi
+          # gh-api retry helper. Distinguishes:
+          #   - HTTP 404 (commit truly missing on remote) → terminal verified=false
+          #   - HTTP 401/403/429/5xx/network → transient, retry up to 3x with 1s/2s backoff
+          # See REQ-8 history for the reasoning behind the narrow 404 match.
+          gh_api_verified_with_retry() {
+            local sha="$1" attempts=3 i=0 last_stderr="" stdout="" rc=0
+            local stderr_file
+            stderr_file="$(mktemp)"
+            while [ "$i" -lt "$attempts" ]; do
+              stdout="$(gh api "repos/${REPO_FULL}/commits/${sha}" \
+                --jq '.commit.verification.verified' 2>"$stderr_file")"
+              rc=$?
+              last_stderr="$(cat "$stderr_file")"
+              if [ "$rc" -eq 0 ]; then
+                rm -f "$stderr_file"
+                printf '%s' "$stdout"
+                return 0
+              fi
+              if printf '%s' "$last_stderr" | grep -qE '\bHTTP 404\b'; then
+                rm -f "$stderr_file"
+                printf 'false'
+                return 0
+              fi
+              i=$((i + 1))
+              if [ "$i" -lt "$attempts" ]; then
+                sleep $((1 << (i - 1)))
+              fi
+            done
+            rm -f "$stderr_file"
+            printf '[mumei] gh api transient failure after %d attempts (last stderr: %s)\n' \
+              "$attempts" "$last_stderr" >&2
+            return 2
+          }
+          unsigned=""
+          for sha in "${shas[@]}"; do
+            verified="$(gh_api_verified_with_retry "$sha")"
+            api_rc=$?
+            if [ "$api_rc" -eq 2 ]; then
+              echo "::error::infra failure: cannot determine signed status of ${sha} after retries"
+              exit 2
+            fi
+            if [ "$verified" != "true" ]; then
+              author="$(git log -1 --format='%an <%ae>' "$sha")"
+              unsigned+="${sha}  ${author}"$'\n'
+            fi
+          done
+          if [ -n "$unsigned" ]; then
+            echo "::error::Unverified commits detected on this PR:"
+            printf '%s' "$unsigned"
+            echo ""
+            echo "Sign every commit (e.g. 'git commit -S' or 'git rebase -S') and force-push the branch."
+            exit 1
+          fi
+          echo "all ${#shas[@]} commit(s) carry a verified signature"
+
+  # ─────────────────────────────────────────
+  # Reject any PR that introduces a third-party `uses:` reference
+  # pinned to a mutable target (vN floating tag, main, master, branch).
+  # Counters the tj-actions / Trivy-style supply-chain pattern where a
+  # malicious force-push to a mutable tag rotates code under everyone's
+  # `@v1` reference. Self-exclusion: this workflow file is excluded
+  # because the regex matches the example patterns in the comments.
+  # ─────────────────────────────────────────
+  mutable-tag-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Reject mutable uses references
+        run: |
+          set -u
+          shopt -s nullglob
+          mapfile -t files < <(
+            find .github/workflows -maxdepth 1 -type f \
+              \( -name '*.yml' -o -name '*.yaml' \) \
+              ! -name 'pr.yml' \
+              | sort
+          )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no workflow files to scan"
+            exit 0
+          fi
+          uses_line='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+'
+          local_action="${uses_line}\\."
+          valid_sha="${uses_line}[^/[:space:]]+/[^@[:space:]]+@[a-f0-9]{40}([[:space:]]+#.*)?[[:space:]]*$"
+          violations=""
+          for f in "${files[@]}"; do
+            while IFS= read -r line_with_no; do
+              [ -n "$line_with_no" ] || continue
+              n="${line_with_no%%:*}"
+              line="${line_with_no#*:}"
+              if printf '%s\n' "$line" | grep -qE "$local_action"; then continue; fi
+              if printf '%s\n' "$line" | grep -qE "$valid_sha"; then continue; fi
+              violations+="${f}:${n}:${line}"$'\n'
+            done < <(grep -nE "$uses_line" "$f" || true)
+          done
+          if [ -n "$violations" ]; then
+            echo "::error::Mutable uses: references detected. Pin to a 40-char commit SHA with a trailing # version comment."
+            printf '%s' "$violations"
+            exit 1
+          fi
+          echo "all uses: references are SHA-pinned"
+
+  # ─────────────────────────────────────────
+  # Reject any PR that introduces a new workflow using
+  # `pull_request_target` outside the explicit ALLOWLIST. The trigger
+  # runs in the base repo's context with secret access — canonical
+  # attack surface for fork-PR-driven secret exfiltration. Self-
+  # exclusion: pr.yml is skipped because the comment text contains
+  # the literal `pull_request_target` token.
+  # ─────────────────────────────────────────
+  pr-target-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Reject new pull_request_target usage
+        run: |
+          set -u
+          ALLOWLIST=""
+          shopt -s nullglob
+          mapfile -t files < <(
+            find .github/workflows -maxdepth 1 -type f \
+              \( -name '*.yml' -o -name '*.yaml' \) \
+              ! -name 'pr.yml' \
+              | sort
+          )
+          violations=""
+          for f in "${files[@]}"; do
+            base="$(basename "$f")"
+            if grep -qE '^[[:space:]]*-?[[:space:]]*pull_request_target' "$f"; then
+              if ! printf '%s\n' "$ALLOWLIST" | grep -qFx "$base"; then
+                violations+="$f"$'\n'
+              fi
+            fi
+          done
+          if [ -n "$violations" ]; then
+            echo "::error::pull_request_target detected in workflow(s) not on the allowlist:"
+            printf '%s' "$violations"
+            echo ""
+            echo "Either remove the trigger or add the basename to the ALLOWLIST in pr.yml within this same PR."
+            exit 1
+          fi
+          echo "no unauthorized pull_request_target usage"
