@@ -52,6 +52,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 
 - **Harness, not just prompts** — every phase / Wave / commit / push gate is enforced via Claude Code Hooks at the tool-call boundary. mumei treats the agent's intent as untrusted input and validates at the OS layer.
 - **Hook-enforced phases** — phase / Wave / commit / push transitions are denied at the tool-call boundary; the agent cannot prompt its way around them.
+- **Harness state protection (S1)** — `.mumei/current`, `state.json`, and review JSON files are denied to LLM Edit/Write at the Hook layer; harness internal state cannot be corrupted by a runaway agent. Orchestrator bash helpers retain legitimate write access via paths that bypass the hook.
 - **Deterministic security ground-truth** — `semgrep` + `osv-scanner` run before LLM reviewers. HIGH findings pin the verdict to `MAJOR_ISSUES`.
 - **3 spec reviewers + 4-stage review pipeline** — independent `requirements` / `design` / `tasks` reviewers on fresh contexts (auto-iter ≤ 3); `spec-compliance` + `security` parallel, then `adversarial`, then per-issue validator. `requirements-reviewer` audits AC `examples_coverage` (zero examples on high-risk AC, actor-trigger inconsistency) and `requirement_smell` (ambiguity / vagueness / incompleteness).
 - **Wave-based commits** — 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` to block phantom completion.

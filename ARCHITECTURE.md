@@ -102,13 +102,13 @@ not by prompting.
 
 ## Hook rules — full enforcement table
 
-The 16 rules below describe **what mumei refuses to do** when an invariant is
+The 17 rules below describe **what mumei refuses to do** when an invariant is
 violated. Each rule is a single check in one of the handler scripts under
 `hooks/`. Rules denoted _advisory_ surface findings via `additionalContext`
 without blocking the tool call. The 4 `L-*` rows at the bottom of the table
 are plan-vehicle lifecycle hooks (state mutations and one Stop block) that
 fire only when the active feature's state lives under `.mumei/plans/`; they
-are documented here for completeness but are not counted in the 16 spec-vehicle
+are documented here for completeness but are not counted in the 17 spec-vehicle
 rules.
 
 | ID   | Phase        | Hook event               | Trigger                                                                                                                                                                                    | Implementation                |
@@ -126,6 +126,7 @@ rules.
 | R2   | review       | PreToolUse(Bash)         | `git push` while latest review verdict is `MAJOR_ISSUES`                                                                                                                                   | `hooks/pre-bash-guard.sh`     |
 | R3   | done         | Stop                     | `phase=done` but feature still in `.mumei/current`                                                                                                                                         | `hooks/stop-guard.sh`         |
 | M1   | any          | PreToolUse(Edit)         | LLM-driven Edit/Write on `.claude/agent-memory/<reviewer>/MEMORY.md` (curator pipeline only)                                                                                               | `hooks/pre-edit-guard.sh`     |
+| S1   | any          | PreToolUse(Edit)         | LLM-driven Edit/Write on mumei harness state: `.mumei/current` / state.json / spec-reviews/_.json / reviews/_.json (orchestrator helpers only)                                             | `hooks/pre-edit-guard.sh`     |
 | X1   | any          | PostToolUse(Bash)        | Bash modified files outside scope (advisory)                                                                                                                                               | `hooks/post-bash-guard.sh`    |
 | X2   | any          | PostToolUse(Edit)        | tasks.md format violation (advisory)                                                                                                                                                       | `scripts/lint-tasks.sh`       |
 | X3   | implement    | PostToolUse(Bash)        | Wave auto-advance after a `git commit` that passes a triple gate (`tool_response.exit_code == 0` + HEAD moved + Conventional-Commits or `[wave-N]` subject — state mutation, not blocking) | `hooks/post-bash-guard.sh`    |

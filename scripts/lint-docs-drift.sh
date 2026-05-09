@@ -37,7 +37,7 @@ _mumei_arch_hook_ids() {
       /^## Hook rules/ { flag = 1; next }
       flag && /^## / { flag = 0 }
       flag {
-        if (match($0, /^\|[[:space:]]+[PIWRMX][0-9]+[[:space:]]+\|/)) {
+        if (match($0, /^\|[[:space:]]+[PIWRMSX][0-9]+[[:space:]]+\|/)) {
           chunk = substr($0, RSTART, RLENGTH)
           gsub(/[|[:space:]]/, "", chunk)
           print chunk
@@ -142,7 +142,7 @@ impl_glob=()
 [[ -d "${ROOT}/scripts" ]] && impl_glob+=("$ROOT"/scripts/*.sh)
 impl_ids_sorted=""
 if ((${#impl_glob[@]} > 0)); then
-  impl_ids_sorted="$(grep -hoE '[PIWRMX][0-9]+' "${impl_glob[@]}" 2>/dev/null | sort -u)"
+  impl_ids_sorted="$(grep -hoE '[PIWRMSX][0-9]+' "${impl_glob[@]}" 2>/dev/null | sort -u)"
 fi
 
 if [[ -n "$arch_ids_sorted" ]] || [[ -n "$impl_ids_sorted" ]]; then

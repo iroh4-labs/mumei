@@ -52,6 +52,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 
 - **Harness — prompt ではなく Hook で強制** — phase / Wave / commit / push の各 gate は Claude Code Hook で tool 呼び出しの段階で enforce されます。エージェントの意図は untrusted input として OS layer で検証。
 - **Hook で phase を物理強制** — phase / Wave / commit / push の遷移を tool 呼び出しの段階で deny します。エージェントは prompt-level で回避できません。
+- **harness state 保護 (S1 rule)** — `.mumei/current` / state.json / review JSON は LLM の Edit/Write を Hook 層で deny します。暴走した agent が内部 state を壊せません。orchestrator の bash helper は hook を経由しない経路で正規 write を保持します。
 - **決定論的なセキュリティ ground-truth** — `semgrep` と `osv-scanner` を LLM reviewer の前に走らせ、HIGH の finding が出たら verdict を `MAJOR_ISSUES` に固定します。
 - **3 つの spec reviewer + 4 段階の review pipeline** — `requirements` / `design` / `tasks` reviewer が fresh context で独立に走り、最大 3 回まで自動 iterate。続けて `spec-compliance` と `security` を並列、`adversarial` を直列、最後に per-issue validator が回ります。
 - **Wave 単位の commit** — 1 Wave = 1 commit。Hook が diff を各 task の `_Files:_` と突き合わせ、phantom completion (実装の diff がないのに `[x]` を付ける) を止めます。
