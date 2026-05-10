@@ -5,10 +5,8 @@
   "description": "Phase 5 / /mumei:review pipeline verdict, persisted at .mumei/specs/<feature>/reviews/<ts>.json (spec vehicle) or .mumei/plans/<slug>/reviews/<ts>.json (plan vehicle).",
   "type": "object",
   "required": [
-    "feature",
     "iteration",
-    "verdict",
-    "summary"
+    "verdict"
   ],
   "properties": {
     "feature": {
@@ -30,8 +28,7 @@
     },
     "iteration": {
       "minimum": 1,
-      "maximum": 3,
-      "description": "Review iter (capped at 3). Iter 1 is baseline; iter 2+ uses next_iter_reviewers from iter N-1.",
+      "description": "Review iter index. Current orchestrator caps at 3 (REQ-7.6 short-circuit) but historical reviews under archive may carry higher values from earlier iter caps.",
       "type": "integer"
     },
     "iter_head": {
@@ -56,6 +53,7 @@
       ]
     },
     "summary": {
+      "description": "Human-readable summary of the review verdict. Older archived reviews may omit this field.",
       "type": "string"
     },
     "reviewers": {
@@ -63,25 +61,19 @@
       "type": "object",
       "patternProperties": {
         "^(.*)$": {
-          "type": "object",
-          "properties": {
-            "verdict": {
-              "anyOf": [
-                {
-                  "const": "PASS",
-                  "type": "string"
-                },
-                {
-                  "const": "NEEDS_IMPROVEMENT",
-                  "type": "string"
-                },
-                {
-                  "const": "MAJOR_ISSUES",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "verdict": {
                   "type": "string"
                 }
-              ]
+              }
+            },
+            {
+              "type": "string"
             }
-          }
+          ]
         }
       }
     },
@@ -89,10 +81,6 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "severity",
-          "message"
-        ],
         "properties": {
           "id": {
             "type": "string"
@@ -168,10 +156,6 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "severity",
-          "message"
-        ],
         "properties": {
           "id": {
             "type": "string"
