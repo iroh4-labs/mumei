@@ -128,35 +128,65 @@ if mumei_is_git_commit "$COMMAND"; then
   fi
 fi
 
-# --- R2: git push while the latest review verdict is MAJOR_ISSUES ---
+# --- R2: git push gating on review state ---
+# Two cases blocked under R2:
+#   (a) review pipeline has not run yet but the feature requires one
+#       (spec: phase=review; plan: pending_review=true). Pushing in
+#       this state would ship code that the harness has not vetted.
+#   (b) latest review verdict is MAJOR_ISSUES. Pre-existing rule;
+#       address findings via /mumei:plan (spec) or /mumei:review (plan)
+#       before retrying.
+# Detector reports (<ts>-detectors.json) are excluded so the latest
+# *review* (not the detector run) is selected.
 if mumei_is_git_push "$COMMAND"; then
-  # Look at the latest review across both vehicles. spec vehicle reviews
-  # live under .mumei/specs/<feature>/reviews/, plan vehicle under
-  # .mumei/plans/<key>/reviews/. Either may be present depending on which
-  # vehicle the active feature is. Detector reports (<ts>-detectors.json)
-  # are excluded so the latest *review* (not the detector run) is selected.
   if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
     REVIEW_DIR=".mumei/plans/${KEY}/reviews"
   else
     REVIEW_DIR=".mumei/specs/${FEATURE}/reviews"
   fi
+  LATEST_REVIEW=""
   if [[ -d "$REVIEW_DIR" ]]; then
     LATEST_REVIEW="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name '*.json' \
       ! -name '*-detectors.json' 2>/dev/null | sort | tail -n1)"
-    if [[ -n "$LATEST_REVIEW" ]] && [[ -f "$LATEST_REVIEW" ]]; then
-      VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
-      if [[ "$VERDICT" == "MAJOR_ISSUES" ]]; then
-        if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
-          mumei_deny \
-            "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
-            "Latest review: ${LATEST_REVIEW}\nRun /mumei:review to re-evaluate after fixing." \
-            "L-R2"
-        else
-          mumei_deny \
-            "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
-            "Latest review: ${LATEST_REVIEW}\nRun /mumei:plan to address findings and re-review." \
-            "R2"
-        fi
+  fi
+
+  # (a) review required but missing
+  REQUIRES_REVIEW=0
+  if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
+    PENDING="$(mumei_state_get "$KEY" '.pending_review' 2>/dev/null || true)"
+    [[ "$PENDING" == "true" ]] && REQUIRES_REVIEW=1
+  else
+    PHASE="$(mumei_state_phase "$FEATURE" 2>/dev/null || echo "")"
+    [[ "$PHASE" == "review" ]] && REQUIRES_REVIEW=1
+  fi
+  if [[ "$REQUIRES_REVIEW" == "1" ]] && [[ -z "$LATEST_REVIEW" ]]; then
+    if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
+      mumei_deny \
+        "Review pipeline has not run. Run /mumei:review before pushing." \
+        "Active feature: ${KEY}\nReview dir: ${REVIEW_DIR} (no <ts>.json found)" \
+        "L-R2"
+    else
+      mumei_deny \
+        "Review pipeline has not run. Run /mumei:plan to drive Phase 5 review before pushing." \
+        "Active feature: ${FEATURE} (phase=review)\nReview dir: ${REVIEW_DIR} (no <ts>.json found)" \
+        "R2"
+    fi
+  fi
+
+  # (b) latest review verdict is MAJOR_ISSUES
+  if [[ -n "$LATEST_REVIEW" ]] && [[ -f "$LATEST_REVIEW" ]]; then
+    VERDICT="$(jq -r '.verdict // empty' "$LATEST_REVIEW" 2>/dev/null || true)"
+    if [[ "$VERDICT" == "MAJOR_ISSUES" ]]; then
+      if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
+        mumei_deny \
+          "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
+          "Latest review: ${LATEST_REVIEW}\nRun /mumei:review to re-evaluate after fixing." \
+          "L-R2"
+      else
+        mumei_deny \
+          "Review verdict: MAJOR_ISSUES. Address findings before pushing." \
+          "Latest review: ${LATEST_REVIEW}\nRun /mumei:plan to address findings and re-review." \
+          "R2"
       fi
     fi
   fi

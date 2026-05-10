@@ -117,6 +117,59 @@ EOF
   [ -z "$stderr" ]
 }
 
+@test "denies git push when phase=review but no review JSON exists yet (R2)" {
+  _init_feature REQ-1-foo review 1
+  cat >".mumei/specs/REQ-1-foo/tasks.md" <<'EOF'
+# foo plan
+
+## Wave 1: alpha
+
+- [x] 1.1 task one
+  - _Files: src/a.ts_
+  - _Depends: -_
+  - _Requirements: REQ-1.1_
+EOF
+  # No reviews/ directory at all → review pipeline never ran.
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"Review pipeline has not run"* ]]
+}
+
+@test "denies git push when phase=review and reviews/ exists but only detector reports (R2)" {
+  _init_feature REQ-1-foo review 1
+  cat >".mumei/specs/REQ-1-foo/tasks.md" <<'EOF'
+# foo plan
+
+## Wave 1: alpha
+
+- [x] 1.1 task one
+  - _Files: src/a.ts_
+  - _Depends: -_
+  - _Requirements: REQ-1.1_
+EOF
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  # Only a detector report; no <ts>.json review verdict.
+  printf '{}' >.mumei/specs/REQ-1-foo/reviews/2026-01-01T00-00-00Z-detectors.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"Review pipeline has not run"* ]]
+}
+
+@test "allows git push when phase=implement and no review yet (review not required yet)" {
+  _init_feature_with_tasks
+  # No reviews/ directory; phase=implement → not yet at review gate.
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  [ -z "$stderr" ]
+}
+
 # ─── MUMEI_BYPASS escape hatch ───────────────────────────────
 
 @test "MUMEI_BYPASS=1 short-circuits to allow even when Wave is incomplete" {
