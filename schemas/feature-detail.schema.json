@@ -194,7 +194,7 @@
           },
           "iteration": {
             "minimum": 1,
-            "maximum": 3,
+            "description": "Review iter index. Current orchestrator caps at 3 but archived reviews may carry higher values from earlier iter caps.",
             "type": "integer"
           },
           "wave": {
@@ -267,7 +267,7 @@
         "properties": {
           "iter": {
             "minimum": 1,
-            "maximum": 3,
+            "description": "Review iter index. Current orchestrator caps at 3 but archived cost-log entries may carry higher values.",
             "type": "integer"
           },
           "tokens": {

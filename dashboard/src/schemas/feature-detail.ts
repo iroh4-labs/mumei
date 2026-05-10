@@ -73,7 +73,11 @@ const ReviewSummarySchema = Type.Object(
       Type.Literal('NEEDS_IMPROVEMENT'),
       Type.Literal('MAJOR_ISSUES'),
     ]),
-    iteration: Type.Integer({ minimum: 1, maximum: 3 }),
+    iteration: Type.Integer({
+      minimum: 1,
+      description:
+        'Review iter index. Current orchestrator caps at 3 but archived reviews may carry higher values from earlier iter caps.',
+    }),
     wave: Type.Optional(Type.Union([Type.Integer({ minimum: 1 }), Type.Literal('all')])),
     findings: Type.Optional(Type.Array(FindingShortSchema)),
   },
@@ -82,7 +86,11 @@ const ReviewSummarySchema = Type.Object(
 
 const CostPerIterSchema = Type.Object(
   {
-    iter: Type.Integer({ minimum: 1, maximum: 3 }),
+    iter: Type.Integer({
+      minimum: 1,
+      description:
+        'Review iter index. Current orchestrator caps at 3 but archived cost-log entries may carry higher values.',
+    }),
     tokens: Type.Integer({ minimum: 0 }),
     cacheHit: Type.Number({ minimum: 0, maximum: 1 }),
   },
