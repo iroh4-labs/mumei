@@ -319,8 +319,8 @@ tasks:
         gh api "repos/{owner}/{repo}/pulls/${pr}/comments" \
           --jq '.[] | select(.user.login == "Copilot") | "[\(.path):\(.line // .original_line)] \(.body)"'
 
-  pr:gemini:
-    desc: "Trigger a Gemini PR re-review by posting an `@gemini-cli /review` comment"
+  pr:codex:
+    desc: "Trigger an OpenAI Codex PR re-review by posting an `@codex review` comment"
     preconditions:
       - sh: command -v gh
         msg: "gh CLI not installed"
@@ -331,15 +331,19 @@ tasks:
       - |
         pr="$MUMEI_PR_ARG"
         if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
-          echo "Usage: task pr:gemini -- <PR-number>"
+          echo "Usage: task pr:codex -- <PR-number>"
           [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
           exit 1
         fi
-        gh pr comment "$pr" --body '@gemini-cli /review'
-        echo "posted @gemini-cli /review on PR #${pr}; run 'task pr:gemini-fetch -- ${pr}' once CI completes."
+        # Codex Cloud (OpenAI-hosted GitHub App) listens for `@codex review`
+        # comments and posts a P0/P1-focused review. Optional one-off
+        # focus: `@codex review for security regressions` — append your
+        # own context inline if needed.
+        gh pr comment "$pr" --body '@codex review'
+        echo "posted @codex review on PR #${pr}; Codex posts the review back to the PR within ~1-2 min."
 
-  pr:gemini-fetch:
-    desc: "Fetch the most recent Gemini review (summary body) for the given PR"
+  pr:codex-fetch:
+    desc: "Fetch the most recent Codex review (summary body) for the given PR"
     preconditions:
       - sh: command -v gh
         msg: "gh CLI not installed"
@@ -349,24 +353,19 @@ tasks:
       - |
         pr="$MUMEI_PR_ARG"
         if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
-          echo "Usage: task pr:gemini-fetch -- <PR-number>"
+          echo "Usage: task pr:codex-fetch -- <PR-number>"
           [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
           exit 1
         fi
-        # Gemini posts review summaries as PR comments via the GitHub MCP
-        # server's `pull_request_review_write` tool — they show up under
-        # the same `pulls/.../comments` endpoint Copilot uses, but the
-        # comment body author varies (the `gemini-cli` GitHub App when
-        # APP_ID is set, otherwise github-actions[bot]). Filter on the
-        # leading marker the extension prefixes ("## Code Review Summary"
-        # / similar) so we only return Gemini-authored comments.
+        # Codex posts reviews via the standard GitHub Reviews + inline
+        # comment APIs from the `codex[bot]` author.
         echo "=== reviews (summary) ==="
         gh pr view "$pr" --json reviews \
-          --jq '.reviews[] | select((.author.login // "") | test("(?i)gemini|github-actions")) | "\(.submittedAt) [\(.state)] \(.author.login):\n\(.body)\n"'
+          --jq '.reviews[] | select((.author.login // "") | test("(?i)codex")) | "\(.submittedAt) [\(.state)] \(.author.login):\n\(.body)\n"'
         echo
-        echo "=== inline review comments authored by Gemini ==="
+        echo "=== inline review comments authored by Codex ==="
         gh api "repos/{owner}/{repo}/pulls/${pr}/comments" \
-          --jq '.[] | select((.user.login // "") | test("(?i)gemini|github-actions")) | "[\(.path):\(.line // .original_line)] \(.body)"'
+          --jq '.[] | select((.user.login // "") | test("(?i)codex")) | "[\(.path):\(.line // .original_line)] \(.body)"'
 
   # ---------------------------------------------------------------
   # Post-merge watcher — call after `gh pr merge` to confirm main CI green.

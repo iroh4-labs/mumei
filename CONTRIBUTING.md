@@ -221,19 +221,18 @@ creates a topic branch in this repo.
    Address failures before merge.
 8. Monitor the PR after opening. CI green is necessary but not
    sufficient — also check the automated reviewers (mumei runs two
-   in parallel):
+   in parallel for genuine multi-vendor coverage):
    - `task pr:watch` — wait for the latest CI run on this branch
    - `gh pr checks <N>` — CI status snapshot
    - `task pr:copilot -- <N>` — Copilot summary + inline review
-     comments in one call
-   - `task pr:gemini-fetch -- <N>` — Gemini summary + inline
-     comments (Gemini 3.1 Pro via `google-github-actions/run-gemini-cli`,
-     re-runs on every push thanks to `synchronize` trigger; manual
-     re-trigger via `task pr:gemini -- <N>`)
+     (Anthropic Claude family).
+   - `task pr:codex-fetch -- <N>` — OpenAI Codex summary + inline
+     review (auto-posts on PR open via Codex Cloud; manual re-trigger
+     via `task pr:codex -- <N>` which posts `@codex review`).
      Address findings from BOTH reviewers (push fix commits) before
      merging. They focus differently — Copilot tends to surface
-     correctness / consistency, Gemini emphasizes architecture /
-     edge cases via thinking-mode reasoning.
+     correctness / consistency, Codex flags P0/P1 issues focused on
+     architecture and security per OpenAI's review prompt.
 9. Self-merge via squash or rebase (linear history; merge commits should
    be avoided). No required approval count.
 
