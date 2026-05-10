@@ -123,10 +123,12 @@ are generated from the subject line alone, and bot-style attribution adds noise.
 
 ## Pull request workflow
 
-`main` is branch-protected: direct pushes are rejected at the server. Every
-change reaches `main` through a pull request whose required status checks all
-pass. External contributors fork; the maintainer creates a topic branch in this
-repo.
+`main` has no server-side branch protection, but the project's
+development rule **requires every change to go through a pull request**
+so the CI checks below run on the diff before merge. Direct pushes to
+`main` are not allowed by convention, even though they are not
+technically blocked. External contributors fork; the maintainer
+creates a topic branch in this repo.
 
 1. Fork or branch from `main` (`git checkout -b feat/your-feature`).
 2. Implement the change, keeping commits focused and Conventional Commits-formatted.
@@ -140,25 +142,27 @@ repo.
    their place through observed failure or external knowledge, not through
    speculation. The check is enforced by review (no automated tooling),
    so do this in the same commit as the rule itself.
-6. Open the PR. The template (`.github/PULL_REQUEST_TEMPLATE.md`) lists the
-   pre-merge checklist; tick each item that applies.
-7. CI runs on the PR. The following 8 required status checks must all pass
-   before `main` will accept the merge: `lint`, `lint-extra`,
-   `bats (macos-latest)`, `bats (ubuntu-latest)`, `codeql (actions)`,
-   `codeql (javascript-typescript)`, `pr-target-guard`, `mutable-tag-guard`.
-   Other checks (e.g. `signed-commit-verify`, `dashboard-ci / build`) run but
-   are informational, not blocking.
-8. Self-merge is permitted via squash or rebase (linear history is enforced;
-   merge commits are rejected). Approval count is not required.
-
-The protection rule applies to administrators as well — there is no
-`bypass` list. To temporarily relax the rule for an emergency repair, the
-maintainer disables protection, makes the change, and re-applies protection
-in the same session:
-
-```bash
-gh api -X DELETE /repos/<owner>/<repo>/branches/main/protection
-```
+6. Open the PR. The body **must follow** `.github/PULL_REQUEST_TEMPLATE.md`
+   (Summary / Motivation / Approach / Affected components / Test plan /
+   Pre-merge checklist / Breaking change). When using `gh pr create
+--body-file <path>`, copy the template structure into your body file
+   first; the `--body` argument otherwise overrides the template prefill
+   that the GitHub web UI would have inserted automatically.
+7. CI runs on the PR. The relevant workflows are `ci.yml` (`lint`,
+   `lint-extra`, `bats` on macOS / Ubuntu, `codeql`), `pr.yml`
+   (`mutable-tag-guard`, `pr-target-guard`), `gitleaks.yml`,
+   `plugin-json-validate.yml`, and `dashboard-ci.yml` (path-triggered).
+   Address failures before merge.
+8. Monitor the PR after opening. CI green is necessary but not
+   sufficient — also check Copilot's automated review:
+   - `gh pr checks <N>` — CI status
+   - `gh pr view <N> --comments` — Copilot's summary review
+     (`copilot-pull-request-reviewer[bot]` author)
+   - `gh api repos/<owner>/<repo>/pulls/<N>/comments` — inline
+     comments Copilot left on specific lines
+     Address Copilot findings (push fix commits) before merging.
+9. Self-merge via squash or rebase (linear history; merge commits should
+   be avoided). No required approval count.
 
 ## Spec-driven changes
 
@@ -171,64 +175,36 @@ relevant `decisions.md` entry under `docs/` if applicable.
 
 ## Releases
 
-Releases are automated by [release-please](https://github.com/googleapis/release-please).
-Maintainers do **not** run a manual `/release` command; instead:
+Releases are maintainer-only. External contributors do not need to
+reproduce a release locally; the procedure lives in a private skill
+that is not part of the distributed plugin (the entire `.claude/` tree
+is gitignored).
 
-1. Land Conventional-Commits-formatted PRs on `main` as usual. Each PR's
-   subject (`feat:` / `fix:` / `feat!:` / `BREAKING CHANGE:` footer) drives
-   the eventual semver bump.
-2. The `release-please` workflow (`.github/workflows/release-please.yml`)
-   maintains one **release pull request per package**:
+For maintainers, the procedure (in `.claude/skills/release/SKILL.md`)
+takes either no argument, a SemVer bump keyword
+(`patch` / `minor` / `major`), or an explicit version (`0.4.2`). It
+creates one commit that wraps any uncommitted work, pushes to `main`,
+watches the `main` CI run, then on green creates an annotated tag
+(`v<X.Y.Z>`, unsigned) and pushes it. The tag push triggers
+`release.yml`, which delegates to `release-reusable.yml` for build →
+Sigstore sign → SBOM → SLSA → publish.
 
-   - `chore(main): release v<X.Y.Z>` for the plugin (root)
-   - `chore(main): release dashboard-v<X.Y.Z>` for the dashboard
-
-   The body of each release PR is the auto-generated CHANGELOG covering
-   all commits landed since the previous release tag.
-
-3. When a release PR is merged, release-please pushes the corresponding
-   tag (`v<X.Y.Z>` or `dashboard-v<X.Y.Z>`). The existing tag-triggered
-   workflows (`release.yml`, `release-dashboard.yml`) take over from
-   there: build → Sigstore sign → SBOM → SLSA → publish.
+The dashboard sub-project has its own `release-dashboard` skill that
+follows the same shape but bumps `dashboard/package.json` and tags
+with `dashboard-v<X.Y.Z>`. Both skills are user-invocable and
+`disable-model-invocation: true`; the orchestrator never runs them
+automatically.
 
 Version sources of truth:
 
-- Plugin: `.claude-plugin/plugin.json` `version` field. release-please
-  updates this in lockstep with the tag via `extra-files` config.
-- Dashboard: `dashboard/package.json` `version` field (standard
-  release-please `node` strategy).
-- The `.github/.release-please-manifest.json` file tracks the current
-  released version of each package; do not edit by hand.
+- Plugin: `.claude-plugin/plugin.json` `version` field, bumped by the
+  release skill.
+- Dashboard: `dashboard/package.json` `version` field, bumped by the
+  release-dashboard skill.
 
-`RELEASE_PLEASE_TOKEN` (PAT) setup is required so the release PR
-triggers branch-protection-required CI runs. With the default
-`GITHUB_TOKEN`, GitHub deliberately suppresses workflow runs on PRs
-authored by an action, leaving the release PR unmergeable. To
-provision the PAT:
-
-1. Go to **GitHub → Settings → Developer settings → Personal access
-   tokens → Fine-grained tokens** and click **Generate new token**.
-2. Set **Repository access** to "Only select repositories" and pick
-   `hir4ta/mumei`.
-3. Under **Repository permissions**, grant:
-   - **Contents**: Read and write
-   - **Pull requests**: Read and write
-4. Copy the generated token and register it on
-   **`hir4ta/mumei` → Settings → Secrets and variables → Actions** as
-   a new repository secret named `RELEASE_PLEASE_TOKEN`.
-
-The PAT is required for two compounding reasons:
-
-- This workflow intentionally runs with **read-only `GITHUB_TOKEN`**
-  (`permissions: contents: read`, no `pull-requests: write`). Without
-  `RELEASE_PLEASE_TOKEN` the action has no credentials to push the
-  release branch or open the release PR, and the run fails outright.
-- Even if `GITHUB_TOKEN` were elevated, GitHub suppresses workflow
-  runs on PRs authored by an action (re-entrancy guard), so the
-  release PR could never satisfy the required status checks under
-  branch protection.
-
-Supplying the PAT sidesteps both constraints simultaneously.
+Conventional Commits in the release range drive the GitHub Release
+auto-generated notes (`gh release create --generate-notes`, called by
+the skill). There is no CHANGELOG.md in the source tree.
 
 ## Maintainer-only — bumping pinned external binaries
 
@@ -311,42 +287,12 @@ See [SECURITY.md](./SECURITY.md) and
 [`docs/threat-model.md`](./docs/threat-model.md) for the threat model
 each rule mitigates.
 
-- **Signed commits**. Every commit on the PR branch must carry a
-  verified GPG or SSH signature. The `signed-commit-verify.yml`
-  workflow inspects each commit's `verification.verified` field via
-  the GitHub API and rejects the PR if any commit is unverified.
-
-  How to comply locally:
-
-  ```bash
-  # SSH signing (recommended on macOS / Linux):
-  git config gpg.format ssh
-  git config user.signingkey ~/.ssh/id_ed25519.pub
-  git config commit.gpgsign true
-
-  # GPG signing (alternative):
-  git config gpg.format openpgp
-  git config user.signingkey <YOUR-GPG-KEY-ID>
-  git config commit.gpgsign true
-  ```
-
-  Then make sure the public key is registered as a Signing Key in
-  your GitHub account (Settings → SSH and GPG keys → New SSH key →
-  Key type: Signing). If you forget to sign and the gate flags
-  unsigned commits, rebase + sign:
-
-  ```bash
-  git rebase -S main
-  git push --force-with-lease
-  ```
-
 - **No `pull_request_target`**. Do not introduce a workflow that uses
   the `pull_request_target` trigger. The trigger runs in the base
   repository's context with secret access; one fork-PR-driven leak
-  is enough to compromise `ANTHROPIC_API_KEY`. The
-  `pull-request-target-guard.yml` workflow rejects any PR adding the
-  trigger to a workflow that is not on the (currently empty)
-  allowlist.
+  is enough to compromise `ANTHROPIC_API_KEY`. The `pr-target-guard`
+  job in `pr.yml` rejects any PR adding the trigger to a workflow
+  that is not on the (currently empty) allowlist.
 
 - **SHA-pinned third-party actions**. Every `uses:` reference to a
   third-party action must be pinned to a 40-char commit SHA, with
@@ -356,7 +302,7 @@ each rule mitigates.
   - uses: foo/bar@aaaa1111bbbb2222cccc3333dddd4444eeee5555 # v1.2.3
   ```
 
-  The `mutable-tag-guard.yml` workflow rejects PRs adding `@vN`,
+  The `mutable-tag-guard` job in `pr.yml` rejects PRs adding `@vN`,
   `@main`, `@master`, or `@<branch>` references. To resolve a tag
   to a SHA:
 

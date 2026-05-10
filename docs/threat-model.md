@@ -30,8 +30,7 @@ entirely on the user's machine. The realistic compromise paths are:
   marketplace's transit layer — would land malicious code on user
   machines on the next `/plugin install`.
 - **Maintainer account compromise.** An attacker who obtains the
-  maintainer's GitHub credentials can push to `main` directly,
-  bypass branch protection (if `enforce_admins=false`), or sign and
+  maintainer's GitHub credentials can push to `main` directly or
   publish a release that users would accept as authentic.
 - **Secret leakage in published artifacts.** A stray `ANTHROPIC_API_KEY`
   or PAT committed to the source tree, embedded in a release tarball,
@@ -61,30 +60,25 @@ entirely on the user's machine. The realistic compromise paths are:
 The implemented controls map onto the surfaces above:
 
 - **Mutable-tag rewrite**: every third-party `uses:` is pinned to a
-  40-char SHA with the tag retained as a comment (Wave 2 across all
-  workflows). The `mutable-tag-guard.yml` workflow enforces this on
-  every PR that touches `.github/workflows/`.
-- **`pull_request_target` introduction**: blocked by
-  `pull-request-target-guard.yml`, which rejects any PR adding the
-  trigger to a non-allowlisted workflow.
+  40-char SHA with the tag retained as a comment. The
+  `mutable-tag-guard` job in `pr.yml` enforces this on every PR
+  that touches `.github/workflows/`.
+- **`pull_request_target` introduction**: blocked by the
+  `pr-target-guard` job in `pr.yml`, which rejects any PR adding
+  the trigger to a non-allowlisted workflow.
 - **Workflow permissions creep**: every workflow declares minimal
   `permissions:` at top level; CI is read-only; release jobs gate on
   the `release` GitHub Environment with required reviewers.
 - **Secret scanning at multiple stages**: pre-commit (gitleaks +
-  trufflehog locally) → ci.yml gitleaks on every PR → weekly full
-  history rescan (`gitleaks-weekly.yml`). Pre-flight scans rerun
+  trufflehog locally) → `ci.yml` gitleaks on every PR → weekly full
+  history rescan via `gitleaks.yml`. Pre-flight scans rerun
   inside the release pipeline before signing.
-- **Static analysis**: CodeQL (`codeql.yml`) and OpenSSF Scorecard
-  (`scorecards.yml`) run on schedule; `semgrep` runs as Stage 0 in
-  the `/mumei:plan` review pipeline.
+- **Static analysis**: CodeQL (`ci.yml` codeql job) and OpenSSF
+  Scorecard (`scorecards.yml`) run on schedule; `semgrep` runs as
+  Stage 0 in the `/mumei:plan` review pipeline.
 - **Release-time integrity**: tarballs are signed via Sigstore
   keyless signing, an SBOM (CycloneDX) is generated, and SLSA L3
   provenance is attached to every GitHub Release.
-- **Branch protection on `main`**: `allow_force_pushes=false`,
-  `enforce_admins=true`, `required_signatures=true` (REQ-8 addition),
-  `required_status_checks` covering CI + the security workflows.
-- **Verified signed commits on PRs**: `signed-commit-verify.yml`
-  rejects PRs with unsigned commits.
 - **Supply-chain currency**: Dependabot keeps third-party SHA pins
   fresh weekly so the project does not stagnate on a vulnerable
   pinned version.
@@ -107,10 +101,12 @@ users can model them rather than discovering them later.
   passes every in-tree check. Out-of-band detection (community
   vigilance, scorecard divergence) is the only signal.
 - **R3 — Single-maintainer review.** mumei has no two-party-review
-  requirement (`required_pull_request_reviews=null`). A typo or
-  malicious commit by the maintainer landing on `main` is gated
-  only by status checks. SLSA L4's two-party review is
-  approximated by the gates listed above, not actually enforced.
+  requirement, and `main` has no enforced branch protection at the
+  server level (the project's development rule requires PR review,
+  but it is not technically blocking). A typo or malicious commit by
+  the maintainer who bypasses the convention can land directly. SLSA
+  L4's two-party review is approximated by CI gates and the controls
+  listed above, not actually enforced.
 - **R4 — Bash analysis gap.** CodeQL does not analyze shell
   scripts. `shellcheck` (CI + pre-commit) and `semgrep` (review
   Stage 0) are the only static checks against bash code. Bash-
