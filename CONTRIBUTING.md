@@ -220,12 +220,20 @@ creates a topic branch in this repo.
    `plugin-json-validate.yml`, and `dashboard-ci.yml` (path-triggered).
    Address failures before merge.
 8. Monitor the PR after opening. CI green is necessary but not
-   sufficient — also check Copilot's automated review:
+   sufficient — also check the automated reviewers (mumei runs two
+   in parallel):
    - `task pr:watch` — wait for the latest CI run on this branch
    - `gh pr checks <N>` — CI status snapshot
    - `task pr:copilot -- <N>` — Copilot summary + inline review
      comments in one call
-     Address Copilot findings (push fix commits) before merging.
+   - `task pr:gemini-fetch -- <N>` — Gemini summary + inline
+     comments (Gemini 3.1 Pro via `google-github-actions/run-gemini-cli`,
+     re-runs on every push thanks to `synchronize` trigger; manual
+     re-trigger via `task pr:gemini -- <N>`)
+     Address findings from BOTH reviewers (push fix commits) before
+     merging. They focus differently — Copilot tends to surface
+     correctness / consistency, Gemini emphasizes architecture /
+     edge cases via thinking-mode reasoning.
 9. Self-merge via squash or rebase (linear history; merge commits should
    be avoided). No required approval count.
 

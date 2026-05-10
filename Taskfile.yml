@@ -319,6 +319,55 @@ tasks:
         gh api "repos/{owner}/{repo}/pulls/${pr}/comments" \
           --jq '.[] | select(.user.login == "Copilot") | "[\(.path):\(.line // .original_line)] \(.body)"'
 
+  pr:gemini:
+    desc: "Trigger a Gemini PR re-review by posting an `@gemini-cli /review` comment"
+    preconditions:
+      - sh: command -v gh
+        msg: "gh CLI not installed"
+    env:
+      # Same env-passing pattern as pr:copilot to defeat shell injection.
+      MUMEI_PR_ARG: "{{.CLI_ARGS}}"
+    cmds:
+      - |
+        pr="$MUMEI_PR_ARG"
+        if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+          echo "Usage: task pr:gemini -- <PR-number>"
+          [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
+          exit 1
+        fi
+        gh pr comment "$pr" --body '@gemini-cli /review'
+        echo "posted @gemini-cli /review on PR #${pr}; run 'task pr:gemini-fetch -- ${pr}' once CI completes."
+
+  pr:gemini-fetch:
+    desc: "Fetch the most recent Gemini review (summary body) for the given PR"
+    preconditions:
+      - sh: command -v gh
+        msg: "gh CLI not installed"
+    env:
+      MUMEI_PR_ARG: "{{.CLI_ARGS}}"
+    cmds:
+      - |
+        pr="$MUMEI_PR_ARG"
+        if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+          echo "Usage: task pr:gemini-fetch -- <PR-number>"
+          [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
+          exit 1
+        fi
+        # Gemini posts review summaries as PR comments via the GitHub MCP
+        # server's `pull_request_review_write` tool — they show up under
+        # the same `pulls/.../comments` endpoint Copilot uses, but the
+        # comment body author varies (the `gemini-cli` GitHub App when
+        # APP_ID is set, otherwise github-actions[bot]). Filter on the
+        # leading marker the extension prefixes ("## Code Review Summary"
+        # / similar) so we only return Gemini-authored comments.
+        echo "=== reviews (summary) ==="
+        gh pr view "$pr" --json reviews \
+          --jq '.reviews[] | select((.author.login // "") | test("(?i)gemini|github-actions")) | "\(.submittedAt) [\(.state)] \(.author.login):\n\(.body)\n"'
+        echo
+        echo "=== inline review comments authored by Gemini ==="
+        gh api "repos/{owner}/{repo}/pulls/${pr}/comments" \
+          --jq '.[] | select((.user.login // "") | test("(?i)gemini|github-actions")) | "[\(.path):\(.line // .original_line)] \(.body)"'
+
   # ---------------------------------------------------------------
   # Post-merge watcher — call after `gh pr merge` to confirm main CI green.
   # ---------------------------------------------------------------
