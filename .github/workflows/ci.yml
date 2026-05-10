@@ -4,7 +4,9 @@ name: ci
 # ran in parallel on every push. scorecards.yml stays standalone because
 # the scorecard action rejects workflows with global env / defaults.
 #
-# Push main / PR (developer flow) → lint, lint-extra, bats, codeql
+# PR (developer flow) → lint, lint-extra, bats, codeql
+# Push main → codeql only (Security tab feed; lint/lint-extra/bats are
+#   PR-gated and skipped post-merge as redundant after squash-merge)
 # Schedule weekly (Mon 03:00 UTC) → codeql security audit
 
 on:
@@ -106,11 +108,12 @@ jobs:
           # makes its `--first-parent` walk fail with "stderr is not empty".
           fetch-depth: 0
 
-      # markdownlint / typos / shfmt / actionlint / gitleaks are required by
-      # REQ-5.6 to run on every PR / main push. They also live in
-      # .pre-commit-config.yaml for local-commit gating, but CI re-runs them
-      # so the SHALL-clause holds even if a contributor hasn't installed
-      # pre-commit (and required-status enforcement reaches branch protection).
+      # markdownlint / typos / shfmt / actionlint / gitleaks run on every
+      # PR. They also live in .pre-commit-config.yaml for local-commit
+      # gating, but CI re-runs them so coverage holds even if a contributor
+      # hasn't installed pre-commit (and required-status enforcement reaches
+      # branch protection). post-merge runs would re-validate the same tree
+      # already vetted at PR time and are intentionally skipped.
 
       - name: markdownlint-cli2
         uses: DavidAnson/markdownlint-cli2-action@ded1f9488f68a970bc66ea5619e13e9b52e601cd # v23
@@ -162,7 +165,8 @@ jobs:
 
       # trufflehog complements gitleaks: gitleaks rules-based, trufflehog
       # entropy-based + verified-only mode catches secrets the rules miss.
-      # Both run on every PR and push to main per REQ-8.5.3.
+      # Both run on every PR (lint-extra is PR-gated). Defense-in-depth is
+      # preserved by the weekly full-history rescan in gitleaks.yml.
       - name: trufflehog (secret scan)
         uses: trufflesecurity/trufflehog@17456f8c7d042d8c82c9a8ca9e937231f9f42e26 # v3.95.2
         with:
