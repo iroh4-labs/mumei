@@ -227,8 +227,10 @@ creates a topic branch in this repo.
    - `task pr:copilot -- <N>` — Copilot summary + inline review
      (Anthropic Claude family).
    - `task pr:codex-fetch -- <N>` — OpenAI Codex summary + inline
-     review (auto-posts on PR open via Codex Cloud; manual re-trigger
-     via `task pr:codex -- <N>` which posts `@codex review`).
+     review (Codex Cloud auto-posts on PR open AND on each push, per
+     the repo's settings; only use `task pr:codex -- <N> "<focus>"`
+     when you want a focus-specific re-review such as
+     `"for security regressions"`).
      Address findings from BOTH reviewers (push fix commits) before
      merging. They focus differently — Copilot tends to surface
      correctness / consistency, Codex flags P0/P1 issues focused on

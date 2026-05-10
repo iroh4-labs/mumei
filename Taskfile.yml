@@ -323,27 +323,42 @@ tasks:
           --jq '.[] | .[] | select(.user.login == "Copilot") | "[\(.path):\(.line // .original_line)] \(.body)"'
 
   pr:codex:
-    desc: "Trigger an OpenAI Codex PR re-review by posting an `@codex review` comment"
+    desc: "Post a focused `@codex review <context>` comment (NOT for routine re-review — Codex Cloud auto-reviews on push)"
     preconditions:
       - sh: command -v gh
         msg: "gh CLI not installed"
     env:
-      # Same env-passing pattern as pr:copilot to defeat shell injection.
+      # Pass CLI_ARGS through env to defeat shell injection.
       MUMEI_PR_ARG: "{{.CLI_ARGS}}"
     cmds:
       - |
-        pr="$MUMEI_PR_ARG"
+        # Codex Cloud already auto-reviews each push to a PR (per the
+        # repo's settings at https://chatgpt.com/codex/settings/code-review),
+        # so this task is intentionally NOT a "re-trigger after push"
+        # helper. It exists for a different use case: posting a
+        # focus-specific re-review such as
+        #   task pr:codex -- 40 'for security regressions'
+        #   task pr:codex -- 40 'address that feedback'
+        # The first arg is the PR number; everything after is the
+        # focus / instruction appended after `@codex review`.
+        read -r pr rest <<< "$MUMEI_PR_ARG"
         if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
-          echo "Usage: task pr:codex -- <PR-number>"
-          [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
+          echo "Usage: task pr:codex -- <PR-number> [focus]"
+          echo
+          echo "  task pr:codex -- 40                          # plain re-review (rarely needed; auto on push)"
+          echo "  task pr:codex -- 40 'for security regressions'   # focused"
+          echo "  task pr:codex -- 40 'address that feedback'      # follow-up"
+          [[ -n "$pr" ]] && echo
+          [[ -n "$pr" ]] && echo "got pr=[$pr] (must be a single integer)"
           exit 1
         fi
-        # Codex Cloud (OpenAI-hosted GitHub App) listens for `@codex review`
-        # comments and posts a P0/P1-focused review. Optional one-off
-        # focus: `@codex review for security regressions` — append your
-        # own context inline if needed.
-        gh pr comment "$pr" --body '@codex review'
-        echo "posted @codex review on PR #${pr}; Codex posts the review back to the PR within ~1-2 min."
+        if [[ -n "$rest" ]]; then
+          body="@codex review ${rest}"
+        else
+          body="@codex review"
+        fi
+        gh pr comment "$pr" --body "$body"
+        echo "posted on PR #${pr}: ${body}"
 
   pr:codex-fetch:
     desc: "Fetch the most recent Codex review (summary body) for the given PR"
