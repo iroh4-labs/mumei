@@ -1,0 +1,315 @@
+# Taskfile for the mumei monorepo.
+#
+# Why Taskfile (vs Makefile / npm scripts / shell aliases)?
+#   - Single entry point across heterogeneous tooling: bash scripts,
+#     bats, npm (dashboard), gh CLI, pre-commit. Discoverable via
+#     `task --list`.
+#   - Sub-Taskfile composition: dashboard/Taskfile.yml is included with
+#     `dir: ./dashboard` so `task dashboard:test` chdirs automatically.
+#   - Task v3 caching (sources / generates) skips redundant work for
+#     code-gen + builds without bespoke timestamp logic.
+#
+# Conventions:
+#   - desc: present on every public task → shows in `task --list`.
+#   - Internal-only helpers use `internal: true`.
+#   - Aliases are minimal: only the two highest-frequency tasks (`l`, `t`).
+#   - `task` invokes scripts/*.sh; pre-commit and CI keep calling
+#     scripts/ directly so this Taskfile is a thin DX layer, not a hard
+#     dependency.
+#
+# Quickstart:
+#   task              # show menu
+#   task lint         # full pre-PR lint sweep
+#   task test         # bats + dashboard vitest
+#   task validate     # lint + test (use before pushing)
+#   task ci:replay    # mirror what ci.yml runs on a PR
+#   task release:check # tag-prep sanity gate
+#   task -- some args # pass-through CLI args via {{.CLI_ARGS}}
+
+version: "3"
+
+# `pipefail` propagates non-zero exit codes through pipelines (e.g.
+# `cmd1 | tee log` will now fail if cmd1 fails). Matches what
+# scripts/*.sh assumes via mumei_log helpers.
+set: [pipefail]
+
+# Default to silent so `task --list` and runtime output stays focused on
+# the script's own messages, not the boilerplate `task: [name] cmd...`
+# echo. Scripts that need verbose output already print their own headers
+# (see scripts/lint-all.sh).
+silent: true
+
+vars:
+  DASHBOARD_DIR: ./dashboard
+
+includes:
+  # dashboard sub-project as a sub-namespace. `task dashboard:test`
+  # automatically chdirs to ./dashboard before running.
+  dashboard:
+    taskfile: ./dashboard/Taskfile.yml
+    dir: ./dashboard
+
+tasks:
+  # ---------------------------------------------------------------
+  # Default — show task menu when invoked without arguments.
+  # ---------------------------------------------------------------
+  default:
+    desc: List available tasks (this menu)
+    cmds:
+      - task --list
+
+  # ---------------------------------------------------------------
+  # Lint — bash, plugin manifest, frontmatter, hook-ID consistency.
+  # The flagship `task lint` mirrors scripts/lint-all.sh exactly so
+  # CI parity is preserved.
+  # ---------------------------------------------------------------
+  lint:
+    aliases: [l]
+    desc: Run the full bash + manifest + frontmatter lint sweep (CI parity)
+    cmds:
+      - bash scripts/lint-all.sh
+
+  lint:bash-prefix:
+    desc: "Verify mumei_ prefix on bash functions"
+    cmds:
+      - bash scripts/lint-bash-prefix.sh
+
+  lint:frontmatter:
+    desc: "Agents + skills frontmatter validity"
+    cmds:
+      - bash scripts/lint-frontmatter.sh
+
+  lint:hook-ids:
+    desc: "Hook ID consistency across ARCHITECTURE.md / hooks / scripts / tests"
+    cmds:
+      - bash scripts/lint-hook-ids.sh
+
+  lint:docs-drift:
+    desc: "docs ↔ filesystem drift (Hook tables / agent counts / skill commands)"
+    cmds:
+      - bash scripts/lint-docs-drift.sh
+
+  lint:plan-vehicle:
+    desc: "plan-vehicle hooks.json registration check"
+    cmds:
+      - bash scripts/lint-plan-vehicle-hooks.sh
+
+  lint:tasks:
+    desc: "tasks.md format invariants (advisory; mainly used by hooks)"
+    cmds:
+      - bash scripts/lint-tasks.sh
+
+  # ---------------------------------------------------------------
+  # Test — bats (bash) + dashboard vitest. `task test` runs both.
+  # ---------------------------------------------------------------
+  test:
+    aliases: [t]
+    desc: Run all tests (bats + dashboard vitest)
+    deps: [test:bats, dashboard:test]
+
+  test:bats:
+    desc: bats hook / _lib / integration / skill tests
+    cmds:
+      - bats -r tests/
+
+  # ---------------------------------------------------------------
+  # Validate — pre-PR full check (lint + test).
+  # ---------------------------------------------------------------
+  validate:
+    desc: "Pre-PR full check (lint + test). Run this before `git push`"
+    deps: [lint, test]
+
+  # ---------------------------------------------------------------
+  # CI replay — run locally what GitHub Actions runs on a PR.
+  # ---------------------------------------------------------------
+  ci:replay:
+    desc: "Replay PR-time CI locally (lint + dashboard checks + bats)"
+    cmds:
+      - task: lint
+      - task: dashboard:typecheck
+      - task: dashboard:lint
+      - task: dashboard:test
+      - task: test:bats
+
+  # ---------------------------------------------------------------
+  # pre-commit — manual all-file run. The hook auto-runs on commit;
+  # this target is for sweeping after upstream version bumps.
+  # ---------------------------------------------------------------
+  pre-commit:
+    desc: pre-commit run on every file
+    preconditions:
+      - sh: command -v pre-commit
+        msg: "pre-commit not installed. See CONTRIBUTING.md for setup."
+    cmds:
+      - pre-commit run --all-files
+
+  # ---------------------------------------------------------------
+  # Cost telemetry — aggregate / backfill / curator + hook stats.
+  # CLI_ARGS pass-through: `task cost -- --feature foo`.
+  # ---------------------------------------------------------------
+  cost:
+    desc: "Aggregate .mumei/{specs,plans}/<f>/cost-log.jsonl for active feature"
+    cmds:
+      - bash scripts/aggregate-cost.sh {{.CLI_ARGS}}
+
+  cost:backfill:
+    desc: "Backfill cost-log entries for past reviews"
+    cmds:
+      - bash scripts/cost-backfill.sh {{.CLI_ARGS}}
+
+  cost:curator:
+    desc: "Aggregate memory-curator decision log"
+    cmds:
+      - bash scripts/aggregate-curator-log.sh {{.CLI_ARGS}}
+
+  cost:hook-stats:
+    desc: "Aggregate per-hook execution timing + counts"
+    cmds:
+      - bash scripts/aggregate-hook-stats.sh {{.CLI_ARGS}}
+
+  # ---------------------------------------------------------------
+  # Workflow scheduling guard — verify CI cron entries don't collide.
+  # ---------------------------------------------------------------
+  cron:check:
+    desc: "Verify .github/workflows/* cron schedules are off-peak and non-colliding"
+    cmds:
+      - bash scripts/check-workflow-cron.sh
+
+  # ---------------------------------------------------------------
+  # Release — tag-prep sanity gate. Compose lint + test + cron check
+  # so a green run signals "safe to bump version + tag".
+  # ---------------------------------------------------------------
+  release:check:
+    desc: "Sanity gate before tagging a release (lint + test + cron alignment)"
+    deps: [lint, test, cron:check]
+
+  # ---------------------------------------------------------------
+  # Retro — generate retrospective from archived features.
+  # ---------------------------------------------------------------
+  retro:
+    desc: "Generate retro from .mumei/archive/<YYYY-MM>/"
+    cmds:
+      - bash scripts/generate-retro.sh {{.CLI_ARGS}}
+
+  # ---------------------------------------------------------------
+  # Doctor — verify required tools are installed. Fast smoke test for
+  # new contributors who just cloned the repo.
+  # ---------------------------------------------------------------
+  doctor:
+    desc: "Check that all required dev tools are on PATH"
+    cmds:
+      - |
+        missing=0
+        check() {
+          local tool="$1"
+          local hint="$2"
+          if command -v "$tool" >/dev/null 2>&1; then
+            printf "  ✓ %-14s %s\n" "$tool" "$(command -v "$tool")"
+          else
+            printf "  ✗ %-14s MISSING — %s\n" "$tool" "$hint"
+            missing=$((missing + 1))
+          fi
+        }
+        echo "Required:"
+        check bash       "macOS ships bash 3.x; brew install bash for 5.x if needed"
+        check jq         "brew install jq"
+        check shellcheck "brew install shellcheck"
+        check shfmt      "brew install shfmt"
+        check actionlint "brew install actionlint"
+        check bats       "brew install bats-core"
+        check pre-commit "brew install pre-commit"
+        check gh         "brew install gh"
+        check git        "comes with macOS dev tools"
+        check node       "brew install node@22 (for dashboard)"
+        check npm        "ships with node"
+        echo
+        echo "Optional (CI parity locally):"
+        check gitleaks   "brew install gitleaks"
+        check trufflehog "brew install trufflehog"
+        check semgrep    "brew install semgrep"
+        check lychee     "brew install lychee"
+        check shellharden "cargo install shellharden"
+        echo
+        if [ "$missing" -gt 0 ]; then
+          echo "missing $missing required tool(s); see hints above"
+          exit 1
+        fi
+        echo "all required tools present"
+
+  # ---------------------------------------------------------------
+  # Branch helper — guard against running /mumei:plan on default branch.
+  # CLAUDE.md rule: must branch before invoking /mumei:plan.
+  # ---------------------------------------------------------------
+  branch:guard:
+    desc: "Refuse if currently on default branch (use before starting feature work)"
+    cmds:
+      - |
+        current="$(git rev-parse --abbrev-ref HEAD)"
+        if [ "$current" = "main" ] || [ "$current" = "master" ]; then
+          echo "on default branch ($current). Switch to a feature branch first:"
+          echo "  git switch -c <feature-slug>"
+          exit 1
+        fi
+        echo "on feature branch: $current"
+
+  # ---------------------------------------------------------------
+  # PR helper — open a PR using the project template.
+  # ---------------------------------------------------------------
+  pr:create:
+    desc: "Open a PR via gh using .github/PULL_REQUEST_TEMPLATE.md (provide --title via CLI_ARGS)"
+    preconditions:
+      - sh: command -v gh
+        msg: "gh CLI not installed. brew install gh"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task pr:create -- --title 'feat: ...' [--draft]"
+          echo "Compose body in /tmp/pr-body.md following PULL_REQUEST_TEMPLATE.md, then add --body-file /tmp/pr-body.md"
+          exit 1
+        fi
+        gh pr create {{.CLI_ARGS}}
+
+  pr:watch:
+    desc: "Watch the latest CI run on the current branch"
+    preconditions:
+      - sh: command -v gh
+        msg: "gh CLI not installed"
+    cmds:
+      - |
+        branch="$(git rev-parse --abbrev-ref HEAD)"
+        run_id="$(gh run list --branch "$branch" --limit 1 --json databaseId --jq '.[0].databaseId')"
+        if [ -z "$run_id" ]; then
+          echo "no CI run found for branch $branch yet (push first?)"
+          exit 1
+        fi
+        gh run watch "$run_id" --exit-status
+
+  pr:copilot:
+    desc: "Fetch Copilot review comments (summary + inline) for the given PR"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task pr:copilot -- <PR-number>"
+          exit 1
+        fi
+        pr={{.CLI_ARGS}}
+        echo "=== summary ==="
+        gh pr view "$pr" --comments | tail -40
+        echo
+        echo "=== inline ==="
+        gh api "repos/{owner}/{repo}/pulls/${pr}/comments" \
+          --jq '.[] | select(.user.login == "Copilot") | "[\(.path):\(.line // .original_line)] \(.body)"'
+
+  # ---------------------------------------------------------------
+  # Post-merge watcher — call after `gh pr merge` to confirm main CI green.
+  # ---------------------------------------------------------------
+  main:watch:
+    desc: "Watch the latest CI run on main (use after merge, per CLAUDE.md merge-≠-完了)"
+    cmds:
+      - |
+        run_id="$(gh run list --branch main --limit 1 --json databaseId --jq '.[0].databaseId')"
+        if [ -z "$run_id" ]; then
+          echo "no main CI run found"
+          exit 1
+        fi
+        gh run watch "$run_id" --exit-status

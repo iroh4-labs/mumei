@@ -39,28 +39,78 @@ that the maintainer keeps in sync with this guide.
 | `bash` >= 4.0        | hook handlers + lib                             | preinstalled on macOS / Linux              |
 | `jq` >= 1.6          | JSON manipulation                               | `brew install jq` / `apt install jq`       |
 | `git` >= 2.30        | source control                                  | preinstalled                               |
+| `task` >= 3.40       | task runner (Taskfile.yml entry point)          | `brew install go-task`                     |
 | `bats-core` >= 1.5.0 | test runner                                     | `brew install bats-core` / `npm i -g bats` |
 | `shellcheck`         | shell lint                                      | `brew install shellcheck`                  |
 | `semgrep`            | review-phase SAST detector (optional for tests) | `brew install semgrep`                     |
 | `osv-scanner`        | review-phase CVE detector (optional for tests)  | `brew install osv-scanner`                 |
 
-## Running the tests
+After installing the tools above, run `task doctor` to verify the local
+environment is ready. The `doctor` task lists every required and optional
+tool with its resolved path and exits non-zero if anything is missing.
 
-mumei ships a [bats](https://bats-core.readthedocs.io/) suite under `tests/`.
-Run the whole suite recursively:
+## Task runner
+
+mumei uses [Task](https://taskfile.dev/) (`go-task`) as a unified entry
+point for the heterogeneous tooling in this repo (bash scripts, bats,
+the dashboard's npm scripts, gh CLI helpers). Discovery is one command:
 
 ```bash
-bats -r tests/
+task              # show the menu (alias for `task --list`)
+task --list-all   # include internal tasks
 ```
 
-Single file:
+Common workflows:
+
+```bash
+task lint         # full bash + manifest + frontmatter lint sweep (CI parity)
+task test         # bats + dashboard vitest
+task validate     # lint + test (run before `git push`)
+task ci:replay    # mirror what ci.yml runs on a PR
+task doctor       # verify required tools are on PATH
+task release:check # tag-prep sanity gate (lint + test + cron alignment)
+```
+
+Sub-namespaces:
+
+- `dashboard:*` — dashboard sub-project (`task dashboard:dev`,
+  `task dashboard:typecheck`, etc.). Defined in
+  [`dashboard/Taskfile.yml`](./dashboard/Taskfile.yml); included from
+  the root with `dir: ./dashboard` so the working directory is set
+  automatically.
+- `lint:*` — individual lint scripts (`task lint:hook-ids`,
+  `task lint:docs-drift`, etc.).
+- `cost:*` — telemetry aggregation
+  (`task cost`, `task cost:hook-stats`, etc.). Most accept a feature
+  slug via `task cost -- <slug>`.
+- `pr:*` / `main:watch` — PR helpers (`task pr:watch`,
+  `task pr:copilot -- <PR#>`, `task main:watch`).
+
+Tasks are thin wrappers around `scripts/*.sh` and `npm run …`; CI and
+pre-commit keep calling those directly so Task is a developer-experience
+layer, not a hard dependency.
+
+## Running the tests
+
+mumei ships a [bats](https://bats-core.readthedocs.io/) suite under `tests/`
+and a [Vitest](https://vitest.dev/) suite under `dashboard/`. The Task
+runner has both layers wired together:
+
+```bash
+task test         # bats + dashboard vitest (run both)
+task test:bats    # bats only
+task dashboard:test # dashboard vitest only
+```
+
+Single bats file:
 
 ```bash
 bats tests/hooks/pre-edit-guard.bats
 ```
 
-The CI workflow (`.github/workflows/ci.yml`) runs the same suite on
-`ubuntu-latest` and `macos-latest`. PRs that break tests block the merge.
+The CI workflow (`.github/workflows/ci.yml`) runs the same bats suite on
+`ubuntu-latest` and `macos-latest`. `dashboard-ci.yml` runs the Vitest
+suite. PRs that break tests block the merge.
 
 ## pre-commit hooks
 
@@ -141,7 +191,9 @@ creates a topic branch in this repo.
    orchestrator (Claude) and the contributor are responsible for
    branching first.
 2. Implement the change, keeping commits focused and Conventional Commits-formatted.
-3. Run `bats -r tests/` and `/validate` locally; both must pass.
+3. Run `task validate` locally (lint + test); it must exit clean.
+   `/validate` (the bundled Claude Code skill) is also acceptable for
+   the bash side and runs the same checks `task lint` does.
 4. Update `README.md`, `PRIVACY.md`, or `docs/` if your change alters external
    behaviour, install steps, network egress, or distribution layout.
 5. **Ratchet principle**: when a PR adds a new hook rule, agent, skill, or
@@ -164,11 +216,10 @@ creates a topic branch in this repo.
    Address failures before merge.
 8. Monitor the PR after opening. CI green is necessary but not
    sufficient — also check Copilot's automated review:
-   - `gh pr checks <N>` — CI status
-   - `gh pr view <N> --comments` — Copilot's summary review
-     (`copilot-pull-request-reviewer[bot]` author)
-   - `gh api repos/<owner>/<repo>/pulls/<N>/comments` — inline
-     comments Copilot left on specific lines
+   - `task pr:watch` — wait for the latest CI run on this branch
+   - `gh pr checks <N>` — CI status snapshot
+   - `task pr:copilot -- <N>` — Copilot summary + inline review
+     comments in one call
      Address Copilot findings (push fix commits) before merging.
 9. Self-merge via squash or rebase (linear history; merge commits should
    be avoided). No required approval count.
