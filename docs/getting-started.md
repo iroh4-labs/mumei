@@ -75,8 +75,6 @@ artifacts you install.
   by the `slsa-github-generator` reusable workflow.
 - **CycloneDX SBOM** — `mumei-sbom.cdx.json` published as a release
   asset, ingestable by Grype / Syft / etc.
-- **Signed commits + tags** — `main` requires verified GPG/SSH
-  signatures; release tags are annotated and signed.
 - **Strict cosign cert-identity** — verification pins to the exact
   `release-reusable.yml@refs/tags/` path so a malicious sibling
   workflow cannot forge a signature.
@@ -94,7 +92,7 @@ cosign verify-blob \
 
 Full security model: [SECURITY.md](../SECURITY.md) (vulnerability
 reporting), [docs/security-policy.md](./security-policy.md)
-(verification recipes for tarball / SBOM / SLSA / signed tag),
+(verification recipes for tarball / SBOM / SLSA),
 [docs/threat-model.md](./threat-model.md) (threat surface and
 mitigations), [PRIVACY.md](../PRIVACY.md).
 
@@ -253,7 +251,7 @@ enforce scope or order.
 
 ## Hook rules
 
-mumei enforces **16 hook rules** across phase transitions, Wave
+mumei enforces hook rules across phase transitions, Wave
 boundaries, commit / push gates, and reviewer memory writes. The full
 enforcement table (rule ID, phase, hook event, trigger, implementation
 script) is in [ARCHITECTURE.md → Hook
@@ -278,5 +276,5 @@ single escape hatch is `MUMEI_BYPASS=1`.
 
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — runtime structure, distribution layout, full hook rules table, reviewer pipeline, file-based state model.
 - [docs/opus-4-7-playbook.md](./opus-4-7-playbook.md) — practical guidance for running mumei on Claude Opus 4.7.
-- [docs/security-policy.md](./security-policy.md) — verification recipes for tarball / SBOM / SLSA / signed tag.
+- [docs/security-policy.md](./security-policy.md) — verification recipes for tarball / SBOM / SLSA.
 - [docs/threat-model.md](./threat-model.md) — threat surface and mitigations.

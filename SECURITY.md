@@ -89,9 +89,10 @@ for the user-facing verification commands.
 
 - **Build-time** — all third-party `uses:` pinned to 40-char commit
   SHAs; `mutable-tag-guard` rejects any PR introducing a mutable tag.
-- **PR-time** — `signed-commit-verify` rejects unsigned commits,
-  `pull-request-target-guard` rejects new `pull_request_target`,
-  `plugin-json-validate` strict-validates the plugin manifest.
+- **PR-time** — `pr.yml` aggregates two PR-time jobs:
+  `mutable-tag-guard` (rejects mutable `uses:` references),
+  `pr-target-guard` (rejects new `pull_request_target` triggers).
+  `plugin-json-validate.yml` strict-validates the plugin manifest.
 - **Code analysis** — CodeQL (PR + weekly), OpenSSF Scorecards
   (weekly), `shellcheck` + `semgrep` for the bash core.
 - **Secret scanning** — gitleaks on every PR and weekly full-history;
@@ -100,12 +101,8 @@ for the user-facing verification commands.
   SLSA L3 provenance via the official slsa-github-generator reusable
   workflow. High-privilege jobs gate on the `release` GitHub
   Environment with required-reviewer approval.
-- **Branch protection** — `allow_force_pushes=false`,
-  `enforce_admins=true`, `required_signatures=true`, status checks
-  cover all CI + security workflows.
 - **Maintainer hygiene** — MFA on the GitHub account, fine-grained
-  PATs scoped to single repo with ≤ 90-day expiry, signed tags
-  via the maintainer's SSH key registered with GitHub.
+  PATs scoped to single repo with ≤ 90-day expiry.
 
 ## MFA policy
 

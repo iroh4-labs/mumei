@@ -57,7 +57,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 - **3 つの spec reviewer + 4 段階の review pipeline** — `requirements` / `design` / `tasks` reviewer が fresh context で独立に走り、最大 3 回まで自動 iterate。続けて `spec-compliance` と `security` を並列、`adversarial` を直列、最後に per-issue validator が回ります。
 - **Wave 単位の commit** — 1 Wave = 1 commit。Hook が diff を各 task の `_Files:_` と突き合わせ、phantom completion (実装の diff がないのに `[x]` を付ける) を止めます。
 - **curator-gated な reviewer memory** — 独立した `memory-curator` (sonnet、read-only) が候補を 7 軸 rubric で score し、`>= 15/21` の候補だけを永続化します。
-- **署名 + provenance 付きリリース** — Sigstore keyless 署名、SLSA Level 3、CycloneDX SBOM、署名 commit + tag。詳細は [docs/getting-started.ja.md → Security & supply chain](./docs/getting-started.ja.md#security--supply-chain) を参照。
+- **署名 + provenance 付きリリース** — Sigstore keyless 署名、SLSA Level 3、CycloneDX SBOM。詳細は [docs/getting-started.ja.md → Security & supply chain](./docs/getting-started.ja.md#security--supply-chain) を参照。
 - **黒子 (kuroko) スタンス** — opt-in していないプロジェクトには副作用ゼロ。`.mumei/current` がなければ Hook はすべて no-op。テレメトリも一切ありません。
 
 ## Commands
@@ -86,7 +86,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 ## ドキュメント
 
 - **[docs/getting-started.ja.md](./docs/getting-started.ja.md)** — 詳細な解説: 二つの vehicle、ワークフロー、spec / tasks フォーマット、前提ツール、プロジェクト構成、Hook ルール、Troubleshooting。
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — ランタイム構造、配布物レイアウト、16 ルールの enforcement 表、reviewer pipeline、ファイルベースの state モデル。
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — ランタイム構造、配布物レイアウト、enforcement 表、reviewer pipeline、ファイルベースの state モデル。
 - **[docs/opus-4-7-playbook.md](./docs/opus-4-7-playbook.md)** — Claude Opus 4.7 era で mumei を運用するための実践ガイド (proactive `/compact`、subagent コスト、prompt cache、byte-exact ツール、`MUMEI_BYPASS=1` の使いどころ)。
 - **[SECURITY.md](./SECURITY.md)** + **[docs/security-policy.md](./docs/security-policy.md)** + **[docs/threat-model.md](./docs/threat-model.md)** + **[PRIVACY.md](./PRIVACY.md)** — supply-chain 検証、threat model、privacy。
 

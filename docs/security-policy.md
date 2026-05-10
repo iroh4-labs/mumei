@@ -34,11 +34,10 @@ does not need to take any action to benefit from them.
     pre-flight scan.
   - GitHub-native secret redaction is enabled in every workflow.
 - **PR-time gates**
-  - `signed-commit-verify` rejects PRs containing any unsigned
-    commit.
-  - `pull-request-target-guard` rejects PRs that introduce the
-    `pull_request_target` trigger.
-  - `plugin-json-validate` strict-validates the plugin manifest
+  - The `pr-target-guard` job in `pr.yml` rejects PRs that
+    introduce the `pull_request_target` trigger to a workflow not
+    on the (currently empty) allowlist.
+  - `plugin-json-validate.yml` strict-validates the plugin manifest
     against its declared `$schema` whenever it changes.
 - **Release pipeline (SLSA L3 + L4-equivalent practices)**
   - `release-reusable.yml` runs pre-flight SAST scans before any
@@ -49,8 +48,6 @@ does not need to take any action to benefit from them.
     workflow.
   - All high-privilege steps gate on the `release` GitHub
     Environment with required-reviewer approval.
-  - The release tag itself is signed (SSH-based) by the
-    maintainer's key registered with GitHub.
 
 ## Verification steps
 
@@ -122,20 +119,6 @@ jq '.components | length' mumei-sbom.cdx.json
 # Vulnerability scan against the SBOM:
 grype sbom:mumei-sbom.cdx.json
 ```
-
-### Optional: verify the release tag is signed
-
-For users who want to verify the source commit-by-commit, the
-release tag itself is signed:
-
-```bash
-git fetch --tags
-git tag -v "${TAG}"
-# Expect: Good "git" signature (or Good signature) ... ssh-ed25519
-```
-
-The maintainer's SSH public key is the one published at
-`https://github.com/hir4ta.keys`.
 
 ## License
 

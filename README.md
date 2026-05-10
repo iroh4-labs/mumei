@@ -57,7 +57,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 - **3 spec reviewers + 4-stage review pipeline** — independent `requirements` / `design` / `tasks` reviewers on fresh contexts (auto-iter ≤ 3); `spec-compliance` + `security` parallel, then `adversarial`, then per-issue validator. `requirements-reviewer` audits AC `examples_coverage` (zero examples on high-risk AC, actor-trigger inconsistency) and `requirement_smell` (ambiguity / vagueness / incompleteness).
 - **Wave-based commits** — 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` to block phantom completion.
 - **Curator-gated reviewer memory** — independent `memory-curator` (sonnet, read-only) scores candidates on a 7-axis rubric; only `≥ 15/21` is persisted.
-- **Signed, attestable releases** — Sigstore keyless signing, SLSA Level 3, CycloneDX SBOM, signed commits + tags. See [docs/getting-started.md → Security & supply chain](./docs/getting-started.md#security--supply-chain).
+- **Signed, attestable releases** — Sigstore keyless signing, SLSA Level 3, CycloneDX SBOM. See [docs/getting-started.md → Security & supply chain](./docs/getting-started.md#security--supply-chain).
 - **Kuroko (黒衣) stance** — zero side effects on projects that have not opted in. No `.mumei/current` = every Hook is a no-op. No telemetry.
 
 ## Commands
@@ -86,7 +86,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 ## Documentation
 
 - **[docs/getting-started.md](./docs/getting-started.md)** — long-form walkthrough: two vehicles, workflow, spec & tasks format, prerequisites, project layout, hook rules, troubleshooting.
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — runtime structure, distribution layout, full 16-rule enforcement table, reviewer pipeline, file-based state model.
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — runtime structure, distribution layout, full enforcement table, reviewer pipeline, file-based state model.
 - **[docs/opus-4-7-playbook.md](./docs/opus-4-7-playbook.md)** — practical guidance for running mumei on Claude Opus 4.7 (proactive `/compact`, subagent cost, prompt cache, byte-exact tools, `MUMEI_BYPASS=1` discipline).
 - **[SECURITY.md](./SECURITY.md)** + **[docs/security-policy.md](./docs/security-policy.md)** + **[docs/threat-model.md](./docs/threat-model.md)** + **[PRIVACY.md](./PRIVACY.md)** — supply-chain verification, threat model, privacy.
 
