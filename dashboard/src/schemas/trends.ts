@@ -14,7 +14,7 @@ export const TokensTrendSchema = Type.Array(
     { additionalProperties: false },
   ),
   {
-    $id: 'https://mumei.dev/schemas/tokens-trend.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/tokens-trend.schema.json',
     title: 'mumei tokens trend',
     description:
       'GET /api/trends/tokens?days=14 result. Daily total of input + output tokens from cost-log.jsonl. Days with no entries are emitted as v=0.',
@@ -32,7 +32,7 @@ export const ReviewsTrendSchema = Type.Array(
     { additionalProperties: false },
   ),
   {
-    $id: 'https://mumei.dev/schemas/reviews-trend.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/reviews-trend.schema.json',
     title: 'mumei reviews trend',
     description:
       'GET /api/trends/reviews?days=14 result. Daily count of review JSON files grouped by verdict.',
@@ -54,6 +54,7 @@ export const HooksTrendSchema = Type.Array(
           Type.Literal('warn'),
           Type.Literal('block'),
           Type.Literal('noop'),
+          Type.Literal('pass'),
         ],
         {
           description: 'Most common decision recorded for the hook_id within the window.',
@@ -63,7 +64,7 @@ export const HooksTrendSchema = Type.Array(
     { additionalProperties: false },
   ),
   {
-    $id: 'https://mumei.dev/schemas/hooks-trend.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/hooks-trend.schema.json',
     title: 'mumei hooks trend',
     description:
       'GET /api/trends/hooks?topN=10&windowH=24 result. Top-N hook_id rows by firing count within the window.',

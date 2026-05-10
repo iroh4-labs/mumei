@@ -36,7 +36,7 @@ export const CostLogEntrySchema = Type.Object(
     ),
   },
   {
-    $id: 'https://mumei.dev/schemas/cost-log.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/cost-log.schema.json',
     title: 'mumei cost-log JSONL entry',
     description:
       'One line of .mumei/specs/<feature>/cost-log.jsonl (spec vehicle) or .mumei/plans/<slug>/cost-log.jsonl (plan vehicle). Append-only. Per-feature, archived with the feature.',

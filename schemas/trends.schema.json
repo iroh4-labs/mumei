@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "oneOf": [
     {
-      "$id": "https://mumei.dev/schemas/tokens-trend.schema.json#v0.1.0",
+      "$id": "https://mumei.dev/schemas/tokens-trend.schema.json",
       "title": "mumei tokens trend",
       "description": "GET /api/trends/tokens?days=14 result. Daily total of input + output tokens from cost-log.jsonl. Days with no entries are emitted as v=0.",
       "type": "array",
@@ -27,7 +27,7 @@
       }
     },
     {
-      "$id": "https://mumei.dev/schemas/reviews-trend.schema.json#v0.1.0",
+      "$id": "https://mumei.dev/schemas/reviews-trend.schema.json",
       "title": "mumei reviews trend",
       "description": "GET /api/trends/reviews?days=14 result. Daily count of review JSON files grouped by verdict.",
       "type": "array",
@@ -64,7 +64,7 @@
       }
     },
     {
-      "$id": "https://mumei.dev/schemas/hooks-trend.schema.json#v0.1.0",
+      "$id": "https://mumei.dev/schemas/hooks-trend.schema.json",
       "title": "mumei hooks trend",
       "description": "GET /api/trends/hooks?topN=10&windowH=24 result. Top-N hook_id rows by firing count within the window.",
       "type": "array",
@@ -106,6 +106,10 @@
               },
               {
                 "const": "noop",
+                "type": "string"
+              },
+              {
+                "const": "pass",
                 "type": "string"
               }
             ]

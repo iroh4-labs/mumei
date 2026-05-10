@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/state.schema.json#v0.1.0",
+  "$id": "https://mumei.dev/schemas/state.schema.json",
   "title": "mumei feature state",
   "description": "Persistent per-feature state written atomically by hooks/_lib/state.sh. Lives at .mumei/specs/<feature>/state.json (spec vehicle) or .mumei/plans/<slug>/state.json (plan vehicle).",
   "additionalProperties": false,

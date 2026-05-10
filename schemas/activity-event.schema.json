@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/activity-event.schema.json#v0.1.0",
+  "$id": "https://mumei.dev/schemas/activity-event.schema.json",
   "title": "mumei activity event",
   "description": "Discriminated union of activity entries returned by GET /api/activity?limit=50 and prepended into ActivityFeed via SSE 'activity.added'. Producer: dashboard/server/activity.ts (merging git log + reviews/*.json + state.json mtime + .hook-stats.jsonl, active + archive). Consumer: dashboard/src/components/ActivityFeed.tsx.",
   "anyOf": [
@@ -202,6 +202,10 @@
             },
             {
               "const": "noop",
+              "type": "string"
+            },
+            {
+              "const": "pass",
               "type": "string"
             }
           ]

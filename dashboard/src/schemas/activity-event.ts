@@ -63,6 +63,7 @@ const HookEventSchema = Type.Object(
       Type.Literal('warn'),
       Type.Literal('block'),
       Type.Literal('noop'),
+      Type.Literal('pass'),
     ]),
   },
   { additionalProperties: false },
@@ -128,7 +129,7 @@ export const ActivityEventSchema = Type.Union(
     ArchiveEventSchema,
   ],
   {
-    $id: 'https://mumei.dev/schemas/activity-event.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/activity-event.schema.json',
     title: 'mumei activity event',
     description:
       "Discriminated union of activity entries returned by GET /api/activity?limit=50 and prepended into ActivityFeed via SSE 'activity.added'. Producer: dashboard/server/activity.ts (merging git log + reviews/*.json + state.json mtime + .hook-stats.jsonl, active + archive). Consumer: dashboard/src/components/ActivityFeed.tsx.",

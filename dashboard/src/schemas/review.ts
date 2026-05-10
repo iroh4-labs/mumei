@@ -108,7 +108,7 @@ export const ReviewSchema = Type.Object(
     ),
   },
   {
-    $id: 'https://mumei.dev/schemas/review.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/review.schema.json',
     title: 'mumei review pipeline output',
     description:
       'Phase 5 / /mumei:review pipeline verdict, persisted at .mumei/specs/<feature>/reviews/<ts>.json (spec vehicle) or .mumei/plans/<slug>/reviews/<ts>.json (plan vehicle).',

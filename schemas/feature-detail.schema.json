@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/feature-detail.schema.json#v0.1.0",
+  "$id": "https://mumei.dev/schemas/feature-detail.schema.json",
   "title": "mumei feature detail payload",
   "description": "GET /api/feature/:slug/detail result built by dashboard/server/detail.ts from requirements.md + tasks.md (via execFile bash hooks/_lib/tasks.sh) + reviews/*.json + cost-log.jsonl. When planVehicle=true, requirements.md is absent so acs is []. Producer: dashboard backend. Consumer: DetailPanel.tsx.",
   "additionalProperties": false,

@@ -59,6 +59,7 @@ const InlineActivityEventSchema = Type.Union([
         Type.Literal('warn'),
         Type.Literal('block'),
         Type.Literal('noop'),
+        Type.Literal('pass'),
       ]),
     },
     { additionalProperties: false },
@@ -124,7 +125,7 @@ export const SseEventSchema = Type.Union(
     ActivityAddedEventSchema,
   ],
   {
-    $id: 'https://mumei.dev/schemas/sse-event.schema.json#v0.1.0',
+    $id: 'https://mumei.dev/schemas/sse-event.schema.json',
     title: 'mumei dashboard SSE event',
     description:
       'Server-Sent Events emitted by dashboard/server/sse.ts on /api/events. All events are debounced 200ms per (event, slug). state.json updates emit BOTH feature.update AND activity.changed; review/hook activity emits only activity.changed. The client treats activity.changed and activity.added as cache-invalidation triggers and refetches /api/activity. Producer: backend chokidar -> EventEmitter pipeline. Consumer: dashboard/src/hooks/useEventStream.ts.',
