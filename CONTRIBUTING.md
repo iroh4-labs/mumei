@@ -299,7 +299,7 @@ each rule mitigates.
 - **No `pull_request_target`**. Do not introduce a workflow that uses
   the `pull_request_target` trigger. The trigger runs in the base
   repository's context with secret access; one fork-PR-driven leak
-  is enough to compromise `ANTHROPIC_API_KEY`. The `pr-target-guard`
+  is enough to compromise any repo secret. The `pr-target-guard`
   job in `pr.yml` rejects any PR adding the trigger to a workflow
   that is not on the (currently empty) allowlist.
 

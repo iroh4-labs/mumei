@@ -130,16 +130,6 @@ job-level `permissions:`) instead of a PAT, it must do so. PATs are
 reserved for cross-repo or cross-workspace operations the
 `GITHUB_TOKEN` cannot perform.
 
-## API key spend limit
-
-The `ANTHROPIC_API_KEY` configured as a repository secret is bound to
-an Anthropic workspace that has a per-workspace **spend limit**
-configured. The specific dollar amount is intentionally omitted from
-this document so the limit can be tuned without a docs change. The
-existence of the cap means a runaway loop in any workflow stops at
-the workspace ceiling rather than at the account ceiling, which is a
-materially smaller blast radius.
-
 ## Secret redaction
 
 GitHub Actions' built-in **secret redaction** is enabled and is never

@@ -23,7 +23,7 @@ entirely on the user's machine. The realistic compromise paths are:
 - **GitHub Actions workflow tampering.** A malicious contributor who
   introduces a workflow with `pull_request_target` (or otherwise
   obtains `secrets.*` from a fork-PR-driven run) can exfiltrate
-  `ANTHROPIC_API_KEY`, `GITLEAKS_LICENSE`, or any other repo secret.
+  any repo secret.
 - **Anthropic plugin marketplace distribution path.** Tampering with
   the published plugin manifest (`marketplace.json`) or the plugin
   archive — either at the GitHub release artifact level or at the
@@ -32,9 +32,9 @@ entirely on the user's machine. The realistic compromise paths are:
 - **Maintainer account compromise.** An attacker who obtains the
   maintainer's GitHub credentials can push to `main` directly or
   publish a release that users would accept as authentic.
-- **Secret leakage in published artifacts.** A stray `ANTHROPIC_API_KEY`
-  or PAT committed to the source tree, embedded in a release tarball,
-  or echoed to a workflow log eludes runtime redaction.
+- **Secret leakage in published artifacts.** A stray API key or PAT
+  committed to the source tree, embedded in a release tarball, or
+  echoed to a workflow log eludes runtime redaction.
 
 ## Attacker profiles
 
@@ -43,10 +43,9 @@ entirely on the user's machine. The realistic compromise paths are:
   installations as possible. Method of choice: mutable tag rewrite.
   Typically not targeted at mumei specifically; the project is
   collateral damage.
-- **Targeted CI/CD attackers** who notice `ANTHROPIC_API_KEY` in repo
-  secrets and craft a fork-PR designed to exfiltrate it. The
-  motivating prize is the API quota and the upstream account
-  pivot, not the mumei code itself.
+- **Targeted CI/CD attackers** who notice repo secrets and craft a
+  fork-PR designed to exfiltrate them. The motivating prize is the
+  upstream account pivot, not the mumei code itself.
 - **Malicious contributors** opening a PR with a payload disguised as
   a feature improvement. The PR-time CI scans plus the signed-commit
   gate (Wave 4) constrain this category to bugs that pass review.
