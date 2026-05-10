@@ -66,16 +66,16 @@ tasks:
     cmds:
       - npm run test:watch
 
-  generate-types:
-    desc: "Regenerate src/types/*.ts from ../schemas/*.json"
+  schemas:
+    desc: "Regenerate ../schemas/*.schema.json from src/schemas/*.ts (TypeBox canonical)"
     deps: [install]
     cmds:
-      - npm run generate-types
+      - npm run schemas
     sources:
-      - ../schemas/*.json
-      - scripts/generate-types.ts
+      - src/schemas/*.ts
+      - scripts/generate-schemas.ts
     generates:
-      - src/types/**/*.ts
+      - ../schemas/*.schema.json
 
   build:
     desc: "Production build (tsc -b + vite build + tsup server). tsc -b inside `npm run build` does typecheck-equivalent work; do not chain `task dashboard:typecheck` before this in CI."
@@ -101,17 +101,18 @@ tasks:
       - npm run preview
 
   validate:
-    desc: "Pre-PR full check for dashboard (typecheck + lint + test + generate-types drift)"
+    desc: "Pre-PR full check for dashboard (typecheck + lint + test + schemas drift)"
     cmds:
       - task: typecheck
       - task: lint
       - task: test
-      - task: generate-types
+      - task: schemas
       - |
-        # generate-types drift check: if `npm run generate-types` produced
-        # a diff, the committed types are stale. Fail loudly.
-        if ! git diff --quiet -- src/types/; then
-          echo "::error::generated types differ from committed src/types/. Run 'task dashboard:generate-types' and commit the result." >&2
-          git --no-pager diff -- src/types/ >&2
+        # schemas drift check: if `npm run schemas` regenerated ../schemas/*.schema.json
+        # differently from the committed canonical, the TypeBox sources and the
+        # committed JSON are out of sync. Fail loudly.
+        if ! git -C .. diff --quiet -- schemas/; then
+          echo "::error::generated schemas differ from committed schemas/. Run 'task dashboard:schemas' and commit the result." >&2
+          git -C .. --no-pager diff -- schemas/ >&2
           exit 1
         fi

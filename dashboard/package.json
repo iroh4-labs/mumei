@@ -34,7 +34,7 @@
     "build:server": "tsup server/index.ts --format esm --target node20 --out-dir dist/server --no-splitting --clean",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "generate-types": "tsx scripts/generate-types.ts",
+    "schemas": "tsx scripts/generate-schemas.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check --error-on-warnings .",

@@ -3,6 +3,7 @@
   "$id": "https://mumei.dev/schemas/state.schema.json#v0.1.0",
   "title": "mumei feature state",
   "description": "Persistent per-feature state written atomically by hooks/_lib/state.sh. Lives at .mumei/specs/<feature>/state.json (spec vehicle) or .mumei/plans/<slug>/state.json (plan vehicle).",
+  "additionalProperties": false,
   "type": "object",
   "required": [
     "id",
@@ -12,69 +13,84 @@
     "created_at",
     "updated_at"
   ],
-  "additionalProperties": false,
   "properties": {
     "id": {
-      "type": "string",
       "pattern": "^REQ-[0-9]+$",
-      "description": "Spec-vehicle stable identifier. For plan-vehicle features this field equals slug."
+      "description": "Spec-vehicle stable identifier. For plan-vehicle features this field equals slug.",
+      "type": "string"
     },
     "slug": {
-      "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$",
-      "description": "Kebab-case feature name."
+      "description": "Kebab-case feature name.",
+      "type": "string"
     },
     "phase": {
-      "type": "string",
-      "enum": ["plan", "implement", "review", "done"],
-      "description": "spec vehicle uses all 4 values; plan vehicle uses only implement / done."
+      "description": "spec vehicle uses all 4 values; plan vehicle uses only implement / done.",
+      "anyOf": [
+        {
+          "const": "plan",
+          "type": "string"
+        },
+        {
+          "const": "implement",
+          "type": "string"
+        },
+        {
+          "const": "review",
+          "type": "string"
+        },
+        {
+          "const": "done",
+          "type": "string"
+        }
+      ]
     },
     "current_wave": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Wave number currently in flight. 0 before approval gate, 1+ during implement, equals last Wave during review."
+      "description": "Wave number currently in flight. 0 before approval gate, 1+ during implement, equals last Wave during review.",
+      "type": "integer"
     },
     "created_at": {
-      "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 UTC. Set on state-init, never updated."
+      "description": "ISO 8601 UTC. Set on state-init, never updated.",
+      "type": "string"
     },
     "updated_at": {
-      "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 UTC. Bumped on every state mutation."
+      "description": "ISO 8601 UTC. Bumped on every state mutation.",
+      "type": "string"
     },
     "approved_at": {
-      "type": "string",
       "format": "date-time",
-      "description": "Set on the spec-vehicle Phase 3.5 user approval transition. Plan vehicle does not set this field."
+      "description": "Set on the spec-vehicle Phase 3.5 user approval transition. Plan vehicle does not set this field.",
+      "type": "string"
     },
     "last_observed_head": {
-      "type": "string",
       "pattern": "^[0-9a-f]{7,40}$",
-      "description": "git rev-parse HEAD captured by hooks at the most recent transition. Used to detect external commits."
+      "description": "git rev-parse HEAD captured by hooks at the most recent transition. Used to detect external commits.",
+      "type": "string"
     },
     "pending_review": {
-      "type": "boolean",
-      "description": "Plan vehicle only. Set true by post-task-event.sh when the last TaskCompleted matches task_created_count; cleared by /mumei:review on PASS."
+      "description": "Plan vehicle only. Set true by post-task-event.sh when the last TaskCompleted matches task_created_count; cleared by /mumei:review on PASS.",
+      "type": "boolean"
     },
     "task_created_count": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Plan vehicle only. Counter of TaskCreated events since plan-mode capture."
+      "description": "Plan vehicle only. Counter of TaskCreated events since plan-mode capture.",
+      "type": "integer"
     },
     "task_completed_count": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Plan vehicle only. Counter of TaskCompleted events."
+      "description": "Plan vehicle only. Counter of TaskCompleted events.",
+      "type": "integer"
     },
     "depends_on": {
+      "description": "Phase D forward-compat. Cross-feature dependency list. Populated from tasks.md _DependsOn:_ meta when introduced.",
       "type": "array",
       "items": {
-        "type": "string",
-        "pattern": "^REQ-[0-9]+(-[a-z0-9-]+)?$"
-      },
-      "description": "Phase D forward-compat. Cross-feature dependency list. Populated from tasks.md _DependsOn:_ meta when introduced."
+        "pattern": "^REQ-[0-9]+(-[a-z0-9-]+)?$",
+        "type": "string"
+      }
     }
   }
 }

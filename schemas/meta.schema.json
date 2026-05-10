@@ -1,22 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/meta.schema.json#v0.1.0",
-  "title": "mumei dashboard meta + stats",
-  "description": "Backend identity and aggregate counters used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts. Two endpoints share this schema via $defs.",
-  "type": "object",
-  "$defs": {
-    "Meta": {
-      "type": "object",
-      "required": ["projectLabel"],
+  "oneOf": [
+    {
+      "$id": "https://mumei.dev/schemas/meta.schema.json#v0.1.0",
+      "title": "mumei dashboard meta",
+      "description": "Backend identity used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.",
       "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "projectLabel"
+      ],
       "properties": {
         "projectLabel": {
-          "type": "string",
-          "description": "process.cwd() converted to '~/...' when under $HOME, else the absolute path. Computed by dashboard/server/lib/path.ts."
+          "description": "process.cwd() converted to '~/...' when under $HOME, else the absolute path. Computed by dashboard/server/lib/path.ts.",
+          "type": "string"
         }
       }
     },
-    "MetaStats": {
+    {
+      "$id": "https://mumei.dev/schemas/meta-stats.schema.json#v0.1.0",
+      "title": "mumei dashboard meta stats",
+      "description": "Aggregate counters used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.",
+      "additionalProperties": false,
       "type": "object",
       "required": [
         "activeCount",
@@ -25,39 +30,34 @@
         "hooksPerSec",
         "eventCount24h"
       ],
-      "additionalProperties": false,
       "properties": {
         "activeCount": {
-          "type": "integer",
           "minimum": 0,
-          "description": "Count of features with phase != 'done' across .mumei/specs/ and .mumei/plans/."
+          "description": "Count of features with phase != 'done' across .mumei/specs/ and .mumei/plans/.",
+          "type": "integer"
         },
         "monthTokens": {
-          "type": "integer",
           "minimum": 0,
-          "description": "Sum of input_tokens + output_tokens for cost-log entries this calendar month (UTC)."
+          "description": "Sum of input_tokens + output_tokens for cost-log entries this calendar month (UTC).",
+          "type": "integer"
         },
         "cacheHitRate": {
-          "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Project-wide cache_read_input_tokens / (input_tokens + cache_read_input_tokens) for the current month."
+          "description": "Project-wide cache_read_input_tokens / (input_tokens + cache_read_input_tokens) for the current month.",
+          "type": "number"
         },
         "hooksPerSec": {
-          "type": "number",
           "minimum": 0,
-          "description": "24-hour rolling average firing rate computed from .hook-stats.jsonl. 0 when the file is absent."
+          "description": "24-hour rolling average firing rate computed from .hook-stats.jsonl. 0 when the file is absent.",
+          "type": "number"
         },
         "eventCount24h": {
-          "type": "integer",
           "minimum": 0,
-          "description": "Count of activity events (commits + reviews + hooks + phase changes) in the last 24 hours."
+          "description": "Count of activity events (commits + reviews + hooks + phase changes) in the last 24 hours.",
+          "type": "integer"
         }
       }
     }
-  },
-  "oneOf": [
-    { "$ref": "#/$defs/Meta" },
-    { "$ref": "#/$defs/MetaStats" }
   ]
 }
