@@ -1,0 +1,108 @@
+# Taskfile for the @mumei/dashboard sub-project.
+#
+# Included from the root Taskfile.yml as `dashboard:` namespace with
+# `dir: ./dashboard`, so `task dashboard:test` from the repo root is
+# equivalent to `cd dashboard && task test` here.
+#
+# This file delegates to package.json scripts (the source of truth)
+# rather than re-implementing them. npm scripts stay invocable
+# directly, which keeps the dashboard's own tooling (Vite / Vitest /
+# Biome) discoverable via `npm run` for contributors who never use Task.
+
+version: "3"
+
+set: [pipefail]
+silent: true
+
+tasks:
+  default:
+    desc: List available dashboard tasks
+    cmds:
+      - task --list
+
+  install:
+    desc: "npm ci --prefer-offline (idempotent; skipped if package-lock.json unchanged)"
+    cmds:
+      - npm ci --prefer-offline
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+
+  dev:
+    desc: "Start dev (Fastify watch + Vite hot-reload, concurrently)"
+    cmds:
+      - npm run dev
+
+  typecheck:
+    desc: "tsc -b --noEmit on src/ + server/"
+    cmds:
+      - npm run typecheck
+
+  lint:
+    desc: "biome check --error-on-warnings"
+    cmds:
+      - npm run lint
+
+  lint:fix:
+    desc: "biome check --write (auto-fix)"
+    cmds:
+      - npm run lint:fix
+
+  test:
+    desc: "vitest run (one-shot)"
+    cmds:
+      - npm run test
+
+  test:watch:
+    desc: "vitest watch"
+    cmds:
+      - npm run test:watch
+
+  generate-types:
+    desc: "Regenerate src/types/*.ts from ../schemas/*.json"
+    cmds:
+      - npm run generate-types
+    sources:
+      - ../schemas/*.json
+      - scripts/generate-types.ts
+    generates:
+      - src/types/**/*.ts
+
+  build:
+    desc: "Production build (tsc -b + vite build + tsup server). tsc -b inside `npm run build` does typecheck-equivalent work; do not chain `task dashboard:typecheck` before this in CI."
+    cmds:
+      - npm run build
+    sources:
+      - src/**/*.{ts,tsx,css}
+      - server/**/*.ts
+      - public/**/*
+      - index.html
+      - vite.config.ts
+      - tsup.config.ts
+      - tsconfig*.json
+      - package.json
+    generates:
+      - dist/**/*
+
+  preview:
+    desc: "vite preview (serve the production build locally)"
+    cmds:
+      - npm run preview
+
+  validate:
+    desc: "Pre-PR full check for dashboard (typecheck + lint + test + generate-types drift)"
+    cmds:
+      - task: typecheck
+      - task: lint
+      - task: test
+      - task: generate-types
+      - |
+        # generate-types drift check: if `npm run generate-types` produced
+        # a diff, the committed types are stale. Fail loudly.
+        if ! git diff --quiet -- src/types/; then
+          echo "::error::generated types differ from committed src/types/. Run 'task dashboard:generate-types' and commit the result." >&2
+          git --no-pager diff -- src/types/ >&2
+          exit 1
+        fi

@@ -24,6 +24,10 @@
 # self-evaluate skill の dev 採点記録 (個人開発スタンス、配布物外)
 /skills/self-evaluate/results/
 
+# Taskfile (go-task) ローカル checksum cache。sources/generates の up-to-date
+# 判定に使う隠しディレクトリ。dev 環境ごとに再生成されるため共有不要。
+.task/
+
 # =============================================================================
 # OS / Editor
 # =============================================================================
