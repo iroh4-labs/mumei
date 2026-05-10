@@ -117,13 +117,12 @@ jobs:
           github_pr_number: ${{ github.event.pull_request.number }}
           settings: |-
             {
+              "usageStatisticsEnabled": false,
               "model": {
                 "maxSessionTurns": 25
               },
               "telemetry": {
-                "enabled": true,
-                "target": "local",
-                "outfile": ".gemini/telemetry.log"
+                "enabled": false
               },
               "mcpServers": {
                 "github": {
