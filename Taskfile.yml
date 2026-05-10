@@ -39,9 +39,6 @@ set: [pipefail]
 # (see scripts/lint-all.sh).
 silent: true
 
-vars:
-  DASHBOARD_DIR: ./dashboard
-
 includes:
   # dashboard sub-project as a sub-namespace. `task dashboard:test`
   # automatically chdirs to ./dashboard before running.
@@ -277,7 +274,9 @@ tasks:
     cmds:
       - |
         branch="$(git rev-parse --abbrev-ref HEAD)"
-        run_id="$(gh run list --branch "$branch" --limit 1 --json databaseId --jq '.[0].databaseId')"
+        # `// empty` so an empty array yields "" (falsy) instead of "null"
+        # (which would otherwise pass the -z guard and reach `gh run watch null`).
+        run_id="$(gh run list --branch "$branch" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
         if [ -z "$run_id" ]; then
           echo "no CI run found for branch $branch yet (push first?)"
           exit 1
@@ -286,6 +285,9 @@ tasks:
 
   pr:copilot:
     desc: "Fetch Copilot review comments (summary + inline) for the given PR"
+    preconditions:
+      - sh: command -v gh
+        msg: "gh CLI not installed"
     cmds:
       - |
         if [ -z "{{.CLI_ARGS}}" ]; then
@@ -297,6 +299,10 @@ tasks:
         gh pr view "$pr" --comments | tail -40
         echo
         echo "=== inline ==="
+        # `gh api` auto-substitutes {owner}/{repo} from the current repo.
+        # Inline review comments arrive with `.user.login == "Copilot"`
+        # (the reviews endpoint uses `copilot-pull-request-reviewer[bot]`,
+        # the comments endpoint uses the literal "Copilot").
         gh api "repos/{owner}/{repo}/pulls/${pr}/comments" \
           --jq '.[] | select(.user.login == "Copilot") | "[\(.path):\(.line // .original_line)] \(.body)"'
 
@@ -305,9 +311,13 @@ tasks:
   # ---------------------------------------------------------------
   main:watch:
     desc: "Watch the latest CI run on main (use after merge, per CLAUDE.md merge-≠-完了)"
+    preconditions:
+      - sh: command -v gh
+        msg: "gh CLI not installed"
     cmds:
       - |
-        run_id="$(gh run list --branch main --limit 1 --json databaseId --jq '.[0].databaseId')"
+        # `// empty` so an empty array yields "" (falsy) instead of "null".
+        run_id="$(gh run list --branch main --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
         if [ -z "$run_id" ]; then
           echo "no main CI run found"
           exit 1
