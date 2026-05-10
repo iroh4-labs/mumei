@@ -56,7 +56,12 @@ defaults:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Pro Preview + thinking + multi-turn agentic (PR fetch -> review
+    # generation -> create pending review -> add inline comments ->
+    # submit) routinely hits 10+ minutes for non-trivial PRs. 25-min
+    # ceiling absorbs the variance; faster Flash models will return
+    # well under this and incur no cost.
+    timeout-minutes: 25
     permissions:
       contents: read
       id-token: write
