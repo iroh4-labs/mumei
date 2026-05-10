@@ -293,12 +293,16 @@ tasks:
     preconditions:
       - sh: command -v gh
         msg: "gh CLI not installed"
+    env:
+      # Pass CLI_ARGS through an environment variable rather than
+      # interpolating into the script body. Bash parameter expansion
+      # (`$MUMEI_PR_ARG`) treats the value as data, so a malicious
+      # input like `'"; echo pwned; #'` is rejected by the integer
+      # check below instead of being parsed as shell code.
+      MUMEI_PR_ARG: "{{.CLI_ARGS}}"
     cmds:
       - |
-        # Quote CLI_ARGS so word-splitting can't slip extra tokens past
-        # the validator below. Validate as a single integer before any
-        # network call.
-        pr="{{.CLI_ARGS}}"
+        pr="$MUMEI_PR_ARG"
         if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
           echo "Usage: task pr:copilot -- <PR-number>"
           [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
