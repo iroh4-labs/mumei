@@ -86,9 +86,14 @@ Sub-namespaces:
 - `pr:*` / `main:watch` — PR helpers (`task pr:watch`,
   `task pr:copilot -- <PR#>`, `task main:watch`).
 
-Tasks are thin wrappers around `scripts/*.sh` and `npm run …`; CI and
-pre-commit keep calling those directly so Task is a developer-experience
-layer, not a hard dependency.
+Tasks are thin wrappers around `scripts/*.sh` and `npm run …`. CI
+installs Task via [`go-task/setup-task`](https://github.com/go-task/setup-task)
+and routes `lint` / `bats` / `dashboard-ci` jobs through `task` for
+single-source-of-truth parity with local. pre-commit hooks still call
+the underlying scripts directly. Contributors who skip the `task`
+install can keep using `bash scripts/lint-all.sh`, `bats -r tests/`,
+and `cd dashboard && npm run …` — every entry has a documented raw
+fallback.
 
 ## Running the tests
 
