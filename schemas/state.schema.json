@@ -15,8 +15,8 @@
   ],
   "properties": {
     "id": {
-      "pattern": "^REQ-[0-9]+$",
-      "description": "Spec-vehicle stable identifier. For plan-vehicle features this field equals slug.",
+      "pattern": "^(REQ-[0-9]+|[a-z0-9][a-z0-9-]*)$",
+      "description": "Spec-vehicle stable identifier (REQ-N). For plan-vehicle features this field equals slug (kebab-case).",
       "type": "string"
     },
     "slug": {

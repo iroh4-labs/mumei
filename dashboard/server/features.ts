@@ -2,19 +2,42 @@ import { execFile } from 'node:child_process'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
+
+import { validateState } from '../src/lib/validators.ts'
+import type { State } from '../src/schemas/state.ts'
 import type { MumeiFeatureSummary } from '../src/types/feature-summary.ts'
 import { type CostLogEntry, readJsonl } from './lib/aggregator.ts'
 
 const exec = promisify(execFile)
 
-interface StateFile {
-  id?: string
-  slug?: string
-  phase?: 'plan' | 'implement' | 'review' | 'done'
-  current_wave?: number
-  task_created_count?: number
-  task_completed_count?: number
-  updated_at?: string
+/**
+ * Parse and validate a `state.json` body via the TypeBox-compiled
+ * StateSchema validator (REQ-19.4). On JSON parse failure or schema
+ * violation, throw with a descriptive message; the caller forwards the
+ * throw to Fastify's default error handler which emits HTTP 500. The
+ * stderr fallback (`process.stderr.write`) ensures the violation is
+ * observable even when the Fastify logger is in production silent mode.
+ */
+function parseStateOrThrow(body: string, file: string): State {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch (e) {
+    process.stderr.write(
+      `[mumei dashboard] state.json JSON.parse failed: file=${file} err=${(e as Error).message}\n`,
+    )
+    throw new Error(`state.json JSON.parse failed at ${file}`)
+  }
+  if (!validateState.Check(parsed)) {
+    const errors = [...validateState.Errors(parsed)]
+      .map((e) => `${e.path}: ${e.message}`)
+      .join('; ')
+    process.stderr.write(
+      `[mumei dashboard] state.json validation failed: file=${file} errors=${errors}\n`,
+    )
+    throw new Error(`state.json validation failed at ${file}: ${errors}`)
+  }
+  return parsed
 }
 
 const PHASE_NEXT: Record<MumeiFeatureSummary['phase'], MumeiFeatureSummary['nextPhase']> = {
@@ -101,14 +124,33 @@ async function summariseFeature(args: {
   const { projectRoot, featureDir, featureKey, vehicle, archived, now } = args
   const stateRaw = await safeReadFile(path.join(featureDir, 'state.json'))
   if (!stateRaw) return null
-  let state: StateFile
-  try {
-    state = JSON.parse(stateRaw) as StateFile
-  } catch {
-    return null
+  const stateFilePath = path.join(featureDir, 'state.json')
+  let state: State
+  if (archived) {
+    // Archived features may carry older state.json schemas. Fail-fast
+    // would reject the whole /api/features response if a single archive
+    // entry has drifted; treat as skip+warn instead (REQ-19.4 scopes
+    // fail-fast to active specs/plans).
+    try {
+      const parsed = JSON.parse(stateRaw) as unknown
+      if (!validateState.Check(parsed)) {
+        process.stderr.write(
+          `[mumei dashboard] archive state.json shape drift, skipping: file=${stateFilePath}\n`,
+        )
+        return null
+      }
+      state = parsed
+    } catch {
+      process.stderr.write(
+        `[mumei dashboard] archive state.json JSON.parse failed, skipping: file=${stateFilePath}\n`,
+      )
+      return null
+    }
+  } else {
+    state = parseStateOrThrow(stateRaw, stateFilePath)
   }
 
-  const phase = state.phase ?? 'plan'
+  const phase = state.phase
 
   const tasksBody = await safeReadFile(path.join(featureDir, 'tasks.md'))
   const tasksWaveCount = tasksBody ? (tasksBody.match(/^## Wave \d+:/gm) ?? []).length : 0

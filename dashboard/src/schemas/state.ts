@@ -3,9 +3,9 @@ import { type Static, Type } from '@sinclair/typebox'
 export const StateSchema = Type.Object(
   {
     id: Type.String({
-      pattern: '^REQ-[0-9]+$',
+      pattern: '^(REQ-[0-9]+|[a-z0-9][a-z0-9-]*)$',
       description:
-        'Spec-vehicle stable identifier. For plan-vehicle features this field equals slug.',
+        'Spec-vehicle stable identifier (REQ-N). For plan-vehicle features this field equals slug (kebab-case).',
     }),
     slug: Type.String({
       pattern: '^[a-z0-9][a-z0-9-]*$',
