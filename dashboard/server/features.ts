@@ -3,7 +3,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { validateState } from '../src/lib/validators.ts'
+import { validateCostLogEntry, validateReview, validateState } from '../src/lib/validators.ts'
 import type { State } from '../src/schemas/state.ts'
 import type { MumeiFeatureSummary } from '../src/types/feature-summary.ts'
 import { type CostLogEntry, readJsonl } from './lib/aggregator.ts'
@@ -12,11 +12,11 @@ const exec = promisify(execFile)
 
 /**
  * Parse and validate a `state.json` body via the TypeBox-compiled
- * StateSchema validator (REQ-19.4). On JSON parse failure or schema
- * violation, throw with a descriptive message; the caller forwards the
- * throw to Fastify's default error handler which emits HTTP 500. The
- * stderr fallback (`process.stderr.write`) ensures the violation is
- * observable even when the Fastify logger is in production silent mode.
+ * StateSchema validator. On JSON parse failure or schema violation,
+ * throw with a descriptive message; the caller forwards the throw to
+ * Fastify's default error handler which emits HTTP 500. The stderr
+ * fallback ensures the violation is observable even when the Fastify
+ * logger is in production silent mode.
  */
 function parseStateOrThrow(body: string, file: string): State {
   let parsed: unknown
@@ -129,8 +129,8 @@ async function summariseFeature(args: {
   if (archived) {
     // Archived features may carry older state.json schemas. Fail-fast
     // would reject the whole /api/features response if a single archive
-    // entry has drifted; treat as skip+warn instead (REQ-19.4 scopes
-    // fail-fast to active specs/plans).
+    // entry has drifted; treat as skip+warn instead. Active specs and
+    // plans use parseStateOrThrow below.
     try {
       const parsed = JSON.parse(stateRaw) as unknown
       if (!validateState.Check(parsed)) {
@@ -251,16 +251,27 @@ async function latestReview(reviewsDir: string): Promise<ReviewSummary | null> {
     .sort()
   const latestName = candidates[candidates.length - 1]
   if (!latestName) return null
-  const body = await safeReadFile(path.join(reviewsDir, latestName))
+  const reviewPath = path.join(reviewsDir, latestName)
+  const body = await safeReadFile(reviewPath)
   if (!body) return null
+  let parsed: unknown
   try {
-    const parsed = JSON.parse(body) as {
-      verdict?: ReviewSummary['verdict']
-      iteration?: number
-      findings_surfaced?: { severity?: string }[]
-    }
-    if (!parsed.verdict) return null
-    const surfaced = parsed.findings_surfaced ?? []
+    parsed = JSON.parse(body)
+  } catch {
+    // existing torn-write skip path (preserved, no warn)
+    return null
+  }
+  // Shape violation -> skip + warn (do not fail-fast; older schema
+  // versions of review.json should not break /api/features).
+  if (!validateReview.Check(parsed)) {
+    process.stderr.write(
+      `[mumei dashboard] review.json shape violation, skipping: file=${reviewPath}\n`,
+    )
+    return null
+  }
+  try {
+    const r = parsed
+    const surfaced = r.findings_surfaced ?? []
     const findings = { high: 0, medium: 0, low: 0 }
     for (const f of surfaced) {
       if (f.severity === 'CRITICAL' || f.severity === 'HIGH') findings.high += 1
@@ -268,8 +279,8 @@ async function latestReview(reviewsDir: string): Promise<ReviewSummary | null> {
       else if (f.severity === 'LOW') findings.low += 1
     }
     return {
-      verdict: parsed.verdict,
-      iteration: parsed.iteration ?? 1,
+      verdict: r.verdict,
+      iteration: r.iteration ?? 1,
       findings,
     }
   } catch {
@@ -295,7 +306,9 @@ async function loadCost(args: {
   type Acc = { input: number; output: number; cacheRead: number }
   const merged = new Map<string, Acc>()
   for (const file of [args.perFeatureFile, args.projectWideFile]) {
-    for await (const e of readJsonl<CostLogEntry>(file)) {
+    for await (const e of readJsonl<CostLogEntry>(file, {
+      validate: (v) => validateCostLogEntry.Check(v),
+    })) {
       if (e.phase !== 'after') continue
       if (file === args.projectWideFile && e.feature !== args.featureKey) continue
       const key = `${e.agent ?? ''}\t${e.ts ?? ''}`

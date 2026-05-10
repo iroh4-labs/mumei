@@ -119,4 +119,20 @@ describe('useEventStream', () => {
     })
     expect(spy).toHaveBeenCalledWith({ queryKey: ['meta', 'stats'] })
   })
+
+  it('skips events whose shape violates SseEventSchema and warns to console', () => {
+    const qc = new QueryClient()
+    const invalSpy = vi.spyOn(qc, 'invalidateQueries')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    renderHook(() => useEventStream('/api/events'), { wrapper: wrapper(qc) })
+    const es = MockEventSource.instances[0]
+    if (!es) throw new Error('EventSource not constructed')
+    act(() => {
+      // Unknown event type, not in the SseEventSchema union → skip + warn.
+      es.fireMessage({ type: 'unknown.event.kind' })
+    })
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(invalSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
 })

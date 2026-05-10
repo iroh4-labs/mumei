@@ -8,7 +8,6 @@
   "required": [
     "ts",
     "feature",
-    "agent",
     "phase"
   ],
   "properties": {

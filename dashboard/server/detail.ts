@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { validateCostLogEntry } from '../src/lib/validators.ts'
 import type { MumeiFeatureDetailPayload as MumeiFeatureDetail } from '../src/types/feature-detail.ts'
 import { type CostLogEntry, readJsonl } from './lib/aggregator.ts'
 import { buildWaveplan } from './lib/tasks-bridge.ts'
@@ -248,7 +249,9 @@ async function loadCostPerIter(args: {
     } catch {
       continue
     }
-    for await (const e of readJsonl<CostLogEntry & { iteration?: number | null }>(file)) {
+    for await (const e of readJsonl<CostLogEntry & { iteration?: number | null }>(file, {
+      validate: (v) => validateCostLogEntry.Check(v),
+    })) {
       if (e.phase !== 'after') continue
       if (file === args.projectWideFile && e.feature !== args.featureKey) continue
       const iter = e.iteration ?? 1

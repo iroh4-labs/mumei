@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { validateCostLogEntry } from '../src/lib/validators.ts'
 import type { MumeiActivityEvent } from '../src/types/activity-event.ts'
 import { type CostLogEntry, type HookStatsEntry, readJsonl } from './lib/aggregator.ts'
 
@@ -245,7 +246,9 @@ async function collectSubagents(
   for (const file of await collectCostLogFiles(projectRoot)) {
     const slug = featureKeyForCostLog(file, projectRoot)
     if (!slug) continue
-    for await (const e of readJsonl<CostLogEntry>(file)) {
+    for await (const e of readJsonl<CostLogEntry>(file, {
+      validate: (v) => validateCostLogEntry.Check(v),
+    })) {
       if (!e.ts || e.ts < cutoff) continue
       if (!e.agent || !VALID_AGENTS.has(e.agent)) continue
       if (e.phase !== 'before' && e.phase !== 'after') continue

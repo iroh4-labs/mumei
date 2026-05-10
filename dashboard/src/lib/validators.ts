@@ -1,10 +1,10 @@
 // Compiled TypeBox validators for runtime shape checks at the system
 // boundaries (bash -> Node state.json, JSONL aggregator lines, review
-// JSON, SSE event payload). Per REQ-19.7 each `TypeCompiler.Compile()`
-// call is performed at module top-level so the JIT-emitted validator is
-// reused for every request / line / event without per-call allocation.
+// JSON, SSE event payload). Each `TypeCompiler.Compile()` call is
+// performed at module top-level so the JIT-emitted validator is reused
+// for every request / line / event without per-call allocation.
 //
-// Side-effect import './../schemas/_formats.ts' registers the
+// Side-effect import '../schemas/_formats.ts' registers the
 // 'date-time' format with the global FormatRegistry; without it
 // TypeCompiler.Compile() raises "Unknown format" on Check() time.
 import '../schemas/_formats.ts'

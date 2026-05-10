@@ -70,9 +70,9 @@ const FeatureUpdateEventSchema = Type.Object(
     type: Type.Literal('feature.update'),
     slug: Type.Optional(
       Type.String({
-        pattern: '^[a-z0-9][a-z0-9-]*$',
+        pattern: '^(REQ-[0-9]+(-[a-z0-9-]+)?|[a-z0-9][a-z0-9-]*)$',
         description:
-          "Feature slug whose state.json or review changed; useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']. Omit when the change is project-wide (e.g. .hook-stats.jsonl) and only `affects` is meaningful.",
+          "Feature key whose state.json or review changed (REQ-N-slug for spec, bare slug for plan); useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']. Omit when the change is project-wide (e.g. .hook-stats.jsonl) and only `affects` is meaningful.",
       }),
     ),
     affects: Type.Optional(

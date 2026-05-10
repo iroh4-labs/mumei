@@ -196,13 +196,15 @@ describe('listFeatures', () => {
     await writeFile(
       path.join(featDir, 'reviews', '20260508T120000Z.json'),
       JSON.stringify({
+        feature: 'REQ-1-foo',
         verdict: 'NEEDS_IMPROVEMENT',
         iteration: 2,
+        summary: 'test fixture',
         findings_surfaced: [
-          { severity: 'HIGH' },
-          { severity: 'MEDIUM' },
-          { severity: 'MEDIUM' },
-          { severity: 'LOW' },
+          { severity: 'HIGH', message: 'h' },
+          { severity: 'MEDIUM', message: 'm1' },
+          { severity: 'MEDIUM', message: 'm2' },
+          { severity: 'LOW', message: 'l' },
         ],
       }),
     )

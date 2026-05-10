@@ -6,7 +6,9 @@ export const CostLogEntrySchema = Type.Object(
     feature: Type.String(),
     wave: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
     iteration: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
-    agent: Type.String({ description: 'Reviewer / curator / SDK agent short name.' }),
+    agent: Type.Optional(
+      Type.String({ description: 'Reviewer / curator / SDK agent short name.' }),
+    ),
     phase: Type.Union([Type.Literal('before'), Type.Literal('after')], {
       description:
         'before: launch bookmark (no token usage). after: completion record with usage payload.',
