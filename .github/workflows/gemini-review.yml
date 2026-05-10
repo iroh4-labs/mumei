@@ -84,7 +84,10 @@ jobs:
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_cli_version: ${{ vars.GEMINI_CLI_VERSION }}
-          gemini_debug: ${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}
+          # Default debug ON during the dogfood / shake-down phase.
+          # Override by setting `vars.GEMINI_DEBUG=false` once the
+          # integration is stable.
+          gemini_debug: ${{ fromJSON(vars.GEMINI_DEBUG || true) }}
           gemini_model: ${{ vars.GEMINI_MODEL }}
           workflow_name: gemini-review
           # Set the PR number explicitly so issue_comment triggers
