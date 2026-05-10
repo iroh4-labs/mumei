@@ -29,14 +29,14 @@ npm run dev              # spawns Fastify (server) + Vite (frontend)
 
 ## Scripts
 
-| Script                   | Purpose                                        |
-| ------------------------ | ---------------------------------------------- |
-| `npm run dev`            | Server + Vite, both with watch mode            |
-| `npm run build`          | Produce `dist/` for production                 |
-| `npm run typecheck`      | `tsc -b --noEmit` across app + server          |
-| `npm run schemas`        | Regenerate `../schemas/*.schema.json` from TypeBox sources in `src/schemas/` |
-| `npm test`               | Vitest                                         |
-| `npm run lint`           | Biome `check --error-on-warnings`              |
+| Script              | Purpose                                                                      |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `npm run dev`       | Server + Vite, both with watch mode                                          |
+| `npm run build`     | Produce `dist/` for production                                               |
+| `npm run typecheck` | `tsc -b --noEmit` across app + server                                        |
+| `npm run schemas`   | Regenerate `../schemas/*.schema.json` from TypeBox sources in `src/schemas/` |
+| `npm test`          | Vitest                                                                       |
+| `npm run lint`      | Biome `check --error-on-warnings`                                            |
 
 ## Architecture
 

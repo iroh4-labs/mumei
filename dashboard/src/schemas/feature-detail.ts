@@ -99,7 +99,11 @@ const CostPerIterSchema = Type.Object(
 
 export const FeatureDetailSchema = Type.Object(
   {
-    slug: Type.String({ pattern: '^[a-z0-9][a-z0-9-]*$' }),
+    slug: Type.String({
+      pattern: '^(REQ-[0-9]+(-[a-z0-9-]+)?|[a-z0-9][a-z0-9-]*)$',
+      description:
+        'Feature key — compound `REQ-N-slug` for spec vehicle, bare kebab-case slug for plan vehicle. Echoes the request `:slug` param (which has the same allowed alphabet via Fastify `SlugParam` regex `^[A-Za-z0-9_-]+$`).',
+    }),
     planVehicle: Type.Boolean({
       description:
         "True when feature lives under .mumei/plans/<slug>/ (no requirements.md). Frontend renders 'no requirements (plan vehicle)' placeholder for the ACs tab.",
