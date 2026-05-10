@@ -46,6 +46,33 @@ describe('readJsonl', () => {
     for await (const e of readJsonl(path.join(dir, 'missing.jsonl'))) out.push(e)
     expect(out).toEqual([])
   })
+
+  it('with validate option, skips lines whose parsed object fails the predicate', async () => {
+    const { TypeCompiler } = await import('@sinclair/typebox/compiler')
+    const { Type } = await import('@sinclair/typebox')
+    const Schema = Type.Object({ a: Type.Number(), required: Type.String() })
+    const v = TypeCompiler.Compile(Schema)
+    const fp = path.join(dir, 'cost-log.jsonl')
+    await writeFile(
+      fp,
+      [
+        '{"a":1,"required":"ok"}',
+        '{"a":2}', // shape violation: required missing
+        '{"a":3,"required":"also-ok"}',
+        '{"a":"not-number","required":"x"}', // shape violation: a is string
+      ].join('\n'),
+    )
+    const out: { a: number; required: string }[] = []
+    for await (const e of readJsonl<{ a: number; required: string }>(fp, {
+      validate: (v2) => v.Check(v2),
+    })) {
+      out.push(e)
+    }
+    expect(out).toEqual([
+      { a: 1, required: 'ok' },
+      { a: 3, required: 'also-ok' },
+    ])
+  })
 })
 
 describe('aggregateTokensByDay', () => {

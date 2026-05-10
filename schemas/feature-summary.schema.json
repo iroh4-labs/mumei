@@ -1,8 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/feature-summary.schema.json#v0.1.0",
+  "$id": "https://mumei.dev/schemas/feature-summary.schema.json",
   "title": "mumei feature summary",
   "description": "Per-feature roll-up returned by GET /api/features. Computed by dashboard/server/features.ts from .mumei/specs/<f>/state.json + .mumei/plans/<f>/state.json + cost-log.jsonl + git log + tasks.md. Producer: dashboard backend. Consumer: dashboard frontend (Dashboard, DetailPanel header). Backward-compatibility: existing fields MUST NOT be renamed or removed (REQ-15.21); add-only.",
+  "additionalProperties": false,
   "type": "object",
   "required": [
     "id",
@@ -22,91 +23,195 @@
     "findings",
     "archived"
   ],
-  "additionalProperties": false,
   "properties": {
     "id": {
-      "type": "string",
+      "pattern": "^(REQ-[0-9]+|[a-z0-9][a-z0-9-]*)$",
       "description": "REQ-N for spec vehicle, equals slug for plan vehicle.",
-      "pattern": "^(REQ-[0-9]+|[a-z0-9][a-z0-9-]*)$"
+      "type": "string"
     },
     "slug": {
-      "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$",
-      "description": "Kebab-case feature name."
+      "description": "Kebab-case feature name.",
+      "type": "string"
     },
     "vehicle": {
-      "type": "string",
-      "enum": ["spec", "plan"]
+      "anyOf": [
+        {
+          "const": "spec",
+          "type": "string"
+        },
+        {
+          "const": "plan",
+          "type": "string"
+        }
+      ]
     },
     "phase": {
-      "type": "string",
-      "enum": ["plan", "implement", "review", "done"]
+      "anyOf": [
+        {
+          "const": "plan",
+          "type": "string"
+        },
+        {
+          "const": "implement",
+          "type": "string"
+        },
+        {
+          "const": "review",
+          "type": "string"
+        },
+        {
+          "const": "done",
+          "type": "string"
+        }
+      ]
     },
     "nextPhase": {
-      "type": ["string", "null"],
-      "enum": ["plan", "implement", "review", "done", null],
-      "description": "Predicted next phase under normal flow; null when done."
+      "description": "Predicted next phase under normal flow; null when done.",
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "const": "plan",
+              "type": "string"
+            },
+            {
+              "const": "implement",
+              "type": "string"
+            },
+            {
+              "const": "review",
+              "type": "string"
+            },
+            {
+              "const": "done",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "currentWave": {
-      "type": ["integer", "null"],
-      "minimum": 0,
-      "description": "Active Wave for spec vehicle. Null for plan vehicle (no Wave concept)."
+      "description": "Active Wave for spec vehicle. Null for plan vehicle (no Wave concept).",
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "totalWaves": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Spec vehicle: count of '## Wave N:' headers in tasks.md. Plan vehicle: task_created_count."
+      "description": "Spec vehicle: count of '## Wave N:' headers in tasks.md. Plan vehicle: task_created_count.",
+      "type": "integer"
     },
     "waveProgress": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Spec vehicle: completed Waves (committed). Plan vehicle: task_completed_count."
+      "description": "Spec vehicle: completed Waves (committed). Plan vehicle: task_completed_count.",
+      "type": "integer"
     },
     "lastVerdict": {
-      "type": ["string", "null"],
-      "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES", null],
-      "description": "Verdict from the most recent review JSON (Phase 5 / /mumei:review). Null when no review has run yet."
+      "description": "Verdict from the most recent review JSON (Phase 5 / /mumei:review). Null when no review has run yet.",
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "const": "PASS",
+              "type": "string"
+            },
+            {
+              "const": "NEEDS_IMPROVEMENT",
+              "type": "string"
+            },
+            {
+              "const": "MAJOR_ISSUES",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "lastIter": {
-      "type": ["integer", "null"],
-      "minimum": 1,
-      "maximum": 3
+      "anyOf": [
+        {
+          "minimum": 1,
+          "maximum": 3,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "tokens": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Sum of input_tokens + output_tokens from cost-log.jsonl entries (phase=after) for this feature."
+      "description": "Sum of input_tokens + output_tokens from cost-log.jsonl entries (phase=after) for this feature.",
+      "type": "integer"
     },
     "cacheHit": {
-      "type": "number",
       "minimum": 0,
       "maximum": 1,
-      "description": "cache_read_input_tokens / (input_tokens + cache_read_input_tokens). NaN treated as 0."
+      "description": "cache_read_input_tokens / (input_tokens + cache_read_input_tokens). NaN treated as 0.",
+      "type": "number"
     },
     "lastActivityMin": {
-      "type": "integer",
       "minimum": 0,
-      "description": "Minutes since the most recent of: state.json mtime, latest commit touching feature paths, latest cost-log entry."
+      "description": "Minutes since the most recent of: state.json mtime, latest commit touching feature paths, latest cost-log entry.",
+      "type": "integer"
     },
     "pulse": {
-      "type": "string",
-      "enum": ["active", "idle", "stalled"],
-      "description": "Derived from lastActivityMin: <60 active, <1440 idle, else stalled."
+      "description": "Derived from lastActivityMin: <60 active, <1440 idle, else stalled.",
+      "anyOf": [
+        {
+          "const": "active",
+          "type": "string"
+        },
+        {
+          "const": "idle",
+          "type": "string"
+        },
+        {
+          "const": "stalled",
+          "type": "string"
+        }
+      ]
     },
     "findings": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["high", "medium", "low"],
+      "description": "Surfaced findings count from latest review JSON.",
+      "type": "object",
+      "required": [
+        "high",
+        "medium",
+        "low"
+      ],
       "properties": {
-        "high": { "type": "integer", "minimum": 0 },
-        "medium": { "type": "integer", "minimum": 0 },
-        "low": { "type": "integer", "minimum": 0 }
-      },
-      "description": "Surfaced findings count from latest review JSON."
+        "high": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "medium": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
     },
     "archived": {
-      "type": "boolean",
-      "description": "True when feature lives under .mumei/archive/<YYYY-MM>/<slug>/. Frontend collapses these into a separate section."
+      "description": "True when feature lives under .mumei/archive/<YYYY-MM>/<slug>/. Frontend collapses these into a separate section.",
+      "type": "boolean"
     }
   }
 }

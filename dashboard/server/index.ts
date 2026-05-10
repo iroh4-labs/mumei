@@ -9,6 +9,11 @@ import fastifyStatic from '@fastify/static'
 import { Type } from '@sinclair/typebox'
 import Fastify from 'fastify'
 
+import { ActivityEventListSchema } from '../src/schemas/activity-event.ts'
+import { FeatureDetailSchema } from '../src/schemas/feature-detail.ts'
+import { FeatureSummaryListSchema } from '../src/schemas/feature-summary.ts'
+import { MetaSchema, MetaStatsSchema } from '../src/schemas/meta.ts'
+import { HooksTrendSchema, ReviewsTrendSchema, TokensTrendSchema } from '../src/schemas/trends.ts'
 import { buildActivity } from './activity.ts'
 import { buildFeatureDetail } from './detail.ts'
 import { listFeatures } from './features.ts'
@@ -149,7 +154,7 @@ const FeatureQuery = Type.Object({
 // ---------------------------------------------------------------------------
 // REST: /api/features — full feature summary list, sorted active-first
 // ---------------------------------------------------------------------------
-app.get('/api/features', async () => {
+app.get('/api/features', { schema: { response: { 200: FeatureSummaryListSchema } } }, async () => {
   return listFeatures({ projectRoot: PROJECT_ROOT })
 })
 
@@ -157,11 +162,11 @@ app.get('/api/features', async () => {
 // REST: /api/meta — project label
 // REST: /api/meta/stats — TopBar aggregate counters
 // ---------------------------------------------------------------------------
-app.get('/api/meta', async () => {
+app.get('/api/meta', { schema: { response: { 200: MetaSchema } } }, async () => {
   return buildMeta({ projectRoot: PROJECT_ROOT })
 })
 
-app.get('/api/meta/stats', async () => {
+app.get('/api/meta/stats', { schema: { response: { 200: MetaStatsSchema } } }, async () => {
   return buildMetaStats({ projectRoot: PROJECT_ROOT })
 })
 
@@ -176,41 +181,63 @@ const TrendHooksQuery = Type.Object({
   windowH: Type.Optional(Type.Integer({ minimum: 1, maximum: 168 })),
 })
 
-app.get('/api/trends/tokens', { schema: { querystring: TrendDaysQuery } }, async (req) => {
-  const { days } = req.query as { days?: number }
-  return trendTokens({ projectRoot: PROJECT_ROOT, days: days ?? 14 })
-})
+app.get(
+  '/api/trends/tokens',
+  { schema: { querystring: TrendDaysQuery, response: { 200: TokensTrendSchema } } },
+  async (req) => {
+    const { days } = req.query as { days?: number }
+    return trendTokens({ projectRoot: PROJECT_ROOT, days: days ?? 14 })
+  },
+)
 
-app.get('/api/trends/reviews', { schema: { querystring: TrendDaysQuery } }, async (req) => {
-  const { days } = req.query as { days?: number }
-  return trendReviews({ projectRoot: PROJECT_ROOT, days: days ?? 14 })
-})
+app.get(
+  '/api/trends/reviews',
+  { schema: { querystring: TrendDaysQuery, response: { 200: ReviewsTrendSchema } } },
+  async (req) => {
+    const { days } = req.query as { days?: number }
+    return trendReviews({ projectRoot: PROJECT_ROOT, days: days ?? 14 })
+  },
+)
 
-app.get('/api/trends/hooks', { schema: { querystring: TrendHooksQuery } }, async (req) => {
-  const { topN, windowH } = req.query as { topN?: number; windowH?: number }
-  return trendHooks({
-    projectRoot: PROJECT_ROOT,
-    topN: topN ?? 10,
-    windowH: windowH ?? 24,
-  })
-})
+app.get(
+  '/api/trends/hooks',
+  { schema: { querystring: TrendHooksQuery, response: { 200: HooksTrendSchema } } },
+  async (req) => {
+    const { topN, windowH } = req.query as { topN?: number; windowH?: number }
+    return trendHooks({
+      projectRoot: PROJECT_ROOT,
+      topN: topN ?? 10,
+      windowH: windowH ?? 24,
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // REST: /api/feature/:slug/detail — DetailPanel payload
 // ---------------------------------------------------------------------------
-app.get('/api/feature/:slug/detail', { schema: { params: SlugParam } }, async (req, reply) => {
-  const { slug } = req.params as { slug: string }
-  const detail = await buildFeatureDetail({
-    projectRoot: PROJECT_ROOT,
-    pluginRoot: PLUGIN_ROOT,
-    featureKey: slug,
-  })
-  if (!detail) {
-    reply.code(404)
-    return { error: 'feature not found' }
-  }
-  return detail
-})
+const ErrorResponse = Type.Object({ error: Type.String() })
+app.get(
+  '/api/feature/:slug/detail',
+  {
+    schema: {
+      params: SlugParam,
+      response: { 200: FeatureDetailSchema, 404: ErrorResponse },
+    },
+  },
+  async (req, reply) => {
+    const { slug } = req.params as { slug: string }
+    const detail = await buildFeatureDetail({
+      projectRoot: PROJECT_ROOT,
+      pluginRoot: PLUGIN_ROOT,
+      featureKey: slug,
+    })
+    if (!detail) {
+      reply.code(404)
+      return { error: 'feature not found' }
+    }
+    return detail
+  },
+)
 
 // ---------------------------------------------------------------------------
 // REST: /api/activity?limit=N — ActivityFeed payload
@@ -219,10 +246,14 @@ const ActivityQuery = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
 })
 
-app.get('/api/activity', { schema: { querystring: ActivityQuery } }, async (req) => {
-  const { limit } = req.query as { limit?: number }
-  return buildActivity({ projectRoot: PROJECT_ROOT, limit: limit ?? 50 })
-})
+app.get(
+  '/api/activity',
+  { schema: { querystring: ActivityQuery, response: { 200: ActivityEventListSchema } } },
+  async (req) => {
+    const { limit } = req.query as { limit?: number }
+    return buildActivity({ projectRoot: PROJECT_ROOT, limit: limit ?? 50 })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // REST: /api/cost?feature=<f> — cost-log JSON via aggregate-cost.sh

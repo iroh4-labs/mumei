@@ -30,6 +30,7 @@ describe('listFeatures', () => {
         slug: 'foo',
         phase: 'implement',
         current_wave: 2,
+        created_at: '2026-05-01T00:00:00Z',
         updated_at: '2026-05-08T11:30:00Z',
       }),
     )
@@ -65,14 +66,21 @@ describe('listFeatures', () => {
   it('builds plan-vehicle summary with task counters', async () => {
     const featDir = path.join(projectRoot, '.mumei', 'plans', 'fix-bug')
     await mkdir(featDir, { recursive: true })
+    // Plan-vehicle state.json shape (mumei_state_init_plan output):
+    // no `id`, no `current_wave`; carries `vehicle: 'plan'` and
+    // `plan_file_path` instead. Schema must accept this layout.
     await writeFile(
       path.join(featDir, 'state.json'),
       JSON.stringify({
-        id: 'fix-bug',
+        vehicle: 'plan',
         slug: 'fix-bug',
         phase: 'implement',
+        plan_file_path: '/tmp/fix-bug.md',
         task_created_count: 5,
         task_completed_count: 3,
+        pending_review: false,
+        review_runs: [],
+        created_at: '2026-05-01T00:00:00Z',
         updated_at: '2026-05-08T11:00:00Z',
       }),
     )
@@ -93,7 +101,14 @@ describe('listFeatures', () => {
     await mkdir(featDir, { recursive: true })
     await writeFile(
       path.join(featDir, 'state.json'),
-      JSON.stringify({ id: 'REQ-1', slug: 'foo', phase: 'plan' }),
+      JSON.stringify({
+        id: 'REQ-1',
+        slug: 'foo',
+        phase: 'plan',
+        current_wave: 0,
+        created_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-08T11:00:00Z',
+      }),
     )
     await writeFile(
       path.join(featDir, 'cost-log.jsonl'),
@@ -119,7 +134,14 @@ describe('listFeatures', () => {
     await mkdir(featDir, { recursive: true })
     await writeFile(
       path.join(featDir, 'state.json'),
-      JSON.stringify({ id: 'REQ-1', slug: 'foo', phase: 'plan' }),
+      JSON.stringify({
+        id: 'REQ-1',
+        slug: 'foo',
+        phase: 'plan',
+        current_wave: 0,
+        created_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-08T11:00:00Z',
+      }),
     )
     // Two identical (agent, ts) records (forward + accidental backfill)
     // collapse to one. A third record with a different ts contributes.
@@ -167,18 +189,27 @@ describe('listFeatures', () => {
     await mkdir(path.join(featDir, 'reviews'), { recursive: true })
     await writeFile(
       path.join(featDir, 'state.json'),
-      JSON.stringify({ id: 'REQ-1', slug: 'foo', phase: 'review' }),
+      JSON.stringify({
+        id: 'REQ-1',
+        slug: 'foo',
+        phase: 'review',
+        current_wave: 1,
+        created_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-08T11:00:00Z',
+      }),
     )
     await writeFile(
       path.join(featDir, 'reviews', '20260508T120000Z.json'),
       JSON.stringify({
+        feature: 'REQ-1-foo',
         verdict: 'NEEDS_IMPROVEMENT',
         iteration: 2,
+        summary: 'test fixture',
         findings_surfaced: [
-          { severity: 'HIGH' },
-          { severity: 'MEDIUM' },
-          { severity: 'MEDIUM' },
-          { severity: 'LOW' },
+          { severity: 'HIGH', message: 'h' },
+          { severity: 'MEDIUM', message: 'm1' },
+          { severity: 'MEDIUM', message: 'm2' },
+          { severity: 'LOW', message: 'l' },
         ],
       }),
     )
@@ -186,5 +217,62 @@ describe('listFeatures', () => {
     expect(r[0]?.lastVerdict).toBe('NEEDS_IMPROVEMENT')
     expect(r[0]?.lastIter).toBe(2)
     expect(r[0]?.findings).toEqual({ high: 1, medium: 2, low: 1 })
+  })
+})
+
+describe('Fastify response schema enforcement (REQ-19.9)', () => {
+  // The route schema gate: Fastify serialises a 200 response through
+  // the declared `response: { 200: <TypeBox> }` schema. If the handler
+  // returns an object whose shape violates the schema, Fastify's
+  // serializer throws during stringify and the error handler emits
+  // 500. This test pins that contract so we don't accidentally drift
+  // the FeatureSummary shape without updating the route schema.
+  it('returns 500 when /api/features handler emits a schema-violating mock', async () => {
+    const Fastify = (await import('fastify')).default
+    const { FeatureSummaryListSchema } = await import('../src/schemas/feature-summary.ts')
+    const app = Fastify({ logger: false })
+    app.get(
+      '/api/features',
+      { schema: { response: { 200: FeatureSummaryListSchema } } },
+      async () => [{ unexpected_field: true } as unknown as never],
+    )
+    const res = await app.inject({ method: 'GET', url: '/api/features' })
+    expect(res.statusCode).toBe(500)
+    await app.close()
+  })
+
+  it('returns 200 when /api/features handler emits a schema-conformant mock', async () => {
+    const Fastify = (await import('fastify')).default
+    const { FeatureSummaryListSchema } = await import('../src/schemas/feature-summary.ts')
+    const app = Fastify({ logger: false })
+    app.get(
+      '/api/features',
+      { schema: { response: { 200: FeatureSummaryListSchema } } },
+      async () => [
+        {
+          id: 'REQ-1',
+          slug: 'foo',
+          vehicle: 'spec' as const,
+          phase: 'plan' as const,
+          nextPhase: 'implement' as const,
+          currentWave: 0,
+          totalWaves: 1,
+          waveProgress: 0,
+          lastVerdict: null,
+          lastIter: null,
+          tokens: 0,
+          cacheHit: 0,
+          lastActivityMin: 0,
+          pulse: 'active' as const,
+          findings: { high: 0, medium: 0, low: 0 },
+          archived: false,
+        },
+      ],
+    )
+    const res = await app.inject({ method: 'GET', url: '/api/features' })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as unknown[]
+    expect(body).toHaveLength(1)
+    await app.close()
   })
 })

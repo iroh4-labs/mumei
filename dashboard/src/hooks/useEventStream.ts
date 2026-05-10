@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { validateSseEvent } from '@/lib/validators'
 import type { MumeiDashboardSSEEvent } from '@/types/sse-event'
 
 const DISCONNECT_THRESHOLD = 5
@@ -47,13 +48,23 @@ export function useEventStream(path = '/api/events'): {
     }
 
     es.onmessage = (msg): void => {
-      let evt: MumeiDashboardSSEEvent
+      let parsed: unknown
       try {
-        evt = JSON.parse(msg.data) as MumeiDashboardSSEEvent
+        parsed = JSON.parse(msg.data)
       } catch {
         return
       }
-      handleEvent(evt, qc, setPulses, pulseTimeouts.current)
+      // Shape violation -> skip + console.warn. Unknown event shapes
+      // (e.g. server adds a new event type that this client tab does
+      // not yet know about) are dropped instead of crashing the switch.
+      if (!validateSseEvent.Check(parsed)) {
+        console.warn('[mumei dashboard] SSE event shape violation, skipping', {
+          raw: msg.data,
+          errors: [...validateSseEvent.Errors(parsed)],
+        })
+        return
+      }
+      handleEvent(parsed as MumeiDashboardSSEEvent, qc, setPulses, pulseTimeouts.current)
     }
 
     return (): void => {

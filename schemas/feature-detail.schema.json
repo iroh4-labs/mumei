@@ -1,8 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/feature-detail.schema.json#v0.1.0",
+  "$id": "https://mumei.dev/schemas/feature-detail.schema.json",
   "title": "mumei feature detail payload",
   "description": "GET /api/feature/:slug/detail result built by dashboard/server/detail.ts from requirements.md + tasks.md (via execFile bash hooks/_lib/tasks.sh) + reviews/*.json + cost-log.jsonl. When planVehicle=true, requirements.md is absent so acs is []. Producer: dashboard backend. Consumer: DetailPanel.tsx.",
+  "additionalProperties": false,
   "type": "object",
   "required": [
     "slug",
@@ -13,77 +14,148 @@
     "reviews",
     "costPerIter"
   ],
-  "additionalProperties": false,
   "properties": {
-    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "slug": {
+      "pattern": "^(REQ-[0-9]+(-[a-z0-9-]+)?|[a-z0-9][a-z0-9-]*)$",
+      "description": "Feature key — compound `REQ-N-slug` for spec vehicle, bare kebab-case slug for plan vehicle. Echoes the request `:slug` param (which has the same allowed alphabet via Fastify `SlugParam` regex `^[A-Za-z0-9_-]+$`).",
+      "type": "string"
+    },
     "planVehicle": {
-      "type": "boolean",
-      "description": "True when feature lives under .mumei/plans/<slug>/ (no requirements.md). Frontend renders 'no requirements (plan vehicle)' placeholder for the ACs tab."
+      "description": "True when feature lives under .mumei/plans/<slug>/ (no requirements.md). Frontend renders 'no requirements (plan vehicle)' placeholder for the ACs tab.",
+      "type": "boolean"
     },
     "archived": {
-      "type": "boolean",
-      "description": "True when the feature was found under .mumei/archive/<YYYY-MM>/<slug>/ instead of active specs/plans. Frontend may surface an 'archived' badge to signal that further realtime updates will not arrive (REQ-18.15)."
+      "description": "True when the feature was found under .mumei/archive/<YYYY-MM>/<slug>/ instead of active specs/plans. Frontend may surface an 'archived' badge to signal that further realtime updates will not arrive (REQ-18.15).",
+      "type": "boolean"
     },
     "timeline": {
       "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["ts", "event"],
+        "type": "object",
+        "required": [
+          "ts",
+          "event"
+        ],
         "properties": {
-          "ts": { "type": "string", "format": "date-time" },
-          "event": {
-            "type": "string",
-            "description": "Short label, e.g. 'created', 'phase: plan -> implement', 'wave 2 commit', 'review iter 1 PASS'."
+          "ts": {
+            "format": "date-time",
+            "type": "string"
           },
-          "ref": { "type": ["string", "null"], "description": "git rev / review JSON path / null." }
+          "event": {
+            "description": "Short label, e.g. 'created', 'phase: plan -> implement', 'wave 2 commit', 'review iter 1 PASS'.",
+            "type": "string"
+          },
+          "ref": {
+            "description": "git rev / review JSON path / null.",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         }
       }
     },
     "acs": {
-      "type": "array",
       "description": "Empty array when planVehicle=true.",
+      "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["id", "body", "confirmed"],
+        "type": "object",
+        "required": [
+          "id",
+          "body",
+          "confirmed"
+        ],
         "properties": {
           "id": {
-            "type": "string",
-            "pattern": "^REQ-[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+            "pattern": "^REQ-[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+            "type": "string"
           },
-          "body": { "type": "string" },
+          "body": {
+            "type": "string"
+          },
           "confirmed": {
-            "type": "boolean",
-            "description": "True for [CONFIRMED] ACs, false for [ASSUMPTION] / [NEEDS CLARIFICATION]."
+            "description": "True for [CONFIRMED] ACs, false for [ASSUMPTION] / [NEEDS CLARIFICATION].",
+            "type": "boolean"
           },
-          "examples": { "type": "array", "items": { "type": "string" } }
+          "examples": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     },
     "waveplan": {
       "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["wave", "goal", "verify", "tasks"],
+        "type": "object",
+        "required": [
+          "wave",
+          "goal",
+          "verify",
+          "tasks"
+        ],
         "properties": {
-          "wave": { "type": "integer", "minimum": 1 },
-          "goal": { "type": "string" },
-          "verify": { "type": "string" },
+          "wave": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "verify": {
+            "type": "string"
+          },
           "tasks": {
             "type": "array",
             "items": {
-              "type": "object",
               "additionalProperties": false,
-              "required": ["id", "description", "done", "files", "depends", "reqs"],
+              "type": "object",
+              "required": [
+                "id",
+                "description",
+                "done",
+                "files",
+                "depends",
+                "reqs"
+              ],
               "properties": {
-                "id": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
-                "description": { "type": "string" },
-                "done": { "type": "boolean" },
-                "files": { "type": "array", "items": { "type": "string" } },
-                "depends": { "type": "array", "items": { "type": "string" } },
-                "reqs": { "type": "array", "items": { "type": "string" } }
+                "id": {
+                  "pattern": "^[0-9]+\\.[0-9]+$",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "done": {
+                  "type": "boolean"
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "depends": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "reqs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -93,36 +165,90 @@
     "reviews": {
       "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["ts", "verdict", "iteration"],
+        "type": "object",
+        "required": [
+          "ts",
+          "verdict",
+          "iteration"
+        ],
         "properties": {
-          "ts": { "type": "string", "format": "date-time" },
-          "verdict": {
-            "type": "string",
-            "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES"]
+          "ts": {
+            "format": "date-time",
+            "type": "string"
           },
-          "iteration": { "type": "integer", "minimum": 1, "maximum": 3 },
+          "verdict": {
+            "anyOf": [
+              {
+                "const": "PASS",
+                "type": "string"
+              },
+              {
+                "const": "NEEDS_IMPROVEMENT",
+                "type": "string"
+              },
+              {
+                "const": "MAJOR_ISSUES",
+                "type": "string"
+              }
+            ]
+          },
+          "iteration": {
+            "minimum": 1,
+            "description": "Review iter index. Current orchestrator caps at 3 but archived reviews may carry higher values from earlier iter caps.",
+            "type": "integer"
+          },
           "wave": {
-            "oneOf": [
-              { "type": "integer", "minimum": 1 },
-              { "type": "string", "const": "all" }
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "const": "all",
+                "type": "string"
+              }
             ]
           },
           "findings": {
             "type": "array",
             "items": {
-              "type": "object",
               "additionalProperties": true,
-              "required": ["severity", "message"],
+              "type": "object",
+              "required": [
+                "severity",
+                "message"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "severity": {
-                  "type": "string",
-                  "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+                "id": {
+                  "type": "string"
                 },
-                "category": { "type": "string" },
-                "message": { "type": "string" }
+                "severity": {
+                  "anyOf": [
+                    {
+                      "const": "LOW",
+                      "type": "string"
+                    },
+                    {
+                      "const": "MEDIUM",
+                      "type": "string"
+                    },
+                    {
+                      "const": "HIGH",
+                      "type": "string"
+                    },
+                    {
+                      "const": "CRITICAL",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -132,13 +258,28 @@
     "costPerIter": {
       "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["iter", "tokens", "cacheHit"],
+        "type": "object",
+        "required": [
+          "iter",
+          "tokens",
+          "cacheHit"
+        ],
         "properties": {
-          "iter": { "type": "integer", "minimum": 1, "maximum": 3 },
-          "tokens": { "type": "integer", "minimum": 0 },
-          "cacheHit": { "type": "number", "minimum": 0, "maximum": 1 }
+          "iter": {
+            "minimum": 1,
+            "description": "Review iter index. Current orchestrator caps at 3 but archived cost-log entries may carry higher values.",
+            "type": "integer"
+          },
+          "tokens": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cacheHit": {
+            "minimum": 0,
+            "maximum": 1,
+            "type": "number"
+          }
         }
       }
     }

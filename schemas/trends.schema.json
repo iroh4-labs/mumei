@@ -1,65 +1,121 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/trends.schema.json#v0.1.0",
-  "title": "mumei dashboard trend payloads",
-  "description": "Three trend payloads served by dashboard/server/trends.ts. Producer: dashboard backend (cost-log.jsonl + reviews/*.json + .hook-stats.jsonl, active + archive merged). Consumer: dashboard/src/hooks/useTrend{Tokens,Reviews,Hooks}.ts.",
-  "type": "object",
-  "$defs": {
-    "DayKey": {
-      "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
-      "description": "ISO calendar day (UTC), zero-padded."
-    },
-    "TokensTrend": {
-      "type": "array",
+  "oneOf": [
+    {
+      "$id": "https://mumei.dev/schemas/tokens-trend.schema.json",
+      "title": "mumei tokens trend",
       "description": "GET /api/trends/tokens?days=14 result. Daily total of input + output tokens from cost-log.jsonl. Days with no entries are emitted as v=0.",
+      "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["d", "v"],
+        "type": "object",
+        "required": [
+          "d",
+          "v"
+        ],
         "properties": {
-          "d": { "$ref": "#/$defs/DayKey" },
-          "v": { "type": "integer", "minimum": 0 }
+          "d": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "ISO calendar day (UTC), zero-padded.",
+            "type": "string"
+          },
+          "v": {
+            "minimum": 0,
+            "type": "integer"
+          }
         }
       }
     },
-    "ReviewsTrend": {
-      "type": "array",
+    {
+      "$id": "https://mumei.dev/schemas/reviews-trend.schema.json",
+      "title": "mumei reviews trend",
       "description": "GET /api/trends/reviews?days=14 result. Daily count of review JSON files grouped by verdict.",
+      "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["d", "PASS", "NI", "MI"],
+        "type": "object",
+        "required": [
+          "d",
+          "PASS",
+          "NI",
+          "MI"
+        ],
         "properties": {
-          "d": { "$ref": "#/$defs/DayKey" },
-          "PASS": { "type": "integer", "minimum": 0 },
-          "NI": { "type": "integer", "minimum": 0, "description": "NEEDS_IMPROVEMENT count." },
-          "MI": { "type": "integer", "minimum": 0, "description": "MAJOR_ISSUES count." }
+          "d": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "ISO calendar day (UTC), zero-padded.",
+            "type": "string"
+          },
+          "PASS": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "NI": {
+            "minimum": 0,
+            "description": "NEEDS_IMPROVEMENT count.",
+            "type": "integer"
+          },
+          "MI": {
+            "minimum": 0,
+            "description": "MAJOR_ISSUES count.",
+            "type": "integer"
+          }
         }
       }
     },
-    "HooksTrend": {
-      "type": "array",
+    {
+      "$id": "https://mumei.dev/schemas/hooks-trend.schema.json",
+      "title": "mumei hooks trend",
       "description": "GET /api/trends/hooks?topN=10&windowH=24 result. Top-N hook_id rows by firing count within the window.",
+      "type": "array",
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": ["hook_id", "count", "decision"],
+        "type": "object",
+        "required": [
+          "hook_id",
+          "count",
+          "decision"
+        ],
         "properties": {
-          "hook_id": { "type": "string", "description": "Hook rule short id emitted by hooks/_lib/hook-stats.sh:mumei_hook_stats_record (e.g. S1, M1, X3, I1)." },
-          "count": { "type": "integer", "minimum": 1 },
+          "hook_id": {
+            "description": "Hook rule short id emitted by hooks/_lib/hook-stats.sh:mumei_hook_stats_record (e.g. S1, M1, X3, I1).",
+            "type": "string"
+          },
+          "count": {
+            "minimum": 1,
+            "type": "integer"
+          },
           "decision": {
-            "type": "string",
-            "enum": ["allow", "deny", "warn", "block", "noop"],
-            "description": "Most common decision recorded for the hook_id within the window."
+            "description": "Most common decision recorded for the hook_id within the window.",
+            "anyOf": [
+              {
+                "const": "allow",
+                "type": "string"
+              },
+              {
+                "const": "deny",
+                "type": "string"
+              },
+              {
+                "const": "warn",
+                "type": "string"
+              },
+              {
+                "const": "block",
+                "type": "string"
+              },
+              {
+                "const": "noop",
+                "type": "string"
+              },
+              {
+                "const": "pass",
+                "type": "string"
+              }
+            ]
           }
         }
       }
     }
-  },
-  "oneOf": [
-    { "$ref": "#/$defs/TokensTrend" },
-    { "$ref": "#/$defs/ReviewsTrend" },
-    { "$ref": "#/$defs/HooksTrend" }
   ]
 }

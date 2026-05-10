@@ -8,8 +8,19 @@ import { createInterface } from 'node:readline'
  * Lines that fail to parse are skipped silently (the cost-log / hook-stats
  * files are append-only and may be torn on a crash). Missing files yield
  * nothing.
+ *
+ * Optionally accepts a `validate` predicate (e.g. a TypeBox compiled
+ * `validator.Check`) — lines whose parsed object fails the predicate
+ * are skipped + warned via stderr. Validate failures are skip+warn
+ * (not fail-fast) because cost-log / hook-stats are append-only logs
+ * and a single torn or shape-drifted line should not break the whole
+ * aggregation. Compile the validator at module top-level (the JIT
+ * output is reused across calls) and pass `validate.Check` here.
  */
-export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<T> {
+export async function* readJsonl<T = unknown>(
+  filePath: string,
+  opts?: { validate?: (v: unknown) => boolean },
+): AsyncGenerator<T> {
   try {
     await access(filePath)
   } catch {
@@ -17,14 +28,25 @@ export async function* readJsonl<T = unknown>(filePath: string): AsyncGenerator<
   }
   const stream = createReadStream(filePath, { encoding: 'utf8' })
   const rl = createInterface({ input: stream, crlfDelay: Infinity })
+  let lineNumber = 0
   try {
     for await (const line of rl) {
+      lineNumber += 1
       if (!line.trim()) continue
+      let parsed: unknown
       try {
-        yield JSON.parse(line) as T
+        parsed = JSON.parse(line)
       } catch {
-        // skip malformed line
+        // skip malformed line (existing torn-write behavior)
+        continue
       }
+      if (opts?.validate && !opts.validate(parsed)) {
+        process.stderr.write(
+          `[mumei dashboard] JSONL shape violation, skipping: file=${filePath} line=${lineNumber}\n`,
+        )
+        continue
+      }
+      yield parsed as T
     }
   } finally {
     rl.close()

@@ -41,14 +41,14 @@ jobs:
       - name: lint (biome --error-on-warnings)
         run: task dashboard:lint
 
-      - name: generate-types (verify schema sync)
+      - name: schemas (verify TypeBox -> JSON Schema drift)
         working-directory: dashboard
         run: |
-          npm run generate-types
-          if ! git diff --quiet -- src/types/; then
+          npm run schemas
+          if ! git -C .. diff --quiet -- schemas/; then
             # shellcheck disable=SC2016  # markdown-style code spans in error message
-            echo "::error::generated types differ from committed src/types/. Run 'task dashboard:generate-types' (from repo root) or 'task generate-types' (from dashboard/) and commit the result." >&2
-            git --no-pager diff -- src/types/
+            echo "::error::generated schemas differ from committed schemas/. Run 'task dashboard:schemas' (from repo root) or 'task schemas' (from dashboard/) and commit the result." >&2
+            git -C .. --no-pager diff -- schemas/
             exit 1
           fi
 

@@ -20,7 +20,7 @@ preview at `http://localhost:5173` during development.
 ```bash
 cd dashboard
 npm install
-npm run generate-types   # build types from ../schemas/*.json
+npm run schemas          # regenerate ../schemas/*.schema.json from src/schemas/*.ts (TypeBox canonical)
 npm run dev              # spawns Fastify (server) + Vite (frontend)
 ```
 
@@ -29,14 +29,14 @@ npm run dev              # spawns Fastify (server) + Vite (frontend)
 
 ## Scripts
 
-| Script                   | Purpose                                        |
-| ------------------------ | ---------------------------------------------- |
-| `npm run dev`            | Server + Vite, both with watch mode            |
-| `npm run build`          | Produce `dist/` for production                 |
-| `npm run typecheck`      | `tsc -b --noEmit` across app + server          |
-| `npm run generate-types` | Regenerate `src/types/*.ts` from `../schemas/` |
-| `npm test`               | Vitest                                         |
-| `npm run lint`           | ESLint, max-warnings 0                         |
+| Script              | Purpose                                                                      |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `npm run dev`       | Server + Vite, both with watch mode                                          |
+| `npm run build`     | Produce `dist/` for production                                               |
+| `npm run typecheck` | `tsc -b --noEmit` across app + server                                        |
+| `npm run schemas`   | Regenerate `../schemas/*.schema.json` from TypeBox sources in `src/schemas/` |
+| `npm test`          | Vitest                                                                       |
+| `npm run lint`      | Biome `check --error-on-warnings`                                            |
 
 ## Architecture
 

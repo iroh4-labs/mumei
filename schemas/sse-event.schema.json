@@ -1,112 +1,295 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mumei.dev/schemas/sse-event.schema.json#v0.1.0",
+  "$id": "https://mumei.dev/schemas/sse-event.schema.json",
   "title": "mumei dashboard SSE event",
   "description": "Server-Sent Events emitted by dashboard/server/sse.ts on /api/events. All events are debounced 200ms per (event, slug). state.json updates emit BOTH feature.update AND activity.changed; review/hook activity emits only activity.changed. The client treats activity.changed and activity.added as cache-invalidation triggers and refetches /api/activity. Producer: backend chokidar -> EventEmitter pipeline. Consumer: dashboard/src/hooks/useEventStream.ts.",
-  "type": "object",
-  "required": ["type"],
-  "properties": {
-    "type": {
-      "type": "string",
-      "enum": ["feature.update", "cost.updated", "activity.added", "activity.changed"]
-    }
-  },
-  "oneOf": [
+  "anyOf": [
     {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["type"],
+      "type": "object",
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "const": "feature.update" },
+        "type": {
+          "const": "feature.update",
+          "type": "string"
+        },
         "slug": {
-          "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9-]*$",
-          "description": "Feature slug whose state.json or review changed; useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']. Omit when the change is project-wide (e.g. .hook-stats.jsonl) and only `affects` is meaningful."
+          "pattern": "^(REQ-[0-9]+(-[a-z0-9-]+)?|[a-z0-9][a-z0-9-]*)$",
+          "description": "Feature key whose state.json or review changed (REQ-N-slug for spec, bare slug for plan); useEventStream invalidates ['features'], ['feature', slug, 'detail'], AND ['meta','stats']. Omit when the change is project-wide (e.g. .hook-stats.jsonl) and only `affects` is meaningful.",
+          "type": "string"
         },
         "affects": {
-          "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "enum": ["hooks", "reviews", "tokens"] },
-          "description": "Trend kinds whose underlying data changed. useEventStream invalidates `['trend', kind, ...]` for each entry, in addition to the slug-scoped invalidations above. Omit when no trend is affected."
+          "description": "Trend kinds whose underlying data changed. useEventStream invalidates `['trend', kind, ...]` for each entry, in addition to the slug-scoped invalidations above. Omit when no trend is affected.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "const": "hooks",
+                "type": "string"
+              },
+              {
+                "const": "reviews",
+                "type": "string"
+              },
+              {
+                "const": "tokens",
+                "type": "string"
+              }
+            ]
+          }
         }
       }
     },
     {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["type"],
+      "type": "object",
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "const": "cost.updated" },
+        "type": {
+          "const": "cost.updated",
+          "type": "string"
+        },
         "slug": {
-          "type": ["string", "null"],
-          "description": "Feature slug owning the cost-log, or null when the change was project-wide."
+          "description": "Feature slug owning the cost-log, or null when the change was project-wide.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
     {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["type"],
+      "type": "object",
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "const": "activity.changed" }
+        "type": {
+          "const": "activity.changed",
+          "type": "string"
+        }
       }
     },
     {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["type", "event"],
+      "type": "object",
+      "required": [
+        "type",
+        "event"
+      ],
       "properties": {
-        "type": { "const": "activity.added" },
+        "type": {
+          "const": "activity.added",
+          "type": "string"
+        },
         "event": {
-          "description": "Mirrors activity-event.schema.json. Inlined because the dashboard generator does not resolve cross-file $ref.",
-          "type": "object",
-          "required": ["ts", "kind"],
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "object",
               "additionalProperties": false,
-              "required": ["ts", "kind", "ref", "message"],
+              "type": "object",
+              "required": [
+                "ts",
+                "kind",
+                "ref",
+                "message"
+              ],
               "properties": {
-                "ts": { "type": "string", "format": "date-time" },
-                "kind": { "const": "commit" },
-                "slug": { "type": ["string", "null"] },
-                "ref": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
-                "message": { "type": "string" }
+                "ts": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "commit",
+                  "type": "string"
+                },
+                "slug": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ref": {
+                  "pattern": "^[0-9a-f]{7,40}$",
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
               }
             },
             {
-              "type": "object",
               "additionalProperties": false,
-              "required": ["ts", "kind", "slug", "verdict", "iter"],
+              "type": "object",
+              "required": [
+                "ts",
+                "kind",
+                "slug",
+                "verdict",
+                "iter"
+              ],
               "properties": {
-                "ts": { "type": "string", "format": "date-time" },
-                "kind": { "const": "review" },
-                "slug": { "type": "string" },
-                "verdict": { "type": "string", "enum": ["PASS", "NEEDS_IMPROVEMENT", "MAJOR_ISSUES"] },
-                "iter": { "type": "integer", "minimum": 1, "maximum": 3 }
+                "ts": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "review",
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "anyOf": [
+                    {
+                      "const": "PASS",
+                      "type": "string"
+                    },
+                    {
+                      "const": "NEEDS_IMPROVEMENT",
+                      "type": "string"
+                    },
+                    {
+                      "const": "MAJOR_ISSUES",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "iter": {
+                  "minimum": 1,
+                  "maximum": 3,
+                  "type": "integer"
+                }
               }
             },
             {
-              "type": "object",
               "additionalProperties": false,
-              "required": ["ts", "kind", "slug", "from", "to"],
+              "type": "object",
+              "required": [
+                "ts",
+                "kind",
+                "slug",
+                "from",
+                "to"
+              ],
               "properties": {
-                "ts": { "type": "string", "format": "date-time" },
-                "kind": { "const": "phase" },
-                "slug": { "type": "string" },
-                "from": { "type": "string", "enum": ["plan", "implement", "review", "done"] },
-                "to": { "type": "string", "enum": ["plan", "implement", "review", "done"] }
+                "ts": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "phase",
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "from": {
+                  "anyOf": [
+                    {
+                      "const": "plan",
+                      "type": "string"
+                    },
+                    {
+                      "const": "implement",
+                      "type": "string"
+                    },
+                    {
+                      "const": "review",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "to": {
+                  "anyOf": [
+                    {
+                      "const": "plan",
+                      "type": "string"
+                    },
+                    {
+                      "const": "implement",
+                      "type": "string"
+                    },
+                    {
+                      "const": "review",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "type": "string"
+                    }
+                  ]
+                }
               }
             },
             {
-              "type": "object",
               "additionalProperties": false,
-              "required": ["ts", "kind", "hook_id", "decision"],
+              "type": "object",
+              "required": [
+                "ts",
+                "kind",
+                "hook_id",
+                "decision"
+              ],
               "properties": {
-                "ts": { "type": "string", "format": "date-time" },
-                "kind": { "const": "hook" },
-                "hook_id": { "type": "string", "description": "Hook rule short id emitted by hooks/_lib/hook-stats.sh:mumei_hook_stats_record." },
-                "decision": { "type": "string", "enum": ["allow", "deny", "warn", "block", "noop"] }
+                "ts": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "hook",
+                  "type": "string"
+                },
+                "hook_id": {
+                  "description": "Hook rule short id emitted by hooks/_lib/hook-stats.sh:mumei_hook_stats_record.",
+                  "type": "string"
+                },
+                "decision": {
+                  "anyOf": [
+                    {
+                      "const": "allow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "deny",
+                      "type": "string"
+                    },
+                    {
+                      "const": "warn",
+                      "type": "string"
+                    },
+                    {
+                      "const": "block",
+                      "type": "string"
+                    },
+                    {
+                      "const": "noop",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pass",
+                      "type": "string"
+                    }
+                  ]
+                }
               }
             }
           ]
