@@ -47,7 +47,7 @@ jobs:
           npm run generate-types
           if ! git diff --quiet -- src/types/; then
             # shellcheck disable=SC2016  # markdown-style code spans in error message
-            echo "::error::generated types differ from committed src/types/. Run 'task dashboard:generate-types' and commit the result." >&2
+            echo "::error::generated types differ from committed src/types/. Run 'task dashboard:generate-types' (from repo root) or 'task generate-types' (from dashboard/) and commit the result." >&2
             git --no-pager diff -- src/types/
             exit 1
           fi

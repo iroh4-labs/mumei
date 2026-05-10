@@ -142,7 +142,12 @@ tasks:
 
   # ---------------------------------------------------------------
   # Cost telemetry — aggregate / backfill / curator + hook stats.
-  # CLI_ARGS pass-through: `task cost -- --feature foo`.
+  # CLI_ARGS pass-through. Examples:
+  #   task cost                       # use .mumei/current
+  #   task cost -- REQ-11-foo         # explicit feature/slug
+  #   task cost -- --json REQ-11-foo  # JSON output (dashboard-shaped)
+  #   task cost -- -f path.jsonl      # arbitrary log file
+  # See scripts/aggregate-cost.sh top comment for the full flag list.
   # ---------------------------------------------------------------
   cost:
     desc: "Aggregate .mumei/{specs,plans}/<f>/cost-log.jsonl for active feature"
@@ -290,11 +295,15 @@ tasks:
         msg: "gh CLI not installed"
     cmds:
       - |
-        if [ -z "{{.CLI_ARGS}}" ]; then
+        # Quote CLI_ARGS so word-splitting can't slip extra tokens past
+        # the validator below. Validate as a single integer before any
+        # network call.
+        pr="{{.CLI_ARGS}}"
+        if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
           echo "Usage: task pr:copilot -- <PR-number>"
+          [[ -n "$pr" ]] && echo "got: '$pr' (must be a single integer)"
           exit 1
         fi
-        pr={{.CLI_ARGS}}
         echo "=== summary ==="
         gh pr view "$pr" --comments | tail -40
         echo

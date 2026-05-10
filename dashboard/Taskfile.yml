@@ -32,36 +32,43 @@ tasks:
 
   dev:
     desc: "Start dev (Fastify watch + Vite hot-reload, concurrently)"
+    deps: [install]
     cmds:
       - npm run dev
 
   typecheck:
     desc: "tsc -b --noEmit on src/ + server/"
+    deps: [install]
     cmds:
       - npm run typecheck
 
   lint:
     desc: "biome check --error-on-warnings"
+    deps: [install]
     cmds:
       - npm run lint
 
   lint:fix:
     desc: "biome check --write (auto-fix)"
+    deps: [install]
     cmds:
       - npm run lint:fix
 
   test:
     desc: "vitest run (one-shot)"
+    deps: [install]
     cmds:
       - npm run test
 
   test:watch:
     desc: "vitest watch"
+    deps: [install]
     cmds:
       - npm run test:watch
 
   generate-types:
     desc: "Regenerate src/types/*.ts from ../schemas/*.json"
+    deps: [install]
     cmds:
       - npm run generate-types
     sources:
@@ -72,6 +79,7 @@ tasks:
 
   build:
     desc: "Production build (tsc -b + vite build + tsup server). tsc -b inside `npm run build` does typecheck-equivalent work; do not chain `task dashboard:typecheck` before this in CI."
+    deps: [install]
     cmds:
       - npm run build
     sources:
@@ -83,6 +91,7 @@ tasks:
       - tsup.config.ts
       - tsconfig*.json
       - package.json
+      - package-lock.json
     generates:
       - dist/**/*
 
