@@ -142,14 +142,26 @@ creates a topic branch in this repo.
    their place through observed failure or external knowledge, not through
    speculation. The check is enforced by review (no automated tooling),
    so do this in the same commit as the rule itself.
-6. Open the PR. The template (`.github/PULL_REQUEST_TEMPLATE.md`) lists the
-   pre-merge checklist; tick each item that applies.
+6. Open the PR. The body **must follow** `.github/PULL_REQUEST_TEMPLATE.md`
+   (Summary / Motivation / Approach / Affected components / Test plan /
+   Pre-merge checklist / Breaking change). When using `gh pr create
+--body-file <path>`, copy the template structure into your body file
+   first; the `--body` argument otherwise overrides the template prefill
+   that the GitHub web UI would have inserted automatically.
 7. CI runs on the PR. The relevant workflows are `ci.yml` (`lint`,
    `lint-extra`, `bats` on macOS / Ubuntu, `codeql`), `pr.yml`
    (`mutable-tag-guard`, `pr-target-guard`), `gitleaks.yml`,
    `plugin-json-validate.yml`, and `dashboard-ci.yml` (path-triggered).
    Address failures before merge.
-8. Self-merge via squash or rebase (linear history; merge commits should
+8. Monitor the PR after opening. CI green is necessary but not
+   sufficient — also check Copilot's automated review:
+   - `gh pr checks <N>` — CI status
+   - `gh pr view <N> --comments` — Copilot's summary review
+     (`copilot-pull-request-reviewer[bot]` author)
+   - `gh api repos/<owner>/<repo>/pulls/<N>/comments` — inline
+     comments Copilot left on specific lines
+     Address Copilot findings (push fix commits) before merging.
+9. Self-merge via squash or rebase (linear history; merge commits should
    be avoided). No required approval count.
 
 ## Spec-driven changes

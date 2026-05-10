@@ -71,8 +71,7 @@ fi
 
 # Capture plan markdown into the plan-vehicle dir. Prefer copying the
 # planFilePath to preserve byte-for-byte fidelity; fall back to the
-# tool_input.plan markdown string when the file is missing or unreadable
-#.
+# tool_input.plan markdown string when the file is missing or unreadable.
 mkdir -p ".mumei/plans/${SLUG}"
 DEST=".mumei/plans/${SLUG}/plan.md"
 plan_written=0
