@@ -35,7 +35,7 @@ mumei/
 │   ├── review/             # /mumei:review — plan-vehicle review pipeline
 │   └── archive/            # /mumei:archive — move done features to archive/
 ├── hooks/                  # Hook handlers + shared bash library
-│   ├── hooks.json          # 17-event registration: PreToolUse / PostToolUse / Stop / TaskCreated / TaskCompleted / UserPromptSubmit + PreCompact / PostCompact / SessionStart / SessionEnd / FileChanged / CwdChanged / InstructionsLoaded / UserPromptExpansion / ConfigChange / PostToolUseFailure / SubagentStop
+│   ├── hooks.json          # event registration: PreToolUse / PostToolUse / Stop / TaskCreated / TaskCompleted / UserPromptSubmit + PreCompact / PostCompact / SessionStart / SessionEnd / FileChanged / CwdChanged / InstructionsLoaded / UserPromptExpansion / ConfigChange / PostToolUseFailure / SubagentStart / SubagentStop
 │   ├── _lib/               # shared bash modules
 │   │   ├── state.sh        # .mumei/specs/<feat>/state.json read/write (atomic)
 │   │   ├── tasks.sh        # tasks.md parser (BSD-awk compatible)
@@ -52,7 +52,7 @@ mumei/
 │   │   ├── scratch-parser.sh # brainstorm scratch parser → vehicle recommend (REQ-14)
 │   │   ├── dependencies.sh # cross-feature `**Depends-Feature**:` queries (Phase D)
 │   │   └── log.sh          # mumei_log_info / warn / error / debug
-│   ├── pre-edit-guard.sh   # P1 / P2 / P3 / I1 / I2 / W1 / M1
+│   ├── pre-edit-guard.sh   # P1 / P2 / P3 / I1 / I2 / W1 / M1 / S1
 │   ├── pre-bash-guard.sh   # I3 / R2 / W2
 │   ├── post-edit-guard.sh  # I4 (phantom completion)
 │   ├── post-bash-guard.sh  # X1 (advisory: out-of-scope Bash writes) + X3 (Wave auto-advance on git commit, internal)
@@ -77,7 +77,7 @@ mumei/
 ├── scripts/
 │   ├── lint-tasks.sh       # X2 (advisory: tasks.md format)
 │   └── cost-backfill.sh    # /mumei:retro: rebuild cost-log.jsonl from session logs (REQ-16)
-├── tests/                  # bats suite (175+ tests, CI on macOS + Ubuntu)
+├── tests/                  # bats suite (CI on macOS + Ubuntu)
 ├── schemas/                # shared JSON Schemas (state / review / cost-log + dashboard payloads: feature-summary / meta / trends / feature-detail / activity-event / sse-event) — NOT shipped in plugin tarball
 ├── dashboard/              # mumei-dashboard — Vite + React 19 + Tailwind v4 + shadcn/ui — NOT shipped in plugin tarball
 └── README.md / README.ja.md / LICENSE / SECURITY.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md / PRIVACY.md
@@ -103,14 +103,14 @@ not by prompting.
 
 ## Hook rules — full enforcement table
 
-The 17 rules below describe **what mumei refuses to do** when an invariant is
+The rules below describe **what mumei refuses to do** when an invariant is
 violated. Each rule is a single check in one of the handler scripts under
 `hooks/`. Rules denoted _advisory_ surface findings via `additionalContext`
-without blocking the tool call. The 4 `L-*` rows at the bottom of the table
-are plan-vehicle lifecycle hooks (state mutations and one Stop block) that
-fire only when the active feature's state lives under `.mumei/plans/`; they
-are documented here for completeness but are not counted in the 17 spec-vehicle
-rules.
+without blocking the tool call. The `L-*` rows at the bottom of the table
+are plan-vehicle lifecycle hooks (state mutations plus the Stop and Bash
+blocks) that fire only when the active feature's state lives under
+`.mumei/plans/`; they are documented here for completeness alongside the
+spec-vehicle rules.
 
 | ID   | Phase        | Hook event               | Trigger                                                                                                                                                                                    | Implementation                |
 | ---- | ------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
@@ -135,6 +135,7 @@ rules.
 | L-T1 | plan-vehicle | TaskCreated              | Increment `task_created_count` in plan-vehicle `state.json` (state mutation, not blocking)                                                                                                 | `hooks/post-task-event.sh`    |
 | L-T2 | plan-vehicle | TaskCompleted            | Increment `task_completed_count`; when it reaches `task_created_count`, set `pending_review=true` (state mutation, not blocking)                                                           | `hooks/post-task-event.sh`    |
 | L-R1 | plan-vehicle | Stop                     | `pending_review=true` with no PASS review JSON or no `detector_report` — block until `/mumei:review` produces a PASS verdict                                                               | `hooks/stop-guard.sh`         |
+| L-R2 | plan-vehicle | PreToolUse(Bash)         | `git push` while latest plan-vehicle review verdict is `MAJOR_ISSUES` — deny                                                                                                               | `hooks/pre-bash-guard.sh`     |
 
 The single escape hatch is `MUMEI_BYPASS=1` (env var). It short-circuits every
 hook on entry. There is no per-rule bypass; this is intentional (see
@@ -228,13 +229,13 @@ spec history but not the in-progress cursor.
 The plugin payload is English; mumei's internal development uses Japanese in a
 parallel set of dev-only files that are gitignored. Distinct boundaries:
 
-| Directory / file                                                                                                                | Distributed?                                 | Language                                        |
-| ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------- |
-| `agents/`, `skills/`, `hooks/`, `scripts/`, `.claude-plugin/`                                                                   | Yes                                          | English                                         |
-| `README.md`, `README.ja.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PRIVACY.md`, `ARCHITECTURE.md` | Yes                                          | English (README.ja.md mirrors in Japanese)      |
-| `CLAUDE.md`, `.claude/`, `docs/` (except `docs/document-corruption.md`)                                                         | No (gitignored)                              | Japanese                                        |
-| `docs/document-corruption.md`                                                                                                   | Yes (single tracked exception under `docs/`) | English (linked from README Philosophy section) |
-| `tests/`, `.github/`, `.editorconfig`, `.markdownlint-cli2.jsonc`, `_typos.toml`, `lychee.toml`, `.pre-commit-config.yaml`      | No (CI / dev tooling)                        | Mixed                                           |
+| Directory / file                                                                                                                               | Distributed?          | Language                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------- |
+| `agents/`, `skills/`, `hooks/`, `scripts/`, `.claude-plugin/`                                                                                  | Yes                   | English                                             |
+| `README.md`, `README.ja.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PRIVACY.md`, `ARCHITECTURE.md`                | Yes                   | English (README.ja.md mirrors in Japanese)          |
+| `docs/document-corruption.md`, `docs/getting-started{,.ja}.md`, `docs/opus-4-7-playbook.md`, `docs/security-policy.md`, `docs/threat-model.md` | Yes                   | English (getting-started.ja.md mirrors in Japanese) |
+| `CLAUDE.md`, `.claude/`, other `docs/` (`mumei-decisions.md`, `harness-engineering.md`, etc.)                                                  | No (gitignored)       | Japanese                                            |
+| `tests/`, `.github/`, `.editorconfig`, `.markdownlint-cli2.jsonc`, `_typos.toml`, `lychee.toml`, `.pre-commit-config.yaml`                     | No (CI / dev tooling) | Mixed                                               |
 
 Maintainers: do not add Japanese prose to distributable files; the
 [CONTRIBUTING.md](./CONTRIBUTING.md) Conventions section explains how to use
