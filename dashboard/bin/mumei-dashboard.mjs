@@ -4,11 +4,33 @@
 // root). The Vite dev server is a separate concern handled by
 // `npm run dev` from the dashboard repo; the published bin always
 // runs the prebuilt server bundle (`dist/server/index.js`).
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+
+const arg = process.argv[2]
+if (arg === '--version' || arg === '-v' || arg === 'version') {
+  const pkg = JSON.parse(readFileSync(path.resolve(here, '../package.json'), 'utf8'))
+  process.stdout.write(`${pkg.version}\n`)
+  process.exit(0)
+}
+if (arg === '--help' || arg === '-h' || arg === 'help') {
+  process.stdout.write(`mumei-dashboard — local web UI for the mumei plugin
+
+Usage:
+  mumei-dashboard            Start the dashboard server (default port 3001)
+  mumei-dashboard --version  Print version and exit
+  mumei-dashboard --help     Show this help and exit
+
+The server reads .mumei/ from the current working directory and serves
+the dashboard at http://127.0.0.1:<port>. Override the port with the
+MUMEI_DASHBOARD_PORT environment variable.
+`)
+  process.exit(0)
+}
+
 const builtEntry = path.resolve(here, '../dist/server/index.js')
 const sourceEntry = path.resolve(here, '../server/index.ts')
 
