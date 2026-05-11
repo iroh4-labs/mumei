@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { MumeiFeatureSummary } from '@/types/feature-summary'
 import { server } from '../test/setup'
 import { Dashboard } from './Dashboard'
@@ -13,7 +14,11 @@ function renderWithProviders(): void {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   function Wrapper({ children }: { children: ReactNode }): ReactNode {
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    return (
+      <QueryClientProvider client={qc}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </QueryClientProvider>
+    )
   }
   render(<Dashboard />, { wrapper: Wrapper })
 }
