@@ -288,10 +288,30 @@ app.get('/api/hook-stats', async () => {
 // REST: /api/feature/:slug/{requirements,design,tasks}
 // Read-only file accessors. Useful for the detail panel.
 // ---------------------------------------------------------------------------
+// Allowlist mirrors the SlugParam pattern. Re-checked inline at every
+// readFile() sink so CodeQL's dataflow recognises the sanitiser at
+// each path-injection boundary (Fastify-schema validation alone is
+// structurally invisible to the static analyser).
+const DOC_SLUG_RE = /^[A-Za-z0-9_-]{1,100}$/
+
+async function readMarkdownIfInside(file: string, root: string): Promise<string | null> {
+  const resolved = path.resolve(file)
+  if (!resolved.startsWith(root + path.sep)) return null
+  try {
+    return await readFile(resolved, 'utf8')
+  } catch {
+    return null
+  }
+}
+
 app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req, reply) => {
   const { slug, doc } = req.params as {
     slug: string
     doc: 'requirements' | 'design' | 'tasks' | 'scratch'
+  }
+  if (!DOC_SLUG_RE.test(slug)) {
+    reply.code(400)
+    return { error: 'invalid slug' }
   }
   // scratch lives at .mumei/scratch/<bare-slug>.md. brainstorm names
   // its file after the topic (= bare slug), so for a compound spec key
@@ -299,17 +319,15 @@ app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req,
   // features (plan vehicle) use the slug verbatim.
   if (doc === 'scratch') {
     const bare = slug.replace(/^REQ-\d+-/, '')
-    const candidates = new Set([
+    const candidates = [
       path.join(MUMEI_DIR, 'scratch', `${bare}.md`),
       path.join(MUMEI_DIR, 'scratch', `${slug}.md`),
-    ])
+    ]
     for (const p of candidates) {
-      try {
-        const body = await readFile(p, 'utf8')
+      const body = await readMarkdownIfInside(p, MUMEI_DIR)
+      if (body !== null) {
         reply.type('text/markdown')
         return body
-      } catch {
-        /* try next */
       }
     }
     reply.code(404)
@@ -327,7 +345,7 @@ app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req,
   try {
     const specsRoot = path.join(MUMEI_DIR, 'specs')
     for (const ent of await readdir(specsRoot, { withFileTypes: true })) {
-      if (ent.isDirectory() && ent.name.endsWith(`-${slug}`)) {
+      if (ent.isDirectory() && ent.name.endsWith(`-${slug}`) && DOC_SLUG_RE.test(ent.name)) {
         candidates.push(path.join(specsRoot, ent.name, `${doc}.md`))
       }
     }
@@ -348,7 +366,7 @@ app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req,
       candidates.push(path.join(monthDir, slug, `${doc}.md`))
       try {
         for (const sub of await readdir(monthDir, { withFileTypes: true })) {
-          if (sub.isDirectory() && sub.name.endsWith(`-${slug}`)) {
+          if (sub.isDirectory() && sub.name.endsWith(`-${slug}`) && DOC_SLUG_RE.test(sub.name)) {
             candidates.push(path.join(monthDir, sub.name, `${doc}.md`))
           }
         }
@@ -360,12 +378,10 @@ app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req,
     /* archive absent */
   }
   for (const p of candidates) {
-    try {
-      const body = await readFile(p, 'utf8')
+    const body = await readMarkdownIfInside(p, MUMEI_DIR)
+    if (body !== null) {
       reply.type('text/markdown')
       return body
-    } catch {
-      /* try next */
     }
   }
   reply.code(404)
