@@ -180,6 +180,45 @@ body {
   }
 }
 
+/* Text-level shimmer for the active Wave row in the Tasks tab.
+   The Wave heading + goal text are painted with a moving warm-amber
+   gradient via background-clip:text so the words themselves appear
+   to wash from base zinc-100 → amber → back as the highlight slides
+   left → right. Other elements in the row (status icon, task
+   counter) keep their own colours by virtue of using their own
+   `text-*` class on a separate span. */
+.mumei-text-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-zinc-100) 0%,
+    var(--color-zinc-100) 38%,
+    var(--color-amber-500) 50%,
+    var(--color-zinc-100) 62%,
+    var(--color-zinc-100) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mumei-text-shimmer 4s linear infinite;
+}
+
+@keyframes mumei-text-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mumei-text-shimmer {
+    animation: none;
+  }
+}
+
 /* Scrollbar — warm muted */
 ::-webkit-scrollbar {
   width: 8px;

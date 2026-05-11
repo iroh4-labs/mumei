@@ -4,6 +4,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActivity } from '@/hooks/useActivity'
+import { truncate60 } from '@/lib/format'
 import type { MumeiActivityEvent } from '@/types/activity-event'
 
 /**
@@ -20,8 +21,15 @@ export function ActivityFeed(): ReactElement {
   )
 }
 
+// Activity feed surfaces lifecycle signals (commits, reviews, phase
+// transitions, archive moves, task progress). Per-hook firings and
+// per-subagent invocations are too noisy for an overview feed and are
+// filtered out at the UI layer — the schema still carries them so they
+// can be re-enabled later without a server round-trip.
+const HIDDEN_KINDS = new Set(['hook', 'subagent'])
+
 function ActivityFeedContent(): ReactElement {
-  const events = useActivity(50).data
+  const events = useActivity(50).data.filter((e) => !HIDDEN_KINDS.has(e.kind))
   if (events.length === 0) {
     return <div className="px-3 py-4 font-mono text-[13px] text-zinc-500">No recent activity.</div>
   }
@@ -244,7 +252,7 @@ function HoverRow({
         >
           <span className="text-zinc-500 tabular-nums">{ts}</span>
           <span className={kindColor}>{kind}</span>
-          <span className="text-zinc-400 truncate flex-1">{summary}</span>
+          <span className="text-zinc-400 truncate flex-1">{truncate60(summary)}</span>
           {trailing && <span className="text-zinc-600 shrink-0">{trailing}</span>}
         </button>
       </HoverCardTrigger>

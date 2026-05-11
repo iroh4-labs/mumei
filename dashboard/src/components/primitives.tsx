@@ -3,6 +3,31 @@ import { cn } from '@/lib/utils'
 
 type Vehicle = 'spec' | 'plan'
 type Verdict = 'PASS' | 'NEEDS_IMPROVEMENT' | 'MAJOR_ISSUES'
+type Phase = 'plan' | 'implement' | 'review' | 'done'
+
+/**
+ * Phase pill — matches VerdictBadge dimensions so the two read as a
+ * single status pair on each feature card. Hue shifts cool → warm →
+ * green as the spec moves from planning to done.
+ */
+export function PhaseBadge({ phase }: { phase: Phase }): ReactElement {
+  const map: Record<Phase, string> = {
+    plan: 'bg-zinc-700',
+    implement: 'bg-amber-300',
+    review: 'bg-violet-600',
+    done: 'bg-stone-500',
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-mono uppercase tracking-wider text-zinc-50',
+        map[phase],
+      )}
+    >
+      {phase}
+    </span>
+  )
+}
 
 /**
  * Verdict pill — tone matches the dusty palette: sage = PASS,

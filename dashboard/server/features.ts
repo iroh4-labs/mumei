@@ -17,24 +17,62 @@ const exec = promisify(execFile)
  * fallback ensures the violation is observable even when the Fastify
  * logger is in production silent mode.
  */
+/**
+ * Thrown when an active spec/plan state.json fails validation. Carries
+ * the offending file path and a flat list of TypeBox `fieldErrors` so
+ * the Fastify error handler can ship the diagnostic in the 500 response
+ * body, letting the dashboard SPA show "which file, which field" rather
+ * than the generic "Internal Server Error".
+ */
+export class StateValidationError extends Error {
+  readonly file: string
+  readonly fieldErrors: { path: string; message: string }[]
+  readonly stage: 'json' | 'shape'
+  constructor(args: {
+    file: string
+    fieldErrors: { path: string; message: string }[]
+    stage: 'json' | 'shape'
+    message: string
+  }) {
+    super(args.message)
+    this.name = 'StateValidationError'
+    this.file = args.file
+    this.fieldErrors = args.fieldErrors
+    this.stage = args.stage
+  }
+}
+
 function parseStateOrThrow(body: string, file: string): State {
   let parsed: unknown
   try {
     parsed = JSON.parse(body)
   } catch (e) {
+    const msg = (e as Error).message
     process.stderr.write(
-      `[mumei dashboard] state.json JSON.parse failed: file=${file} err=${(e as Error).message}\n`,
+      `[mumei dashboard] state.json JSON.parse failed: file=${file} err=${msg}\n`,
     )
-    throw new Error(`state.json JSON.parse failed at ${file}`)
+    throw new StateValidationError({
+      file,
+      stage: 'json',
+      fieldErrors: [{ path: '/', message: msg }],
+      message: `state.json JSON.parse failed at ${file}`,
+    })
   }
   if (!validateState.Check(parsed)) {
-    const errors = [...validateState.Errors(parsed)]
-      .map((e) => `${e.path}: ${e.message}`)
-      .join('; ')
+    const fieldErrors = [...validateState.Errors(parsed)].map((e) => ({
+      path: e.path,
+      message: e.message,
+    }))
+    const joined = fieldErrors.map((e) => `${e.path}: ${e.message}`).join('; ')
     process.stderr.write(
-      `[mumei dashboard] state.json validation failed: file=${file} errors=${errors}\n`,
+      `[mumei dashboard] state.json validation failed: file=${file} errors=${joined}\n`,
     )
-    throw new Error(`state.json validation failed at ${file}: ${errors}`)
+    throw new StateValidationError({
+      file,
+      stage: 'shape',
+      fieldErrors,
+      message: `state.json validation failed at ${file}: ${joined}`,
+    })
   }
   return parsed
 }
