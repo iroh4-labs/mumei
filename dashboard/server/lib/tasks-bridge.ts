@@ -185,15 +185,22 @@ export async function buildWaveplan(args: {
     return []
   }
 
+  // bash hook `mumei_tasks_path` only looks under .mumei/specs/, so for
+  // archive features the bash route returns no task ids. Fall back to a
+  // direct tasks.md parse on the TS side for those — same output shape,
+  // no drift risk because the active path remains bash-authoritative.
+  const isArchive = tf.includes(`${path.sep}archive${path.sep}`)
   let waveplan: WaveMeta[]
   try {
-    waveplan = await parseTasksMdViaBash({ pluginRoot, tasksFile: tf, featureKey, projectRoot })
+    waveplan = isArchive
+      ? await parseTasksMdInline(tf)
+      : await parseTasksMdViaBash({ pluginRoot, tasksFile: tf, featureKey, projectRoot })
   } catch (err) {
-    // REQ-15.11: bash exec failure → return empty + log to server
-    // log. Bare process.stderr write avoids threading the Fastify
-    // logger into this lib module.
+    // REQ-15.11: parser failure → return empty + log to server log.
+    // Bare process.stderr write avoids threading the Fastify logger
+    // into this lib module.
     const message = err instanceof Error ? err.message : String(err)
-    logAtLevel('warn', `[tasks-bridge] parseTasksMdViaBash failed for ${featureKey}: ${message}\n`)
+    logAtLevel('warn', `[tasks-bridge] tasks parse failed for ${featureKey}: ${message}\n`)
     waveplan = []
   }
   memo.set(memoKey, { ts: Date.now(), payload: waveplan })
@@ -294,6 +301,74 @@ function extractWaveHeaders(body: string): { wave: number; goal: string; verify:
   }
   if (current) waves.push(current)
   return waves
+}
+
+/**
+ * Read a tasks.md (archive feature) directly on the TS side and emit
+ * the same WaveMeta tree as `parseTasksMdViaBash`. The bash hook is
+ * not in scope here because `mumei_tasks_path` queries .mumei/specs/
+ * only and would return an empty path. Parse rules mirror the bash
+ * side: `- [x|space] <wave>.<n> description` for task rows, and the
+ * `_Files:_ / _Depends:_ / _Requirements:_` italic-label lines under
+ * each task for metadata.
+ */
+async function parseTasksMdInline(tasksFile: string): Promise<WaveMeta[]> {
+  const fs = await import('node:fs/promises')
+  const body = await fs.readFile(tasksFile, 'utf8')
+  const waves = extractWaveHeaders(body)
+  const tasks = extractTasksWithMeta(body)
+  return waves.map(({ wave, goal, verify }) => ({
+    wave,
+    goal,
+    verify,
+    tasks: tasks.filter((t) => t.id.startsWith(`${wave}.`)),
+  }))
+}
+
+function extractTasksWithMeta(body: string): TaskMeta[] {
+  const out: TaskMeta[] = []
+  const taskRe = /^- \[([x ])\] (\d+(?:\.\d+)+)\s+(.*)$/
+  const filesRe = /^\s*_Files:_\s*(.+?)\s*$/
+  const dependsRe = /^\s*_Depends:_\s*(.+?)\s*$/
+  const reqsRe = /^\s*_Requirements:_\s*(.+?)\s*$/
+  let cur: TaskMeta | null = null
+  for (const raw of body.split('\n')) {
+    const taskMatch = taskRe.exec(raw)
+    if (taskMatch) {
+      if (cur) out.push(cur)
+      cur = {
+        id: taskMatch[2] ?? '',
+        done: taskMatch[1] === 'x',
+        description: taskMatch[3] ?? '',
+        files: [],
+        depends: [],
+        reqs: [],
+      }
+      continue
+    }
+    if (!cur) continue
+    if (/^##/.test(raw)) {
+      out.push(cur)
+      cur = null
+      continue
+    }
+    const filesMatch = filesRe.exec(raw)
+    if (filesMatch) {
+      cur.files = splitCsv(filesMatch[1] ?? '')
+      continue
+    }
+    const dependsMatch = dependsRe.exec(raw)
+    if (dependsMatch) {
+      cur.depends = splitCsv(dependsMatch[1] ?? '').filter((d) => d !== '-')
+      continue
+    }
+    const reqsMatch = reqsRe.exec(raw)
+    if (reqsMatch) {
+      cur.reqs = splitCsv(reqsMatch[1] ?? '')
+    }
+  }
+  if (cur) out.push(cur)
+  return out
 }
 
 function extractTaskDescriptions(body: string): Map<string, string> {

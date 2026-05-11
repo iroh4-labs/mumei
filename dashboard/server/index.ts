@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import cors from '@fastify/cors'
@@ -16,7 +16,7 @@ import { MetaSchema, MetaStatsSchema } from '../src/schemas/meta.ts'
 import { HooksTrendSchema, ReviewsTrendSchema, TokensTrendSchema } from '../src/schemas/trends.ts'
 import { buildActivity } from './activity.ts'
 import { buildFeatureDetail } from './detail.ts'
-import { listFeatures } from './features.ts'
+import { listFeatures, StateValidationError } from './features.ts'
 import { MASCOT_ASCII } from './lib/mascot-ascii.ts'
 import { buildMeta, buildMetaStats } from './meta.ts'
 import { registerSse } from './sse.ts'
@@ -145,7 +145,12 @@ const SlugParam = Type.Object({
 })
 const DocParam = Type.Object({
   slug: Type.String({ pattern: '^[A-Za-z0-9_-]+$', minLength: 1, maxLength: 100 }),
-  doc: Type.Union([Type.Literal('requirements'), Type.Literal('design'), Type.Literal('tasks')]),
+  doc: Type.Union([
+    Type.Literal('requirements'),
+    Type.Literal('design'),
+    Type.Literal('tasks'),
+    Type.Literal('scratch'),
+  ]),
 })
 const FeatureQuery = Type.Object({
   feature: Type.String({ pattern: '^[A-Za-z0-9_-]+$', minLength: 1, maxLength: 100 }),
@@ -283,19 +288,100 @@ app.get('/api/hook-stats', async () => {
 // REST: /api/feature/:slug/{requirements,design,tasks}
 // Read-only file accessors. Useful for the detail panel.
 // ---------------------------------------------------------------------------
+// Allowlist mirrors the SlugParam pattern. Re-checked inline at every
+// readFile() sink so CodeQL's dataflow recognises the sanitiser at
+// each path-injection boundary (Fastify-schema validation alone is
+// structurally invisible to the static analyser).
+const DOC_SLUG_RE = /^[A-Za-z0-9_-]{1,100}$/
+
+async function readMarkdownIfInside(file: string, root: string): Promise<string | null> {
+  const resolved = path.resolve(file)
+  if (!resolved.startsWith(root + path.sep)) return null
+  try {
+    return await readFile(resolved, 'utf8')
+  } catch {
+    return null
+  }
+}
+
 app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req, reply) => {
-  const { slug, doc } = req.params as { slug: string; doc: string }
-  const candidates = [
+  const { slug, doc } = req.params as {
+    slug: string
+    doc: 'requirements' | 'design' | 'tasks' | 'scratch'
+  }
+  if (!DOC_SLUG_RE.test(slug)) {
+    reply.code(400)
+    return { error: 'invalid slug' }
+  }
+  // scratch lives at .mumei/scratch/<bare-slug>.md. brainstorm names
+  // its file after the topic (= bare slug), so for a compound spec key
+  // like `REQ-20-fixture-demo` we look up `fixture-demo.md`. Bare-slug
+  // features (plan vehicle) use the slug verbatim.
+  if (doc === 'scratch') {
+    const bare = slug.replace(/^REQ-\d+-/, '')
+    const candidates = [
+      path.join(MUMEI_DIR, 'scratch', `${bare}.md`),
+      path.join(MUMEI_DIR, 'scratch', `${slug}.md`),
+    ]
+    for (const p of candidates) {
+      const body = await readMarkdownIfInside(p, MUMEI_DIR)
+      if (body !== null) {
+        reply.type('text/markdown')
+        return body
+      }
+    }
+    reply.code(404)
+    return { error: 'not found' }
+  }
+  // listFeatures emits bare slugs (`dashboard-typebox-unification`) for
+  // spec vehicle features even though the on-disk directory uses the
+  // compound `REQ-N-<bare>` key. Resolve both shapes so the lookup
+  // succeeds regardless of which slug the UI passed.
+  const candidates: string[] = [
     path.join(MUMEI_DIR, 'specs', slug, `${doc}.md`),
     path.join(MUMEI_DIR, 'plans', slug, `${doc}.md`),
   ]
+  // bare slug → compound dir under specs/ (suffix match)
+  try {
+    const specsRoot = path.join(MUMEI_DIR, 'specs')
+    for (const ent of await readdir(specsRoot, { withFileTypes: true })) {
+      if (ent.isDirectory() && ent.name.endsWith(`-${slug}`) && DOC_SLUG_RE.test(ent.name)) {
+        candidates.push(path.join(specsRoot, ent.name, `${doc}.md`))
+      }
+    }
+  } catch {
+    /* specs absent */
+  }
+  // Walk archive months newest-first so a re-archived feature surfaces
+  // the most recent copy first. Match both exact and `-${slug}` suffix
+  // so bare slugs locate their compound archive dir.
+  try {
+    const archiveRoot = path.join(MUMEI_DIR, 'archive')
+    const months = (await readdir(archiveRoot, { withFileTypes: true })).sort((a, b) =>
+      b.name.localeCompare(a.name),
+    )
+    for (const m of months) {
+      if (!m.isDirectory()) continue
+      const monthDir = path.join(archiveRoot, m.name)
+      candidates.push(path.join(monthDir, slug, `${doc}.md`))
+      try {
+        for (const sub of await readdir(monthDir, { withFileTypes: true })) {
+          if (sub.isDirectory() && sub.name.endsWith(`-${slug}`) && DOC_SLUG_RE.test(sub.name)) {
+            candidates.push(path.join(monthDir, sub.name, `${doc}.md`))
+          }
+        }
+      } catch {
+        /* month dir unreadable */
+      }
+    }
+  } catch {
+    /* archive absent */
+  }
   for (const p of candidates) {
-    try {
-      const body = await readFile(p, 'utf8')
+    const body = await readMarkdownIfInside(p, MUMEI_DIR)
+    if (body !== null) {
       reply.type('text/markdown')
       return body
-    } catch {
-      /* try next */
     }
   }
   reply.code(404)
@@ -308,6 +394,15 @@ app.get('/api/feature/:slug/:doc', { schema: { params: DocParam } }, async (req,
 // validation errors carry a `.validation` array we surface as 400.
 app.setErrorHandler((err, req, reply) => {
   req.log.error({ err }, 'request handler threw')
+  if (err instanceof StateValidationError) {
+    reply.code(500).send({
+      error: 'state.json shape violation',
+      stage: err.stage,
+      file: err.file,
+      fieldErrors: err.fieldErrors,
+    })
+    return
+  }
   const fastifyErr = err as {
     validation?: unknown
     statusCode?: number

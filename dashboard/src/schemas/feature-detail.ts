@@ -116,6 +116,23 @@ export const FeatureDetailSchema = Type.Object(
     ),
     timeline: Type.Array(TimelineEntrySchema),
     acs: Type.Array(AcSchema, { description: 'Empty array when planVehicle=true.' }),
+    phase: Type.Union(
+      [
+        Type.Literal('plan'),
+        Type.Literal('implement'),
+        Type.Literal('review'),
+        Type.Literal('done'),
+        Type.Null(),
+      ],
+      {
+        description:
+          "Phase from state.json. Null when state.json is missing or unreadable. Frontend's Tasks tab only renders the active-Wave shimmer while phase === 'implement' (and not archived).",
+      },
+    ),
+    currentWave: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()], {
+      description:
+        "Current Wave index from state.json (spec vehicle only). Null when planVehicle=true, when state.json is absent, or when current_wave is unset. Frontend's Tasks tab highlights this Wave only while phase === 'implement' and !archived; otherwise all Waves render as historical state.",
+    }),
     waveplan: Type.Array(WaveplanEntrySchema),
     reviews: Type.Array(ReviewSummarySchema),
     costPerIter: Type.Array(CostPerIterSchema),

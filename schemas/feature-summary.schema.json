@@ -141,10 +141,10 @@
       ]
     },
     "lastIter": {
+      "description": "Review iter index from the most recent review JSON. Current orchestrator caps at 3 (REQ-7.6) but historical archived reviews may carry higher values; no upper bound is enforced here.",
       "anyOf": [
         {
           "minimum": 1,
-          "maximum": 3,
           "type": "integer"
         },
         {

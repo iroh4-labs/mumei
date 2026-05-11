@@ -1,24 +1,35 @@
-// Compiled TypeBox validators for runtime shape checks at the system
-// boundaries (bash -> Node state.json, JSONL aggregator lines, review
-// JSON, SSE event payload). Each `TypeCompiler.Compile()` call is
-// performed at module top-level so the JIT-emitted validator is reused
-// for every request / line / event without per-call allocation.
+// Client-side validators for SSE event payloads consumed by the SPA.
+//
+// Uses TypeBox `Value.Check` / `Value.Errors` (AST traversal) instead of
+// `TypeCompiler.Compile()` so the SPA bundle does not invoke
+// `new Function(...)`, which CSP forbids without `script-src
+// 'unsafe-eval'`. Server hot-path validation lives in
+// `server/lib/validators.ts` and stays JIT-compiled for throughput.
 //
 // Side-effect import '../schemas/_formats.ts' registers the
 // 'date-time' format with the global FormatRegistry; without it
-// TypeCompiler.Compile() raises "Unknown format" on Check() time.
+// `Value.Check` raises "Unknown format" when the schema includes
+// `format: 'date-time'` constraints.
+import type { Static, TSchema } from '@sinclair/typebox'
+import { Value } from '@sinclair/typebox/value'
+
 import '../schemas/_formats.ts'
-
-import { TypeCompiler } from '@sinclair/typebox/compiler'
-
-import { ActivityEventSchema } from '../schemas/activity-event.ts'
-import { CostLogEntrySchema } from '../schemas/cost-log.ts'
-import { ReviewSchema } from '../schemas/review.ts'
 import { SseEventSchema } from '../schemas/sse-event.ts'
-import { StateSchema } from '../schemas/state.ts'
 
-export const validateState = TypeCompiler.Compile(StateSchema)
-export const validateCostLogEntry = TypeCompiler.Compile(CostLogEntrySchema)
-export const validateReview = TypeCompiler.Compile(ReviewSchema)
-export const validateSseEvent = TypeCompiler.Compile(SseEventSchema)
-export const validateActivityEvent = TypeCompiler.Compile(ActivityEventSchema)
+type Validator<T extends TSchema> = {
+  Check: (value: unknown) => value is Static<T>
+  Errors: (value: unknown) => Iterable<{ path: string; message: string; value: unknown }>
+}
+
+function makeValidator<T extends TSchema>(schema: T): Validator<T> {
+  return {
+    Check(value): value is Static<T> {
+      return Value.Check(schema, value)
+    },
+    Errors(value) {
+      return Value.Errors(schema, value)
+    },
+  }
+}
+
+export const validateSseEvent = makeValidator(SseEventSchema)

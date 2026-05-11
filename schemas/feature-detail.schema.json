@@ -10,6 +10,8 @@
     "planVehicle",
     "timeline",
     "acs",
+    "phase",
+    "currentWave",
     "waveplan",
     "reviews",
     "costPerIter"
@@ -91,6 +93,42 @@
           }
         }
       }
+    },
+    "phase": {
+      "description": "Phase from state.json. Null when state.json is missing or unreadable. Frontend's Tasks tab only renders the active-Wave shimmer while phase === 'implement' (and not archived).",
+      "anyOf": [
+        {
+          "const": "plan",
+          "type": "string"
+        },
+        {
+          "const": "implement",
+          "type": "string"
+        },
+        {
+          "const": "review",
+          "type": "string"
+        },
+        {
+          "const": "done",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "currentWave": {
+      "description": "Current Wave index from state.json (spec vehicle only). Null when planVehicle=true, when state.json is absent, or when current_wave is unset. Frontend's Tasks tab highlights this Wave only while phase === 'implement' and !archived; otherwise all Waves render as historical state.",
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "waveplan": {
       "type": "array",

@@ -19,7 +19,7 @@ import { useMeta } from '@/hooks/useMeta'
 import { useTrendHooks } from '@/hooks/useTrendHooks'
 import { useTrendReviews } from '@/hooks/useTrendReviews'
 import { useTrendTokens } from '@/hooks/useTrendTokens'
-import { formatTokens, relTime } from '@/lib/format'
+import { formatTokens, lastActivityDate } from '@/lib/format'
 import { hookIdLabel } from '@/lib/hook-id-labels'
 import { cn } from '@/lib/utils'
 import type { MumeiFeatureSummary } from '@/types/feature-summary'
@@ -28,7 +28,7 @@ import { HBar, LegendDot, LineChart, StackedBar } from './charts'
 import { DetailPanel } from './DetailPanel'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
-import { PulseRing, VerdictBadge } from './primitives'
+import { PhaseBadge, PulseRing, VerdictBadge } from './primitives'
 
 const SECTION_INVALIDATIONS: Record<string, ReadonlyArray<readonly (string | number)[]>> = {
   features: [['features']],
@@ -391,19 +391,16 @@ function FeatureCard({
             />
           </div>
         </div>
-        <div className="px-3 h-[26px] flex items-center">
-          <span className="font-mono text-[16px] text-zinc-400 truncate">
-            {f.phase}
-            {f.nextPhase ? ` ▶ ${f.nextPhase}` : ''}
-          </span>
-        </div>
-        <div className="px-3 h-[40px] flex items-center justify-between">
+        <div className="px-3 h-[40px] flex items-center gap-2">
           {f.lastVerdict ? (
             <VerdictBadge verdict={f.lastVerdict} iter={f.lastIter} />
           ) : (
             <span className="font-mono text-[16px] text-zinc-600">— no review yet</span>
           )}
-          <span className="font-mono text-[15px] text-zinc-600">{relTime(f.lastActivityMin)}</span>
+          <PhaseBadge phase={f.phase} />
+          <span className="ml-auto font-mono text-[15px] text-zinc-600 tabular-nums">
+            {lastActivityDate(f.lastActivityMin)}
+          </span>
         </div>
       </Card>
     </PulseRing>

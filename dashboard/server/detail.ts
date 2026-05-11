@@ -2,10 +2,10 @@ import { execFile } from 'node:child_process'
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { validateCostLogEntry } from '../src/lib/validators.ts'
 import type { MumeiFeatureDetailPayload as MumeiFeatureDetail } from '../src/types/feature-detail.ts'
 import { type CostLogEntry, readJsonl } from './lib/aggregator.ts'
 import { buildWaveplan } from './lib/tasks-bridge.ts'
+import { validateCostLogEntry } from './lib/validators.ts'
 
 // Allowlist for featureKey segments used in filesystem paths under
 // .mumei/{specs,plans,archive}/. Mirrors the TypeBox SlugParam pattern in
@@ -35,6 +35,9 @@ export async function buildFeatureDetail(args: {
   const slug = featureKey
 
   const acs = planVehicle ? [] : await parseAcs(path.join(dir.absDir, 'requirements.md'))
+  const stateForWave = planVehicle ? null : await readStateJson(dir.absDir)
+  const currentWave = stateForWave?.current_wave ?? null
+  const phase = stateForWave?.phase ?? null
   const waveplan = await buildWaveplan({ projectRoot, featureKey, pluginRoot })
   const reviews = await loadReviews(path.join(dir.absDir, 'reviews'))
   const costPerIter = await loadCostPerIter({
@@ -56,6 +59,8 @@ export async function buildFeatureDetail(args: {
     archived,
     timeline,
     acs,
+    phase,
+    currentWave,
     waveplan: waveplan.map((w) => ({
       wave: w.wave,
       goal: w.goal,
@@ -284,6 +289,7 @@ interface StateJsonShape {
   approved_at?: string | null
   pending_review?: boolean
   task_completed_count?: number
+  current_wave?: number
   created_at?: string
   updated_at?: string
 }
