@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { Dashboard } from './components/Dashboard'
 
 /**
@@ -11,5 +12,9 @@ import { Dashboard } from './components/Dashboard'
  * newspaper-grain background; design tokens live in src/index.css.
  */
 export function App(): ReactElement {
-  return <Dashboard />
+  return (
+    <TooltipProvider>
+      <Dashboard />
+    </TooltipProvider>
+  )
 }
