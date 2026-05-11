@@ -119,13 +119,17 @@ export const FeatureWarningsSchema = Type.Object(
   },
 )
 
+// No $id here: this schema is consumed only inside the dashboard
+// (Fastify route + TanStack Query client). It is not emitted as a
+// standalone JSON Schema artifact under schemas/. If a future external
+// consumer needs it, add the file to dashboard/scripts/generate-schemas.ts
+// AND restore an $id, then run `npm run schemas` to ship the artifact.
 export const FeaturesResponseSchema = Type.Object(
   {
     features: FeatureSummaryListSchema,
     warnings: FeatureWarningsSchema,
   },
   {
-    $id: 'https://mumei.dev/schemas/features-response.schema.json',
     title: 'mumei features response',
     description:
       'Response shape for GET /api/features. Wraps the feature summary list with per-aggregation skip+warn counts so the SPA can render a "N items skipped" banner without having to parse stderr.',

@@ -29,18 +29,14 @@ _run_hook_with_bad_cwd() {
   local input_file
   input_file="$(mktemp -t mumei-hook-input.XXXXXX)"
   printf '%s' "$input_json" >"$input_file"
-  # CLAUDE_PROJECT_DIR points at a non-existent path; the hook's -d
-  # guard normally short-circuits silently, so to drive the fail-loud
-  # branch we use a path that exists at -d evaluation but disappears
-  # before cd. The simplest stand-in: create dir, point env at it,
-  # remove just before invoking. bats subprocess isolation guarantees
-  # the removal lands before the hook starts.
+  # Drive the fail-loud branch reliably: create a real directory so the
+  # hook's `[[ -d "$CLAUDE_PROJECT_DIR" ]]` guard passes, then chmod 000
+  # so the subsequent `cd` fails with EACCES. macOS and Linux both
+  # refuse cd on chmod 000 dirs unless root. This is more deterministic
+  # than a TOCTOU rmdir race and avoids depending on bats subprocess
+  # scheduling.
   local race_dir
   race_dir="$(mktemp -d -t mumei-cwd-race.XXXXXX)"
-  # `bash -c` runs in a fresh subshell — race the rmdir against the
-  # hook startup by removing the dir AFTER -d passes but BEFORE cd.
-  # Simpler reliable approach: keep dir but revoke read/execute so cd
-  # fails. macOS / Linux both refuse cd on chmod 000 dirs unless root.
   chmod 000 "$race_dir"
   run --separate-stderr bash -c \
     "CLAUDE_PROJECT_DIR='${race_dir}' bash '${CLAUDE_PLUGIN_ROOT}/hooks/${hook_name}' < '${input_file}'"
