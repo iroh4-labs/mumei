@@ -44,7 +44,10 @@ export const FeatureSummarySchema = Type.Object(
       description:
         'Verdict from the most recent review JSON (Phase 5 / /mumei:review). Null when no review has run yet.',
     }),
-    lastIter: Type.Union([Type.Integer({ minimum: 1, maximum: 3 }), Type.Null()]),
+    lastIter: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()], {
+      description:
+        'Review iter index from the most recent review JSON. Current orchestrator caps at 3 (REQ-7.6) but historical archived reviews may carry higher values; no upper bound is enforced here.',
+    }),
     tokens: Type.Integer({
       minimum: 0,
       description:

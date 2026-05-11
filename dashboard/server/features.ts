@@ -2,11 +2,10 @@ import { execFile } from 'node:child_process'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-
-import { validateCostLogEntry, validateReview, validateState } from '../src/lib/validators.ts'
 import type { State } from '../src/schemas/state.ts'
 import type { MumeiFeatureSummary } from '../src/types/feature-summary.ts'
 import { type CostLogEntry, readJsonl } from './lib/aggregator.ts'
+import { validateCostLogEntry, validateReview, validateState } from './lib/validators.ts'
 
 const exec = promisify(execFile)
 

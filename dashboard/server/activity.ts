@@ -2,9 +2,9 @@ import { execFile } from 'node:child_process'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { validateCostLogEntry } from '../src/lib/validators.ts'
 import type { MumeiActivityEvent } from '../src/types/activity-event.ts'
 import { type CostLogEntry, type HookStatsEntry, readJsonl } from './lib/aggregator.ts'
+import { validateCostLogEntry } from './lib/validators.ts'
 
 const exec = promisify(execFile)
 
