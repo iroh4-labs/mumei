@@ -71,6 +71,11 @@ _run_hook_with_bad_cwd() {
   [ "$(jq -r '.hook_id' <<<"$rec")" = "pre-edit-guard" ]
   [ "$(jq -r '.decision' <<<"$rec")" = "error" ]
   [ "$(jq -r '.reason' <<<"$rec")" = "cwd-anchor-failed" ]
+  # The cwd-anchor block fires BEFORE the hook body parses stdin, so
+  # TOOL_NAME is structurally unavailable. We record the literal sentinel
+  # "pre-anchor" instead of ${TOOL_NAME:-unknown} so the dashboard can
+  # tell "value structurally unavailable" apart from "parse failed".
+  [ "$(jq -r '.tool_name' <<<"$rec")" = "pre-anchor" ]
 }
 
 @test "stop-guard: cd failure emits stderr warn and hook-stats decision=error" {
@@ -87,6 +92,7 @@ _run_hook_with_bad_cwd() {
   [ "$(jq -r '.hook_id' <<<"$rec")" = "stop-guard" ]
   [ "$(jq -r '.decision' <<<"$rec")" = "error" ]
   [ "$(jq -r '.reason' <<<"$rec")" = "cwd-anchor-failed" ]
+  [ "$(jq -r '.tool_name' <<<"$rec")" = "pre-anchor" ]
 }
 
 @test "pre-edit-guard: cd success (control case) emits no fail-loud record" {

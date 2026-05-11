@@ -102,6 +102,14 @@ export async function listFeatures(args: {
     skippedReviews: 0,
     skippedCostLogLines: 0,
   }
+  // Dedupe cost-log skip records by (file:line) across feature cards.
+  // listFeatures calls loadCost once per active+archived feature; the
+  // project-wide .mumei/cost-log.jsonl is shared and re-read each time,
+  // so a single corrupt line would otherwise be counted N times in
+  // warnings.skippedCostLogLines (one increment per feature). Using a
+  // Set keyed by file:line ensures the count reflects the true number
+  // of distinct skipped lines, not the per-aggregation occurrence count.
+  const seenCostLogSkips = new Set<string>()
 
   for (const vehicle of ['spec', 'plan'] as const) {
     const dir = path.join(projectRoot, '.mumei', vehicle === 'spec' ? 'specs' : 'plans')
@@ -116,6 +124,7 @@ export async function listFeatures(args: {
         archived: false,
         now,
         warnings,
+        seenCostLogSkips,
       })
       if (summary) summaries.push(summary)
     }
@@ -153,10 +162,16 @@ export async function listFeatures(args: {
         archived: true,
         now,
         warnings,
+        seenCostLogSkips,
       })
       if (summary) summaries.push(summary)
     }
   }
+
+  // Reconcile the cost-log skip counter from the dedup'd Set so the
+  // banner reflects the actual distinct count, not the per-feature
+  // accumulated count.
+  warnings.skippedCostLogLines = seenCostLogSkips.size
 
   // Active first by lastActivityMin ascending (smaller = more recent).
   summaries.sort((a, b) => a.lastActivityMin - b.lastActivityMin)
@@ -171,8 +186,18 @@ async function summariseFeature(args: {
   archived: boolean
   now: Date
   warnings: FeatureWarnings
+  seenCostLogSkips: Set<string>
 }): Promise<MumeiFeatureSummary | null> {
-  const { projectRoot, featureDir, featureKey, vehicle, archived, now, warnings } = args
+  const {
+    projectRoot,
+    featureDir,
+    featureKey,
+    vehicle,
+    archived,
+    now,
+    warnings,
+    seenCostLogSkips,
+  } = args
   const stateRaw = await safeReadFile(path.join(featureDir, 'state.json'))
   if (!stateRaw) return null
   const stateFilePath = path.join(featureDir, 'state.json')
@@ -213,7 +238,7 @@ async function summariseFeature(args: {
     perFeatureFile: path.join(featureDir, 'cost-log.jsonl'),
     projectWideFile: path.join(projectRoot, '.mumei', 'cost-log.jsonl'),
     featureKey,
-    warnings,
+    seenCostLogSkips,
   })
 
   const stateMtime = await safeMtime(path.join(featureDir, 'state.json'))
@@ -350,7 +375,7 @@ async function loadCost(args: {
   perFeatureFile: string
   projectWideFile: string
   featureKey: string
-  warnings: FeatureWarnings
+  seenCostLogSkips: Set<string>
 }): Promise<{ tokens: number; cacheHit: number }> {
   // Dedup (agent, ts) by COALESCING records, not by first-wins. The
   // SubagentStop hook (REQ-16) writes wave/iteration as null while the
@@ -367,8 +392,12 @@ async function loadCost(args: {
   for (const file of [args.perFeatureFile, args.projectWideFile]) {
     for await (const e of readJsonl<CostLogEntry>(file, {
       validate: (v) => validateCostLogEntry.Check(v),
-      onSkip: () => {
-        args.warnings.skippedCostLogLines += 1
+      onSkip: (info) => {
+        // Dedupe by file:line so a single corrupt line in the
+        // project-wide cost-log isn't counted N times across feature
+        // cards. Caller reconciles warnings.skippedCostLogLines from
+        // Set.size after all summariseFeature calls return.
+        args.seenCostLogSkips.add(`${info.file}:${info.line}`)
       },
     })) {
       if (e.phase !== 'after') continue
