@@ -60,6 +60,7 @@ const InlineActivityEventSchema = Type.Union([
         Type.Literal('block'),
         Type.Literal('noop'),
         Type.Literal('pass'),
+        Type.Literal('error'),
       ]),
     },
     { additionalProperties: false },
