@@ -94,5 +94,46 @@ export const FeatureSummarySchema = Type.Object(
 
 export const FeatureSummaryListSchema = Type.Array(FeatureSummarySchema)
 
+export const FeatureWarningsSchema = Type.Object(
+  {
+    skippedArchiveStates: Type.Integer({
+      minimum: 0,
+      description:
+        'Count of archive state.json files dropped by skip+warn (shape drift or JSON parse failure). Excludes active spec/plan state.json which fail-fast via setErrorHandler.',
+    }),
+    skippedReviews: Type.Integer({
+      minimum: 0,
+      description:
+        'Count of review.json files dropped by skip+warn during latestReview() shape validation.',
+    }),
+    skippedCostLogLines: Type.Integer({
+      minimum: 0,
+      description:
+        'Count of cost-log.jsonl lines dropped by readJsonl validate (shape drift). Torn-write lines that fail JSON.parse are NOT counted (those are silent by design for append-only logs).',
+    }),
+  },
+  {
+    additionalProperties: false,
+    description:
+      'Non-fatal skip+warn counts surfaced from /api/features. Zero counts mean the entire .mumei/ tree validated cleanly. Non-zero counts indicate one or more older / corrupt files that were silently skipped during aggregation — the SPA can surface a banner so the user can investigate. The actual file paths are written to stderr.',
+  },
+)
+
+export const FeaturesResponseSchema = Type.Object(
+  {
+    features: FeatureSummaryListSchema,
+    warnings: FeatureWarningsSchema,
+  },
+  {
+    $id: 'https://mumei.dev/schemas/features-response.schema.json',
+    title: 'mumei features response',
+    description:
+      'Response shape for GET /api/features. Wraps the feature summary list with per-aggregation skip+warn counts so the SPA can render a "N items skipped" banner without having to parse stderr.',
+    additionalProperties: false,
+  },
+)
+
 export type FeatureSummary = Static<typeof FeatureSummarySchema>
 export type FeatureSummaryList = Static<typeof FeatureSummaryListSchema>
+export type FeatureWarnings = Static<typeof FeatureWarningsSchema>
+export type FeaturesResponse = Static<typeof FeaturesResponseSchema>

@@ -55,9 +55,11 @@ export const HooksTrendSchema = Type.Array(
           Type.Literal('block'),
           Type.Literal('noop'),
           Type.Literal('pass'),
+          Type.Literal('error'),
         ],
         {
-          description: 'Most common decision recorded for the hook_id within the window.',
+          description:
+            'Most common decision recorded for the hook_id within the window. "error" surfaces internal hook failures (e.g. cwd anchor unreachable) that previously exited silently.',
         },
       ),
     },

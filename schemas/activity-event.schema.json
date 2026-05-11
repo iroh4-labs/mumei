@@ -207,6 +207,10 @@
             {
               "const": "pass",
               "type": "string"
+            },
+            {
+              "const": "error",
+              "type": "string"
             }
           ]
         }

@@ -86,7 +86,7 @@
             "type": "integer"
           },
           "decision": {
-            "description": "Most common decision recorded for the hook_id within the window.",
+            "description": "Most common decision recorded for the hook_id within the window. \"error\" surfaces internal hook failures (e.g. cwd anchor unreachable) that previously exited silently.",
             "anyOf": [
               {
                 "const": "allow",
@@ -110,6 +110,10 @@
               },
               {
                 "const": "pass",
+                "type": "string"
+              },
+              {
+                "const": "error",
                 "type": "string"
               }
             ]

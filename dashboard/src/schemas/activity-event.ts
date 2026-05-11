@@ -64,6 +64,7 @@ const HookEventSchema = Type.Object(
       Type.Literal('block'),
       Type.Literal('noop'),
       Type.Literal('pass'),
+      Type.Literal('error'),
     ]),
   },
   { additionalProperties: false },
