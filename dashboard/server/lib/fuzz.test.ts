@@ -5,9 +5,10 @@
 // regression where one of these starts throwing on a malformed line
 // is the goal.
 //
-// Each property is run with 200 random samples (fast-check default).
-// Seeds are deterministic per CI run; on failure, fast-check prints a
-// shrunk minimal counterexample alongside the seed for repro.
+// Each property uses fast-check's defaults (100 runs, fresh random
+// seed per invocation). On failure, fast-check prints the shrunk
+// minimal counterexample together with the seed it used so the
+// failing case can be reproduced with `fc.assert(prop, { seed: N })`.
 
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
