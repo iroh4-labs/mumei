@@ -255,6 +255,27 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G2: sudo --user root (long option operand) before a mutator is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "sudo --user root rm tests/golden/snap.json")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: env --unset FOO (long option operand) before a mutator is denied" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "env --unset FOO rm conftest.py")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: env --chdir /tmp (long option operand) before a mutator is denied" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "env --chdir /tmp rm conftest.py")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
 @test "G2: sed -i -f reading a golden script does not false-deny a non-golden target" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   _run_hook "$(_bash_input "sed -i -f tests/golden/rules.sed src/app.py")"

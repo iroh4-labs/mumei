@@ -116,10 +116,15 @@ mumei_command_target_tokens() {
     while [[ "$_ci" -lt "${#words[@]}" ]]; do
       case "${words[$_ci]}" in
       sudo | doas)
+        # Short and long option forms that take a SEPARATE operand
+        # (`-u root` / `--user root`). The `=` form (`--user=root`) is one
+        # token, handled by the generic `-*` arm.
         _ci=$((_ci + 1))
         while [[ "$_ci" -lt "${#words[@]}" ]]; do
           case "${words[$_ci]}" in
-          -u | -g | -C | -p | -r | -t | -T | -h | -U | -R | -D) _ci=$((_ci + 2)) ;;
+          -u | -g | -C | -p | -r | -t | -T | -h | -U | -R | -D | --user | --group | --chdir | --prompt | --role | --type | --other-user | --host | --close-from | --command-timeout)
+            _ci=$((_ci + 2))
+            ;;
           --)
             _ci=$((_ci + 1))
             break
@@ -133,7 +138,7 @@ mumei_command_target_tokens() {
         _ci=$((_ci + 1))
         while [[ "$_ci" -lt "${#words[@]}" ]]; do
           case "${words[$_ci]}" in
-          -u | -S | -C) _ci=$((_ci + 2)) ;;
+          -u | -S | -C | --unset | --chdir | --split-string | --block-signal) _ci=$((_ci + 2)) ;;
           --)
             _ci=$((_ci + 1))
             break
