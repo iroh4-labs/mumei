@@ -100,8 +100,10 @@ mumei_command_target_tokens() {
   # Mutating-command write targets, per separator-delimited segment.
   # printf adds a trailing newline so `read` does not drop the final
   # (unterminated) segment.
-  # shellcheck disable=SC2020  # mapping each separator char to a newline is intended
-  printf '%s\n' "$cmd" | tr ';|&' '\n\n\n' | while IFS= read -r seg; do
+  # ANSI-C $'\n\n\n' so the shell produces real newlines (no reliance on tr's
+  # own escape interpretation); maps each separator char to a newline.
+  # shellcheck disable=SC2020
+  printf '%s\n' "$cmd" | tr ';|&' $'\n\n\n' | while IFS= read -r seg; do
     [[ -n "$seg" ]] || continue
     local words=()
     read -ra words <<<"$seg"
