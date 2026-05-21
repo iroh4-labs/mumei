@@ -5,8 +5,9 @@
 # Unlike state.json (per-feature), config.json holds settings that apply to
 # the whole project. Currently the only key is `golden_paths`: a list of
 # path globs that mumei treats as immutable specification / oracle files.
-# golden_paths back the G1 (Edit/Write deny), G2 (Bash-tamper deny), and the
-# worktree HEAD-restore step in hooks/_lib/worktree-verify.sh.
+# golden_paths back the G1 (Edit/Write deny) and G2 (Bash-tamper deny) rules;
+# the clean-HEAD worktree measurement in hooks/_lib/worktree-verify.sh runs
+# tests against golden's committed content as a further check.
 #
 # A missing file, malformed JSON, or absent key is NOT an error: mumei must
 # not disturb projects that never opted into golden paths. Every reader

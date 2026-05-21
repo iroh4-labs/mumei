@@ -86,14 +86,14 @@ _git_repo_with_commit() {
   [ "$MUMEI_WT_RAN" -eq 1 ]
 }
 
-@test "run_test force-restores a tampered golden file to its HEAD content" {
+@test "run_test measures a golden file at HEAD, not its tampered working-tree content" {
   _git_repo_with_commit
   mkdir -p .mumei
   echo '{"golden_paths": ["data.txt"]}' >.mumei/config.json
   # Tamper with the golden file in the working tree.
   echo tampered >data.txt
-  # The worktree starts at HEAD (v1) and golden is force-checked-out; the
-  # tampered working-tree content must not be visible.
+  # The worktree is a pristine HEAD checkout (data.txt=v1); the tampered
+  # working-tree content must not be visible.
   mumei_worktree_run_test "grep -q v1 data.txt"
   rc=$?
   [ "$rc" -eq 0 ]

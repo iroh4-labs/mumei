@@ -32,11 +32,6 @@ if ! declare -F mumei_log_warn >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
-if ! declare -F mumei_config_golden_paths >/dev/null 2>&1; then
-  # shellcheck disable=SC1091
-  source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
-fi
-
 # Run $1 (the canonical test command) against a detached worktree at HEAD.
 # See file header for output contract. Never sets -e; all failure paths
 # return 0 with MUMEI_WT_RAN=0 so the caller falls back to working-tree only.
@@ -66,16 +61,13 @@ mumei_worktree_run_test() {
   # shellcheck disable=SC2034  # read by the caller (I3) after this returns
   MUMEI_WT_RAN=1
 
-  # Force golden paths back to their HEAD state inside the worktree. This is
-  # the real wall against Bash-route golden tampering: even if a golden file
-  # was altered and committed-then-reverted-in-working-tree tricks slipped
-  # past the grep guards, the worktree measures against the HEAD revision.
-  local gp
-  while IFS= read -r gp; do
-    [[ -n "$gp" ]] || continue
-    git -C "$wt" checkout HEAD -- "$gp" >/dev/null 2>&1 || true
-  done < <(mumei_config_golden_paths)
-
+  # No explicit golden restore is needed: `git worktree add --detach HEAD`
+  # already produces a pristine checkout of the HEAD commit, so every tracked
+  # file — golden files included — is at its HEAD content. The clean-HEAD tree
+  # IS the golden source of truth; an extra `git checkout HEAD -- <glob>` would
+  # be a no-op here (and git pathspec globs would not expand a quoted pattern
+  # anyway).
+  #
   # Run inside the worktree with a normalized, clean-tree-anchored environment:
   #   - CLAUDE_PROJECT_DIR is rebound to the worktree so a test command that
   #     references it reads the clean HEAD tree, not the dirty original.
@@ -93,7 +85,9 @@ mumei_worktree_run_test() {
     set -o pipefail
     export CLAUDE_PROJECT_DIR="$wt"
     export PYTHONDONTWRITEBYTECODE=1
-    export PYTEST_ADDOPTS="-p no:cacheprovider -p no:randomly${PYTEST_ADDOPTS:+ $PYTEST_ADDOPTS}"
+    # Our flags go LAST so they win over any conflicting -p in a
+    # user-provided PYTEST_ADDOPTS (pytest applies options left to right).
+    export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p no:cacheprovider -p no:randomly"
     eval "$test_cmd" 2>&1
   )"
   rc=$?

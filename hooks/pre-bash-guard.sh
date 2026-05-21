@@ -7,8 +7,9 @@
 #       (checks both .mumei/specs/<key>/reviews/ and .mumei/plans/<key>/reviews/)
 #   W2: git commit while the current Wave still has unchecked [ ] tasks -> deny
 #       (spec vehicle only — plan vehicle has no Wave concept)
-#   G2: Bash-route mutation of a golden path (sed -i / > / tee / mv / rm) -> deny
-#       (project-wide, best-effort grep; worktree HEAD-restore is the real wall)
+#   G2: Bash-route write to a golden path (redirect / rm / mv / cp dest / tee /
+#       truncate / sed -i) -> deny (project-wide, best-effort; the clean-HEAD
+#       worktree measurement is the real wall)
 #   G3: test-tampering signature in a Bash command -> warn only (advisory)
 #
 # Design principles:
@@ -77,9 +78,13 @@ COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 # as input) from false-denying, while still enforcing leading-wildcard globs.
 mumei_command_target_tokens() {
   local cmd="$1" seg
-  # Redirect targets: the token following > or >> (not >&, not <).
-  printf '%s' "$cmd" | grep -oE '>>?[[:space:]]*[^[:space:];|&<>]+' |
-    sed -E 's/^>>?[[:space:]]*//'
+  # Redirect targets: the token following > or >>. Require start-of-string or
+  # whitespace before the operator so a quoted literal `>` (e.g.
+  # `echo '> conftest.py'`) is not mistaken for a redirection. Best-effort:
+  # a quoted ` > ` with surrounding spaces can still match — the clean-HEAD
+  # worktree measurement is the authoritative guard.
+  printf '%s' "$cmd" | grep -oE '(^|[[:space:]])>>?[[:space:]]*[^[:space:];|&<>]+' |
+    sed -E 's/^[[:space:]]*>>?[[:space:]]*//'
   # Mutating-command write targets, per separator-delimited segment.
   # printf adds a trailing newline so `read` does not drop the final
   # (unterminated) segment.

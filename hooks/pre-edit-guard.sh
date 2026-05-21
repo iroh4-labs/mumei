@@ -123,9 +123,9 @@ fi
 # --- G1: deny Edit/Write to a configured golden path (project-wide) ---
 # golden_paths in .mumei/config.json mark immutable specification / oracle
 # files. Placed BEFORE the FEATURE check like M1/S1 because golden protection
-# is project-wide and vehicle/feature independent. The worktree HEAD-restore
-# (hooks/_lib/worktree-verify.sh) is the deeper wall for Bash-route tampering;
-# G1 is the direct Edit/Write block.
+# is project-wide and vehicle/feature independent. The clean-HEAD worktree
+# measurement (hooks/_lib/worktree-verify.sh) is the deeper wall for Bash-route
+# tampering; G1 is the direct Edit/Write block.
 #
 # Match BOTH the raw project-relative FILE_PATH and a canonicalized
 # project-relative path (CANON_PATH with the project root stripped), so an

@@ -195,9 +195,10 @@ bytecode) では pass を偽装できません。working-tree pass・clean-HEAD 
 `/mumei:init` は `.mumei/config.json` を作成し `golden_paths` 配列を持たせます。
 不可侵にしたいファイル (snapshot fixture、`conftest.py`、locked な test data) の
 path glob を指定します。golden ファイルは「正典の test」を pin し、生成コードが
-それを勝手に書き換えないようにします: Edit/Write を block (G1)、明白な Bash 改ざん
-経路 (`sed -i` / redirect / `tee` / `mv` / `rm`) を block (G2)、clean-HEAD worktree
-実行で `git checkout HEAD --` により強制復元します。
+それを勝手に書き換えないようにします: Edit/Write を block (G1)、明白な Bash 書き込み
+経路 (redirect / `rm` / `mv` / `cp` の dest / `tee` / `truncate` / `sed -i`) を block
+(G2)、commit-gate は golden が既に commit 済み内容を保持する clean な `HEAD` worktree
+で test を再実行します。
 
 ```json
 { "golden_paths": ["tests/golden/*", "conftest.py", "src/crypto/*.py"] }

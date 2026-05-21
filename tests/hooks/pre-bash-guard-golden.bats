@@ -129,6 +129,13 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G2: a quoted literal > (not a real redirect) does not false-deny" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "echo '> conftest.py'")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "G2: MUMEI_BYPASS=1 allows mutating a golden path" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   local input_file

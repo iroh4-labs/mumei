@@ -207,9 +207,10 @@ results are recorded to `verify-log.jsonl` as `commit-gate` and `worktree-clean`
 `/mumei:init` creates `.mumei/config.json` with a `golden_paths` array — path
 globs for files that must stay immutable (snapshot fixtures, `conftest.py`,
 locked test data). Golden files pin the test of record so generated code cannot
-quietly redefine them: Edit/Write is blocked (G1), the obvious Bash mutation
-route (`sed -i` / redirect / `tee` / `mv` / `rm`) is blocked (G2), and the
-clean-HEAD worktree run force-restores them with `git checkout HEAD --`.
+quietly redefine them: Edit/Write is blocked (G1), the obvious Bash write route
+(redirect / `rm` / `mv` / `cp` destination / `tee` / `truncate` / `sed -i`) is
+blocked (G2), and the commit-gate re-runs tests against a clean `HEAD` worktree
+where golden files already hold their committed content.
 
 ```json
 { "golden_paths": ["tests/golden/*", "conftest.py", "src/crypto/*.py"] }
