@@ -95,6 +95,9 @@ teardown() {
   [ "$status" -eq 0 ]
   run mumei_is_test_command "ls -la"
   [ "$status" -ne 0 ]
+  # F-002: a git command embedding a runner name in its message is NOT a test run.
+  run mumei_is_test_command "git commit -m 'wire up go test in CI'"
+  [ "$status" -ne 0 ]
 }
 
 @test "mumei_is_test_command: MUMEI_TEST_CMD substring match only when set" {

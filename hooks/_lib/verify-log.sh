@@ -67,10 +67,18 @@ mumei_verify_log_append() {
   if [[ "$exit_code" =~ ^-?[0-9]+$ ]]; then
     exit_json="$exit_code"
   else
+    # Non-numeric / empty exit code records as JSON null — never a fabricated 0.
     exit_json="null"
   fi
-  mkdir -p "$(dirname "$path")"
-  jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  # Cap head well under PIPE_BUF (4096) so concurrent appends stay line-atomic.
+  head="${head:0:1500}"
+  local dir
+  dir="$(dirname "$path")"
+  if ! mkdir -p "$dir" 2>/dev/null; then
+    mumei_log_warn "verify-log: cannot create ${dir}; record dropped"
+    return 0
+  fi
+  if ! jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg feature "$feature" \
     --arg vehicle "$vehicle" \
     --arg source "$src" \
@@ -80,7 +88,9 @@ mumei_verify_log_append() {
     '{ts: $ts, feature: $feature, vehicle: $vehicle, source: $source,
       command: $command, exit_code: $exit_code}
      + (if $head == "" then {} else {head: $head} end)' \
-    >>"$path"
+    >>"$path"; then
+    mumei_log_warn "verify-log: append failed: ${path}"
+  fi
 }
 
 # Return 0 when cmd looks like a test invocation: a known runner
@@ -88,6 +98,11 @@ mumei_verify_log_append() {
 # against MUMEI_TEST_CMD when that env var is set.
 mumei_is_test_command() {
   local cmd="$1"
+  # git commands (esp. commit -m messages) often embed a runner name as a
+  # substring but never execute tests; exclude them to avoid spurious rows.
+  case "$cmd" in
+  git\ * | *" git "*) return 1 ;;
+  esac
   case "$cmd" in
   *"npm test"* | *pytest* | *"cargo test"* | *"go test"* | *bats*) return 0 ;;
   esac

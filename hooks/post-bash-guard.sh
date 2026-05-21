@@ -65,7 +65,9 @@ FEATURE="$(mumei_current_feature 2>/dev/null || true)"
 # vehicle, so the audit trail must capture plan-vehicle runs too. No block.
 # mumei_is_test_command is defined in verify-log.sh (sourced above).
 if [[ -n "$COMMAND" ]] && mumei_is_test_command "$COMMAND"; then
-  AGENT_EXIT="$(printf '%s' "$INPUT" | jq -r '.tool_response.exit_code // .tool_response.stdout_exit_code // 0' 2>/dev/null || echo 0)"
+  # Use // empty (not // 0): a missing exit_code must record as null, never a
+  # fabricated green. mumei_verify_log_append coerces the empty string to null.
+  AGENT_EXIT="$(printf '%s' "$INPUT" | jq -r '.tool_response.exit_code // .tool_response.stdout_exit_code // empty' 2>/dev/null || true)"
   mumei_verify_log_append "$FEATURE" "agent-run" "$COMMAND" "$AGENT_EXIT" || true
 fi
 

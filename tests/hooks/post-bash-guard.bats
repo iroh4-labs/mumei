@@ -390,3 +390,20 @@ EOF
   [ "$(jq -r '.source' <<<"$rec")" = "agent-run" ]
   [ "$(jq -r '.exit_code' <<<"$rec")" = "0" ]
 }
+
+@test "X5: missing tool_response.exit_code records null, not a fabricated 0 (F-001)" {
+  _init_feature_implement
+  # No tool_response field at all → exit_code must be null, never 0.
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"npm test"}}'
+  [ "$status" -eq 0 ]
+  rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
+  [ "$(jq -r '.source' <<<"$rec")" = "agent-run" ]
+  [ "$(jq -r '.exit_code' <<<"$rec")" = "null" ]
+}
+
+@test "X5: git commit with a runner name in message records no row (F-002)" {
+  _init_feature_implement
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m wire-up-go-test"},"tool_response":{"exit_code":0}}'
+  [ "$status" -eq 0 ]
+  [ ! -f .mumei/specs/REQ-1-foo/verify-log.jsonl ]
+}
