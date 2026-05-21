@@ -136,14 +136,18 @@ if mumei_is_git_commit "$COMMAND"; then
     mumei_log_info "running tests before commit: ${TEST_CMD}"
     TEST_OUTPUT="$(eval "$TEST_CMD" 2>&1)"
     TEST_EXIT=$?
-    # X4: record the observed commit-gate exit code (pass and fail) to verify-log.
-    mumei_verify_log_append "$FEATURE" "commit-gate" "$TEST_CMD" "$TEST_EXIT" || true
+    # On failure capture the last 30 lines for both the verify-log record and
+    # the deny reason; empty on success (head is omitted from the record).
+    TEST_HEAD=""
     if [[ "$TEST_EXIT" -ne 0 ]]; then
-      # Truncate test output to the last 30 lines for the deny reason
-      TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
+      TEST_HEAD="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
+    fi
+    # X4: record the observed commit-gate exit code (pass and fail) to verify-log.
+    mumei_verify_log_append "$FEATURE" "commit-gate" "$TEST_CMD" "$TEST_EXIT" "$TEST_HEAD" || true
+    if [[ "$TEST_EXIT" -ne 0 ]]; then
       mumei_deny \
         "Tests failing. Fix before committing." \
-        "Test command: ${TEST_CMD}\n\n${TEST_TAIL}" \
+        "Test command: ${TEST_CMD}\n\n${TEST_HEAD}" \
         "I3"
     fi
   fi
