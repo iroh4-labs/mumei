@@ -65,17 +65,22 @@ COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 # Fires before the active-feature check because golden protection is
 # project-wide and vehicle/feature independent.
 #
-# Targets are the actual mutation destinations — redirect targets plus the
-# arguments of mutating commands — NOT every path-shaped substring. This keeps
-# `echo "tests/golden/x" > notes.txt` (golden text is an echo arg, not a write
-# target) from false-denying, and glob-matches each target so leading-wildcard
-# patterns (e.g. `*.snap`) are still enforced.
+# Targets are the actual WRITE destinations — redirect targets plus the
+# write arguments of mutating commands — NOT every path-shaped substring and
+# NOT read-only inputs. Per-command semantics:
+#   rm / mv / truncate / tee : every non-flag arg (deleted / moved / written)
+#   cp                       : only the destination (last non-flag arg);
+#                              sources are reads
+#   sed                      : only with -i (in-place); the file operands.
+#                              Plain `sed 's/…/…/' file > out` reads file.
+# This keeps `echo "tests/golden/x" > notes.txt` and `cp golden out` (golden
+# as input) from false-denying, while still enforcing leading-wildcard globs.
 mumei_command_target_tokens() {
   local cmd="$1" seg
   # Redirect targets: the token following > or >> (not >&, not <).
   printf '%s' "$cmd" | grep -oE '>>?[[:space:]]*[^[:space:];|&<>]+' |
     sed -E 's/^>>?[[:space:]]*//'
-  # Mutating-command argument targets, per separator-delimited segment.
+  # Mutating-command write targets, per separator-delimited segment.
   # printf adds a trailing newline so `read` does not drop the final
   # (unterminated) segment.
   # shellcheck disable=SC2020  # mapping each separator char to a newline is intended
@@ -84,24 +89,54 @@ mumei_command_target_tokens() {
     local words=()
     read -ra words <<<"$seg"
     [[ "${#words[@]}" -gt 0 ]] || continue
+    local i a
     case "${words[0]}" in
-    rm | mv | cp | tee | truncate | sed)
-      local i a
+    rm | mv | truncate | tee)
       for ((i = 1; i < ${#words[@]}; i++)); do
         a="${words[i]}"
         case "$a" in -*) continue ;; esac
         printf '%s\n' "$a"
       done
       ;;
+    cp)
+      # destination = last non-flag argument
+      local dest=""
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        case "$a" in -*) continue ;; esac
+        dest="$a"
+      done
+      [[ -n "$dest" ]] && printf '%s\n' "$dest"
+      ;;
+    sed)
+      # only an in-place edit mutates the file operands
+      local inplace=0
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        case "${words[i]}" in -i | -i* | --in-place | --in-place=*) inplace=1 ;; esac
+      done
+      if [[ "$inplace" == "1" ]]; then
+        for ((i = 1; i < ${#words[@]}; i++)); do
+          a="${words[i]}"
+          case "$a" in -*) continue ;; esac
+          printf '%s\n' "$a"
+        done
+      fi
+      ;;
     esac
   done
 }
+_G2_PROOT="$(pwd -P 2>/dev/null || pwd)"
 while IFS= read -r _tok; do
   [[ -n "$_tok" ]] || continue
   # Strip a single layer of surrounding quotes so quoted targets glob-match.
   _tok="${_tok#[\"\']}"
   _tok="${_tok%[\"\']}"
-  if mumei_config_path_is_golden "$_tok"; then
+  [[ -n "$_tok" ]] || continue
+  # Canonicalize to a project-relative path so alternate spellings
+  # (./tests/golden/x, ../repo/tests/golden/x, symlinks) cannot bypass the glob.
+  _tok_rel="$(mumei_state_canonicalize_path "$_tok" 2>/dev/null || printf '%s' "$_tok")"
+  _tok_rel="${_tok_rel#"${_G2_PROOT}/"}"
+  if mumei_config_path_is_golden "$_tok" || mumei_config_path_is_golden "$_tok_rel"; then
     if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
       # shellcheck disable=SC1091
       source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"

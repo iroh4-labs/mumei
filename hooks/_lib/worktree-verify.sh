@@ -37,24 +37,6 @@ if ! declare -F mumei_config_golden_paths >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 fi
 
-# Normalize a pytest invocation so cached bytecode and plugin nondeterminism
-# cannot mask a failure. Only touches commands where pytest is actually the
-# invoked program (command position: start, after a separator, optionally
-# preceded by env-var assignments or `python -m`). A bare mention as an
-# argument (e.g. `npm test -- --grep pytest`) must NOT trigger normalization,
-# since the pytest-only flags would then fail in the worktree rerun and raise
-# a false I3 divergence. Every other runner is returned unchanged — we
-# normalize the environment we understand rather than blocklist what we don't.
-mumei_worktree_normalize_pytest() {
-  local cmd="$1"
-  local re='(^|[;&|][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+)*(python[0-9.]*[[:space:]]+-m[[:space:]]+)?pytest([[:space:]]|$)'
-  if printf '%s' "$cmd" | grep -qE "$re"; then
-    printf 'PYTHONDONTWRITEBYTECODE=1 %s -p no:cacheprovider -p no:randomly' "$cmd"
-  else
-    printf '%s' "$cmd"
-  fi
-}
-
 # Run $1 (the canonical test command) against a detached worktree at HEAD.
 # See file header for output contract. Never sets -e; all failure paths
 # return 0 with MUMEI_WT_RAN=0 so the caller falls back to working-tree only.
@@ -94,9 +76,26 @@ mumei_worktree_run_test() {
     git -C "$wt" checkout HEAD -- "$gp" >/dev/null 2>&1 || true
   done < <(mumei_config_golden_paths)
 
-  local ncmd out rc
-  ncmd="$(mumei_worktree_normalize_pytest "$test_cmd")"
-  out="$(cd "$wt" && set -o pipefail && eval "$ncmd" 2>&1)"
+  # Run inside the worktree with a normalized, clean-tree-anchored environment:
+  #   - CLAUDE_PROJECT_DIR is rebound to the worktree so a test command that
+  #     references it reads the clean HEAD tree, not the dirty original.
+  #   - PYTHONDONTWRITEBYTECODE avoids stale .pyc masking a failure.
+  #   - PYTEST_ADDOPTS disables the cache / random-ordering plugins for pytest
+  #     regardless of where pytest sits in the command (env-based, so chained
+  #     commands like `cd app && pytest && touch x` are NOT string-rewritten).
+  # These are harmless to non-pytest / non-Python runners. Hard-coded absolute
+  # paths in MUMEI_TEST_CMD that point outside the worktree can still read the
+  # dirty tree — that is an operator-trust boundary (same as MUMEI_TEST_CMD
+  # honesty), not something this hook can redirect.
+  local out rc
+  out="$(
+    cd "$wt" || exit 127
+    set -o pipefail
+    export CLAUDE_PROJECT_DIR="$wt"
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTEST_ADDOPTS="-p no:cacheprovider -p no:randomly${PYTEST_ADDOPTS:+ $PYTEST_ADDOPTS}"
+    eval "$test_cmd" 2>&1
+  )"
   rc=$?
   if [[ "$rc" -ne 0 ]]; then
     # shellcheck disable=SC2034  # read by the caller (I3) after this returns

@@ -108,6 +108,27 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G2: cp with golden as SOURCE (read-only) is allowed" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "cp tests/golden/snap.json out/snap.json")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "G2: sed without -i reading a golden path is allowed" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "sed 's/a/b/' tests/golden/snap.json > out.txt")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "G2: golden deny is not bypassed by a ./ alternate spelling" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "rm ./tests/golden/snap.json")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
 @test "G2: MUMEI_BYPASS=1 allows mutating a golden path" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   local input_file

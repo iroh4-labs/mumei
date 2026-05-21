@@ -29,44 +29,6 @@ _git_repo_with_commit() {
   git commit -qm init
 }
 
-# --- normalize_pytest ---
-
-@test "normalize_pytest adds env + flags only for pytest" {
-  run mumei_worktree_normalize_pytest "pytest -q"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider -p no:randomly" ]
-}
-
-@test "normalize_pytest leaves npm test unchanged" {
-  run mumei_worktree_normalize_pytest "npm test --silent"
-  [ "$status" -eq 0 ]
-  [ "$output" = "npm test --silent" ]
-}
-
-@test "normalize_pytest leaves cargo test unchanged" {
-  run mumei_worktree_normalize_pytest "cargo test --quiet"
-  [ "$status" -eq 0 ]
-  [ "$output" = "cargo test --quiet" ]
-}
-
-@test "normalize_pytest does NOT match pytest mentioned as an argument" {
-  run mumei_worktree_normalize_pytest "npm test -- --grep pytest"
-  [ "$status" -eq 0 ]
-  [ "$output" = "npm test -- --grep pytest" ]
-}
-
-@test "normalize_pytest matches python -m pytest" {
-  run mumei_worktree_normalize_pytest "python -m pytest tests/"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PYTHONDONTWRITEBYTECODE=1 python -m pytest tests/ -p no:cacheprovider -p no:randomly" ]
-}
-
-@test "normalize_pytest matches pytest after a separator" {
-  run mumei_worktree_normalize_pytest "cd app && pytest -q"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PYTHONDONTWRITEBYTECODE=1 cd app && pytest -q -p no:cacheprovider -p no:randomly" ]
-}
-
 # --- run_test no-op paths ---
 
 @test "run_test is a no-op on empty test command" {
@@ -133,6 +95,16 @@ _git_repo_with_commit() {
   # The worktree starts at HEAD (v1) and golden is force-checked-out; the
   # tampered working-tree content must not be visible.
   mumei_worktree_run_test "grep -q v1 data.txt"
+  rc=$?
+  [ "$rc" -eq 0 ]
+  [ "$MUMEI_WT_RAN" -eq 1 ]
+}
+
+@test "run_test does not mangle a chained test command (no string rewrite)" {
+  _git_repo_with_commit
+  # A chained command must run verbatim in the worktree; pytest flag handling
+  # is env-based (PYTEST_ADDOPTS), so the trailing command is not corrupted.
+  mumei_worktree_run_test "true && touch done.marker"
   rc=$?
   [ "$rc" -eq 0 ]
   [ "$MUMEI_WT_RAN" -eq 1 ]
