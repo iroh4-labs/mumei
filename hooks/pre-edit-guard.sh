@@ -127,15 +127,16 @@ fi
 # measurement (hooks/_lib/worktree-verify.sh) is the deeper wall for Bash-route
 # tampering; G1 is the direct Edit/Write block.
 #
-# Match BOTH the raw project-relative FILE_PATH and a canonicalized
-# project-relative path (CANON_PATH with the project root stripped), so an
-# alternate spelling (./tests/golden/x, ../repo/tests/golden/x, a symlink)
-# that resolves to the same protected file cannot bypass the glob via a
-# string mismatch.
+# Match the canonicalized project-relative path (CANON_PATH with the project
+# root stripped) ONLY. Matching the raw FILE_PATH as well would both miss
+# alternate spellings AND false-block a non-golden write that merely traverses
+# a golden prefix (e.g. tests/golden/../safe.txt resolves to safe.txt but the
+# raw string matches tests/golden/*). The canonical form resolves ./ / .. /
+# symlinks, so it is the single correct thing to match.
 _GOLDEN_REL="$CANON_PATH"
 _GOLDEN_PROOT="$(pwd -P 2>/dev/null || pwd)"
 _GOLDEN_REL="${_GOLDEN_REL#"${_GOLDEN_PROOT}/"}"
-if mumei_config_path_is_golden "$FILE_PATH" || mumei_config_path_is_golden "$_GOLDEN_REL"; then
+if mumei_config_path_is_golden "$_GOLDEN_REL"; then
   if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"

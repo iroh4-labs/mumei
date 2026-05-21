@@ -65,6 +65,13 @@ _edit_input() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G1: a traversal path resolving outside golden is not false-denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_edit_input "tests/golden/../safe.txt")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "G1: editing a non-golden path is allowed" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   _run_hook "$(_edit_input "src/app.py")"

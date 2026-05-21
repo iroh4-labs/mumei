@@ -81,14 +81,17 @@ mumei_command_target_tokens() {
   local cmd="$1" seg
   # Redirect targets: the token following a redirection operator —
   # `>` / `>>` / `>|` (clobber), with an optional fd or `&` prefix
-  # (`2>`, `1>>`, `&>`). Strip only quoted spans that CONTAIN a `>` so a quoted
+  # (`2>`, `1>>`, `&>`). Strip quoted spans that CONTAIN a `>` so a quoted
   # literal `>` (e.g. `echo 'note > golden'`) is not mistaken for a redirection,
   # while a quoted redirect *target* (`echo x > "conftest.py"`) is preserved.
-  # That also removes the need for a whitespace anchor, so no-space forms like
-  # `echo x>golden` are still caught. Best-effort: nested / escaped quotes are
-  # not parsed — the clean-HEAD worktree measurement is the authoritative guard.
+  # Also strip `[[ … ]]` / `(( … ))` spans so a `>` *comparison*
+  # (`[[ a > conftest.py ]]`) is not misread as a redirect. That also removes
+  # the need for a whitespace anchor, so no-space forms like `echo x>golden`
+  # are still caught. Best-effort: nested / escaped quotes are not parsed —
+  # the clean-HEAD worktree measurement is the authoritative guard.
   local unquoted
-  unquoted="$(printf '%s' "$cmd" | sed -e "s/'[^']*>[^']*'//g" -e 's/"[^"]*>[^"]*"//g')"
+  unquoted="$(printf '%s' "$cmd" |
+    sed -e "s/'[^']*>[^']*'//g" -e 's/"[^"]*>[^"]*"//g' -e 's/\[\[[^]]*\]\]//g' -e 's/(([^)]*))//g')"
   printf '%s' "$unquoted" | grep -oE '([0-9]+|&)?>>?\|?[[:space:]]*[^[:space:];|&<>]+' |
     sed -E 's/^([0-9]+|&)?>>?\|?[[:space:]]*//'
   # Mutating-command write targets, per separator-delimited segment.
@@ -183,8 +186,10 @@ while IFS= read -r _tok; do
   # (./tests/golden/x, ../repo/tests/golden/x, symlinks) cannot bypass the glob.
   _tok_rel="$(mumei_state_canonicalize_path "$_tok" 2>/dev/null || printf '%s' "$_tok")"
   _tok_rel="${_tok_rel#"${_G2_PROOT}/"}"
-  if mumei_config_path_is_golden "$_tok" || mumei_config_path_is_golden "$_tok_rel" ||
-    mumei_config_dir_holds_golden_glob "$_tok" || mumei_config_dir_holds_golden_glob "$_tok_rel"; then
+  # Match the canonicalized path ONLY: matching the raw token too would
+  # false-deny a non-golden write that traverses a golden prefix
+  # (e.g. `> tests/golden/../safe.txt` canonicalizes to safe.txt).
+  if mumei_config_path_is_golden "$_tok_rel" || mumei_config_dir_holds_golden_glob "$_tok_rel"; then
     if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
       # shellcheck disable=SC1091
       source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"

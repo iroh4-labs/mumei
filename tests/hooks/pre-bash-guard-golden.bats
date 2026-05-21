@@ -199,6 +199,20 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G2: a traversal path resolving outside golden is not false-denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "echo x > tests/golden/../safe.txt")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "G2: a [[ > ]] comparison is not misread as a redirect" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "[[ a > conftest.py ]] && echo ok")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "G2: MUMEI_BYPASS=1 allows mutating a golden path" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   local input_file
