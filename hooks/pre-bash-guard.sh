@@ -2,6 +2,7 @@
 # PreToolUse Bash hook.
 # Rules covered:
 #   I3: git commit while tests are red -> deny (vehicle-independent)
+#   X4: record the commit-gate test result (exit code) to verify-log (internal, no deny)
 #   R2: git push while the latest review verdict is MAJOR_ISSUES -> deny
 #       (checks both .mumei/specs/<key>/reviews/ and .mumei/plans/<key>/reviews/)
 #   W2: git commit while the current Wave still has unchecked [ ] tasks -> deny
@@ -41,6 +42,8 @@ source "${PLUGIN_ROOT}/hooks/_lib/log.sh"
 source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/verify-log.sh"
 
 INPUT="$(cat)"
 COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
@@ -109,27 +112,60 @@ if mumei_is_git_commit "$COMMAND"; then
   fi
 
   # --- I3: git commit while tests are red ---
-  # Detect the project's test runner and execute it. Deny if it exits non-zero.
-  TEST_CMD=""
-  if [[ -f "package.json" ]]; then
-    if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
-      TEST_CMD="npm test --silent"
+  # MUMEI_TEST_CMD overrides auto-detect (handles non-standard runners such as
+  # mumei's own bats suite, which auto-detect cannot find). Otherwise detect
+  # the project's test runner. Deny if it exits non-zero.
+  TEST_CMD="${MUMEI_TEST_CMD:-}"
+  # A ';' or '||' in MUMEI_TEST_CMD can mask a failing test exit (the gate
+  # would observe the trailing command's status), weakening I3. MUMEI_TEST_CMD
+  # is operator-controlled (same trust boundary as MUMEI_BYPASS), so warn
+  # rather than block — but make the risk visible.
+  # Pipelines ('|') are handled by pipefail below, so they are NOT warned.
+  # Sequence (';'), or-chain ('||'), and background ('&') can still mask a
+  # failing exit even with pipefail.
+  case "$TEST_CMD" in
+  *";"* | *"||"* | *"&"*)
+    mumei_log_warn "MUMEI_TEST_CMD contains ';', '||', or '&'; a failing test exit may be masked (sequence/or-chain/background), weakening the I3 commit gate"
+    ;;
+  esac
+  if [[ "$TEST_CMD" == *$'\n'* ]]; then
+    mumei_log_warn "MUMEI_TEST_CMD contains a newline; eval treats it as a command separator that can mask a failing test exit"
+  fi
+  if [[ -z "$TEST_CMD" ]]; then
+    if [[ -f "package.json" ]]; then
+      if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then
+        TEST_CMD="npm test --silent"
+      fi
+    elif [[ -f "pyproject.toml" ]]; then
+      if grep -q 'pytest' pyproject.toml 2>/dev/null; then
+        TEST_CMD="pytest -q"
+      fi
+    elif [[ -f "Cargo.toml" ]]; then
+      TEST_CMD="cargo test --quiet"
+    elif [[ -f "go.mod" ]]; then
+      TEST_CMD="go test ./..."
     fi
-  elif [[ -f "pyproject.toml" ]]; then
-    if grep -q 'pytest' pyproject.toml 2>/dev/null; then
-      TEST_CMD="pytest -q"
-    fi
-  elif [[ -f "Cargo.toml" ]]; then
-    TEST_CMD="cargo test --quiet"
-  elif [[ -f "go.mod" ]]; then
-    TEST_CMD="go test ./..."
   fi
 
   if [[ -n "$TEST_CMD" ]]; then
     mumei_log_info "running tests before commit: ${TEST_CMD}"
-    if ! TEST_OUTPUT="$(eval "$TEST_CMD" 2>&1)"; then
-      # Truncate test output to the last 30 lines for the deny reason
+    # set -o pipefail in a subshell so a failing stage in a piped test command
+    # (e.g. `pytest | tee log`) propagates to the exit code instead of being
+    # masked by the last stage. The subshell scopes pipefail to this eval only.
+    TEST_OUTPUT="$(
+      set -o pipefail
+      eval "$TEST_CMD" 2>&1
+    )"
+    TEST_EXIT=$?
+    # On failure capture the last 30 lines for both the verify-log record and
+    # the deny reason; empty on success (excerpt is omitted from the record).
+    TEST_TAIL=""
+    if [[ "$TEST_EXIT" -ne 0 ]]; then
       TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
+    fi
+    # X4: record the observed commit-gate exit code (pass and fail) to verify-log.
+    mumei_verify_log_append "$FEATURE" "commit-gate" "$TEST_CMD" "$TEST_EXIT" "$TEST_TAIL" || true
+    if [[ "$TEST_EXIT" -ne 0 ]]; then
       mumei_deny \
         "Tests failing. Fix before committing." \
         "Test command: ${TEST_CMD}\n\n${TEST_TAIL}" \

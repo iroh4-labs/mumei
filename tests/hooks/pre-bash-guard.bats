@@ -179,3 +179,58 @@ EOF
   [ "$output" = "" ]
   [ -z "$stderr" ]
 }
+
+# ─── X4 / I3: MUMEI_TEST_CMD override + commit-gate verify-log record ───
+
+# Mark Wave 1 complete so W2 passes and the I3 / X4 path is reached.
+_complete_wave1() {
+  sed -i.bak 's/- \[ \] 1\.1/- [x] 1.1/' .mumei/specs/REQ-1-foo/tasks.md
+  rm .mumei/specs/REQ-1-foo/tasks.md.bak
+}
+
+@test "MUMEI_TEST_CMD pass records a commit-gate exit 0 and allows commit (X4)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  MUMEI_TEST_CMD=true _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
+  [ "$(jq -r '.source' <<<"$rec")" = "commit-gate" ]
+  [ "$(jq -r '.exit_code' <<<"$rec")" = "0" ]
+  [ "$(jq -r '.command' <<<"$rec")" = "true" ]
+}
+
+@test "MUMEI_TEST_CMD fail records commit-gate non-zero exit + excerpt, and denies (I3 + X4)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  MUMEI_TEST_CMD="sh -c 'echo TESTFAIL; exit 3'" _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"Tests failing"* ]]
+  rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
+  [ "$(jq -r '.source' <<<"$rec")" = "commit-gate" ]
+  [ "$(jq -r '.exit_code' <<<"$rec")" = "3" ]
+  [[ "$(jq -r '.excerpt' <<<"$rec")" == *"TESTFAIL"* ]]
+}
+
+@test "no test runner and no MUMEI_TEST_CMD → no spurious verify-log record" {
+  _init_feature_with_tasks
+  _complete_wave1
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  [ ! -f .mumei/specs/REQ-1-foo/verify-log.jsonl ]
+}
+
+@test "MUMEI_TEST_CMD pipeline failure is caught via pipefail (J)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  # `false | cat` exits 0 without pipefail; with pipefail the failing stage
+  # propagates, so I3 must deny the commit.
+  MUMEI_TEST_CMD="false | cat" _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+}
