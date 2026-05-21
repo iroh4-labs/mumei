@@ -72,3 +72,15 @@ _ctx() { jq -r '.hookSpecificOutput.additionalContext' <<<"$output"; }
   # line 6+ of the artifact must be excluded by the head -n 5 cap.
   [[ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")" != *"line 10"* ]]
 }
+
+@test "falls back to 200 lines (and still injects the artifact) when MUMEI_CONTEXT_LINES is non-numeric" {
+  _init_feature REQ-1-foo implement 1
+  printf '# foo\nbody line\n## Open Questions\nNone\n' >.mumei/specs/REQ-1-foo/requirements.md
+  run --separate-stderr bash -c \
+    "printf '%s' '{\"agent_id\":\"a1\"}' | MUMEI_CONTEXT_LINES=200a bash '${CLAUDE_PLUGIN_ROOT}/hooks/subagent-context-inject.sh'"
+  [ "$status" -eq 0 ]
+  # artifact body must still be present (no silent context loss from a head failure).
+  [[ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")" == *"body line"* ]]
+  [[ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")" == *"first 200 lines"* ]]
+  [[ "$stderr" == *"not a positive integer"* ]]
+}

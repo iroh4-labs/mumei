@@ -50,6 +50,13 @@ ARTIFACT=""
 CONTEXT="$FRAMING_PREFIX"
 if [[ -n "$ARTIFACT" && -f "$ARTIFACT" ]]; then
   LINES="${MUMEI_CONTEXT_LINES:-200}"
+  # Validate before feeding head -n: a non-numeric value would make head fail
+  # and silently drop the artifact body from additionalContext (the framing
+  # prefix would ship without the spec, with no operator signal).
+  if ! [[ "$LINES" =~ ^[0-9]+$ ]]; then
+    mumei_log_warn "[mumei] MUMEI_CONTEXT_LINES='${LINES}' is not a positive integer; falling back to 200."
+    LINES=200
+  fi
   CONTEXT="${FRAMING_PREFIX}
 
 --- Active feature spec (${ARTIFACT}, first ${LINES} lines) ---
