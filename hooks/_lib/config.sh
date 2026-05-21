@@ -53,3 +53,28 @@ mumei_config_path_is_golden() {
   done < <(mumei_config_golden_paths)
   return 1
 }
+
+# Exit 0 if $1 is a directory that holds golden files via a wildcard glob
+# (some golden pattern is "<dir>/<glob>"). Catches writes INTO a golden
+# directory — e.g. `cp -t tests/golden payload` / `mv -t tests/golden x` —
+# when the configured pattern is a directory wildcard like `tests/golden/*`
+# and only the directory token is visible to the command parser.
+mumei_config_dir_holds_golden_glob() {
+  local dir="${1%/}" pat rest
+  [[ -n "$dir" ]] || return 1
+  while IFS= read -r pat; do
+    [[ -n "$pat" ]] || continue
+    case "$pat" in
+    "$dir"/*)
+      rest="${pat#"$dir"/}"
+      # Only when the remainder is itself a glob (any file in the dir could be
+      # golden); a specific file (tests/golden/snap.json) does not flag a dir
+      # write, to keep false positives down.
+      case "$rest" in
+      *[\*?[]*) return 0 ;;
+      esac
+      ;;
+    esac
+  done < <(mumei_config_golden_paths)
+  return 1
+}

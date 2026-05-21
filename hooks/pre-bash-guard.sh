@@ -160,7 +160,8 @@ while IFS= read -r _tok; do
   # (./tests/golden/x, ../repo/tests/golden/x, symlinks) cannot bypass the glob.
   _tok_rel="$(mumei_state_canonicalize_path "$_tok" 2>/dev/null || printf '%s' "$_tok")"
   _tok_rel="${_tok_rel#"${_G2_PROOT}/"}"
-  if mumei_config_path_is_golden "$_tok" || mumei_config_path_is_golden "$_tok_rel"; then
+  if mumei_config_path_is_golden "$_tok" || mumei_config_path_is_golden "$_tok_rel" ||
+    mumei_config_dir_holds_golden_glob "$_tok" || mumei_config_dir_holds_golden_glob "$_tok_rel"; then
     if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
       # shellcheck disable=SC1091
       source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"

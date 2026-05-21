@@ -68,6 +68,13 @@ mumei_worktree_run_test() {
   # be a no-op here (and git pathspec globs would not expand a quoted pattern
   # anyway).
   #
+  # Initialize submodules in the linked worktree (best-effort). A fresh
+  # worktree has no submodule contents; tests that read submodule files would
+  # otherwise fail in the clean tree but pass in the working tree, raising a
+  # false I3 divergence. Failure / absence of submodules is a no-op.
+  git -C "$wt" submodule update --init --recursive >/dev/null 2>&1 || true
+
+  #
   # Run inside the worktree with a normalized, clean-tree-anchored environment:
   #   - CLAUDE_PROJECT_DIR is rebound to the worktree so a test command that
   #     references it reads the clean HEAD tree, not the dirty original.

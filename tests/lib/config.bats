@@ -79,3 +79,21 @@ _write_config() {
   run mumei_config_path_is_golden ""
   [ "$status" -eq 1 ]
 }
+
+@test "mumei_config_dir_holds_golden_glob matches a dir holding a wildcard golden" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  run mumei_config_dir_holds_golden_glob "tests/golden"
+  [ "$status" -eq 0 ]
+}
+
+@test "mumei_config_dir_holds_golden_glob ignores a dir holding only a specific golden file" {
+  _write_config '{"golden_paths": ["tests/golden/snap.json"]}'
+  run mumei_config_dir_holds_golden_glob "tests/golden"
+  [ "$status" -eq 1 ]
+}
+
+@test "mumei_config_dir_holds_golden_glob does not match an unrelated dir" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  run mumei_config_dir_holds_golden_glob "tests/goldenextra"
+  [ "$status" -eq 1 ]
+}

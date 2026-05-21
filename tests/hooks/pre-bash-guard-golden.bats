@@ -150,9 +150,16 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
-@test "G2: cp -t into a golden directory is denied" {
-  _write_config '{"golden_paths": ["tests/golden*"]}'
+@test "G2: cp -t into a golden directory (documented /* glob) is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
   _run_hook "$(_bash_input "cp -t tests/golden payload")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: mv -t into a golden directory (documented /* glob) is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "mv -t tests/golden payload")"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
