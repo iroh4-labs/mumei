@@ -81,13 +81,14 @@ mumei_command_target_tokens() {
   local cmd="$1" seg
   # Redirect targets: the token following a redirection operator —
   # `>` / `>>` / `>|` (clobber), with an optional fd or `&` prefix
-  # (`2>`, `1>>`, `&>`). Quoted spans are stripped first so a quoted literal
-  # `>` (e.g. `echo 'note > golden'`) is not mistaken for a redirection; that
-  # removes the need for a whitespace anchor, so no-space forms like
+  # (`2>`, `1>>`, `&>`). Strip only quoted spans that CONTAIN a `>` so a quoted
+  # literal `>` (e.g. `echo 'note > golden'`) is not mistaken for a redirection,
+  # while a quoted redirect *target* (`echo x > "conftest.py"`) is preserved.
+  # That also removes the need for a whitespace anchor, so no-space forms like
   # `echo x>golden` are still caught. Best-effort: nested / escaped quotes are
   # not parsed — the clean-HEAD worktree measurement is the authoritative guard.
   local unquoted
-  unquoted="$(printf '%s' "$cmd" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')"
+  unquoted="$(printf '%s' "$cmd" | sed -e "s/'[^']*>[^']*'//g" -e 's/"[^"]*>[^"]*"//g')"
   printf '%s' "$unquoted" | grep -oE '([0-9]+|&)?>>?\|?[[:space:]]*[^[:space:];|&<>]+' |
     sed -E 's/^([0-9]+|&)?>>?\|?[[:space:]]*//'
   # Mutating-command write targets, per separator-delimited segment.
@@ -101,7 +102,23 @@ mumei_command_target_tokens() {
     [[ "${#words[@]}" -gt 0 ]] || continue
     local i a
     case "${words[0]}" in
-    rm | mv | truncate | tee)
+    rm | truncate | tee)
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        case "$a" in -*) continue ;; esac
+        printf '%s\n' "$a"
+      done
+      ;;
+    mv)
+      # all non-flag args (covers `mv src dest`) PLUS any -t/--target-directory
+      # directory (separate / attached `-tDIR` / `--target-directory=DIR`).
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        case "${words[i]}" in
+        -t | --target-directory) printf '%s\n' "${words[i + 1]:-}" ;;
+        -t?*) printf '%s\n' "${words[i]#-t}" ;;
+        --target-directory=*) printf '%s\n' "${words[i]#--target-directory=}" ;;
+        esac
+      done
       for ((i = 1; i < ${#words[@]}; i++)); do
         a="${words[i]}"
         case "$a" in -*) continue ;; esac
@@ -109,13 +126,18 @@ mumei_command_target_tokens() {
       done
       ;;
     cp)
-      # destination = -t/--target-directory DIR if present (GNU), else the
-      # last non-flag argument; sources are reads.
+      # destination = -t/--target-directory DIR if present (GNU; separate /
+      # attached `-tDIR` / `--target-directory=DIR`), else the last non-flag
+      # argument; sources are reads.
       local dest=""
       for ((i = 1; i < ${#words[@]}; i++)); do
         case "${words[i]}" in
         -t | --target-directory)
           dest="${words[i + 1]:-}"
+          break
+          ;;
+        -t?*)
+          dest="${words[i]#-t}"
           break
           ;;
         --target-directory=*)

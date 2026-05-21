@@ -164,6 +164,27 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G2: a quoted redirect target (real redirect) is denied" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "echo x > \"conftest.py\"")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: cp -tDIR (attached) into a golden directory is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "cp -ttests/golden payload")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: mv --target-directory= into a golden directory is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "mv --target-directory=tests/golden payload")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
 @test "G2: a no-space redirect to a golden path is denied" {
   _write_config '{"golden_paths": ["conftest.py"]}'
   _run_hook "$(_bash_input "echo x>conftest.py")"
