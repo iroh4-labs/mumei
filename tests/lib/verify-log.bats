@@ -17,36 +17,50 @@ teardown() {
   rm -rf "$MUMEI_TEST_TMPDIR"
 }
 
-@test "mumei_verify_log_path returns the spec-vehicle path by default" {
+# active-vehicle resolution only checks for state.json existence, so a bare
+# `{}` is enough to mark a feature as the spec / plan vehicle.
+_spec_state() {
+  mkdir -p ".mumei/specs/REQ-1-foo"
+  echo '{}' >".mumei/specs/REQ-1-foo/state.json"
+}
+_plan_state() {
+  mkdir -p ".mumei/plans/fix-login"
+  echo '{}' >".mumei/plans/fix-login/state.json"
+}
+
+@test "mumei_verify_log_path returns the spec path when spec state exists" {
+  _spec_state
   run mumei_verify_log_path "REQ-1-foo"
   [ "$status" -eq 0 ]
   [ "$output" = ".mumei/specs/REQ-1-foo/verify-log.jsonl" ]
 }
 
-@test "mumei_verify_log_path returns the plan-vehicle path when state says plan" {
-  mkdir -p ".mumei/plans/fix-login"
-  jq -n '{vehicle:"plan",slug:"fix-login",phase:"implement"}' >".mumei/plans/fix-login/state.json"
+@test "mumei_verify_log_path returns the plan path when plan state exists" {
+  _plan_state
   run mumei_verify_log_path "fix-login"
   [ "$status" -eq 0 ]
   [ "$output" = ".mumei/plans/fix-login/verify-log.jsonl" ]
 }
 
-@test "append creates the file and writes one commit-gate JSONL record" {
-  mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "0"
-  [ -f ".mumei/specs/REQ-1-foo/verify-log.jsonl" ]
-  lines="$(wc -l <".mumei/specs/REQ-1-foo/verify-log.jsonl")"
-  [ "$lines" -eq 1 ]
-  rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
-  [ "$(jq -r '.source' <<<"$rec")" = "commit-gate" ]
-  [ "$(jq -r '.feature' <<<"$rec")" = "REQ-1-foo" ]
-  [ "$(jq -r '.vehicle' <<<"$rec")" = "spec" ]
-  [ "$(jq -r '.command' <<<"$rec")" = "npm test" ]
-  [ "$(jq -r '.exit_code' <<<"$rec")" = "0" ]
+@test "mumei_verify_log_path is non-zero when no active vehicle state exists (D/E)" {
+  run mumei_verify_log_path "ghost"
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
 }
 
-@test "agent-run source is recorded with vehicle=plan" {
-  mkdir -p ".mumei/plans/fix-login"
-  jq -n '{vehicle:"plan",slug:"fix-login",phase:"implement"}' >".mumei/plans/fix-login/state.json"
+@test "append creates the file and writes one commit-gate record" {
+  _spec_state
+  mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "0"
+  [ -f ".mumei/specs/REQ-1-foo/verify-log.jsonl" ]
+  rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
+  [ "$(jq -r '.source' <<<"$rec")" = "commit-gate" ]
+  [ "$(jq -r '.vehicle' <<<"$rec")" = "spec" ]
+  [ "$(jq -r '.exit_code' <<<"$rec")" = "0" ]
+  [ "$(jq -r '.command' <<<"$rec")" = "npm test" ]
+}
+
+@test "append records agent-run with vehicle=plan" {
+  _plan_state
   mumei_verify_log_append "fix-login" "agent-run" "pytest -q" "1"
   rec="$(cat .mumei/plans/fix-login/verify-log.jsonl)"
   [ "$(jq -r '.source' <<<"$rec")" = "agent-run" ]
@@ -54,29 +68,38 @@ teardown() {
   [ "$(jq -r '.exit_code' <<<"$rec")" = "1" ]
 }
 
-@test "non-numeric exit_code coerces to null" {
-  mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "boom"
+@test "empty / non-numeric exit_code coerces to null" {
+  _spec_state
+  mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" ""
   rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
   [ "$(jq -r '.exit_code' <<<"$rec")" = "null" ]
 }
 
 @test "head is omitted when empty and present when provided" {
+  _spec_state
   mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "0"
   rec="$(cat .mumei/specs/REQ-1-foo/verify-log.jsonl)"
   [ "$(jq 'has("head")' <<<"$rec")" = "false" ]
-
-  mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "1" "FAIL: assertion"
+  mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "1" "FAIL: boom"
   rec="$(tail -n1 .mumei/specs/REQ-1-foo/verify-log.jsonl)"
-  [ "$(jq -r '.head' <<<"$rec")" = "FAIL: assertion" ]
+  [ "$(jq -r '.head' <<<"$rec")" = "FAIL: boom" ]
 }
 
-@test "empty feature is a no-op (no file, no crash)" {
+@test "empty feature is a no-op (no crash, no dir)" {
   run mumei_verify_log_append "" "commit-gate" "npm test" "0"
   [ "$status" -eq 0 ]
   [ ! -d ".mumei" ]
 }
 
+@test "no active vehicle (stale current) writes no record (E)" {
+  run mumei_verify_log_append "ghost-feature" "agent-run" "npm test" "0"
+  [ "$status" -eq 0 ]
+  [ ! -e ".mumei/specs/ghost-feature/verify-log.jsonl" ]
+  [ ! -e ".mumei/plans/ghost-feature/verify-log.jsonl" ]
+}
+
 @test "JSONL: every line parses as a valid JSON object" {
+  _spec_state
   mumei_verify_log_append "REQ-1-foo" "commit-gate" "npm test" "0"
   mumei_verify_log_append "REQ-1-foo" "agent-run" "pytest" "1" "tail"
   while IFS= read -r line; do
@@ -84,7 +107,7 @@ teardown() {
   done <".mumei/specs/REQ-1-foo/verify-log.jsonl"
 }
 
-@test "mumei_is_test_command: known runners return 0, others non-zero" {
+@test "mumei_is_test_command: known runners at segment start return 0" {
   run mumei_is_test_command "npm test"
   [ "$status" -eq 0 ]
   run mumei_is_test_command "pytest -q"
@@ -93,18 +116,36 @@ teardown() {
   [ "$status" -eq 0 ]
   run mumei_is_test_command "go test ./..."
   [ "$status" -eq 0 ]
-  run mumei_is_test_command "ls -la"
+}
+
+@test "mumei_is_test_command: substring-only mentions do NOT match (B)" {
+  run mumei_is_test_command "cat pytest.ini"
   [ "$status" -ne 0 ]
-  # F-002: a git command embedding a runner name in its message is NOT a test run.
-  run mumei_is_test_command "git commit -m 'wire up go test in CI'"
+  run mumei_is_test_command "go testdata/gen.go"
+  [ "$status" -ne 0 ]
+  run mumei_is_test_command "echo cargo test"
+  [ "$status" -ne 0 ]
+  run mumei_is_test_command "ls -la"
   [ "$status" -ne 0 ]
 }
 
-@test "mumei_is_test_command: MUMEI_TEST_CMD substring match only when set" {
-  # "task check-all" matches none of the built-in runner patterns, so it is
-  # a test command ONLY when MUMEI_TEST_CMD names it.
-  MUMEI_TEST_CMD="task check-all" run mumei_is_test_command "task check-all"
+@test "mumei_is_test_command: runner in a chain segment matches, git commit does not (A)" {
+  run mumei_is_test_command "npm test && git status"
   [ "$status" -eq 0 ]
-  run mumei_is_test_command "task check-all"
+  run mumei_is_test_command "pytest -q ; git add ."
+  [ "$status" -eq 0 ]
+  run mumei_is_test_command "git commit -m 'wire up go test'"
   [ "$status" -ne 0 ]
+}
+
+@test "mumei_is_test_command: MUMEI_TEST_CMD matches as a literal prefix (C)" {
+  MUMEI_TEST_CMD="task check" run mumei_is_test_command "task check ./..."
+  [ "$status" -eq 0 ]
+  run mumei_is_test_command "task check ./..."
+  [ "$status" -ne 0 ]
+  # glob metacharacters are literal, not pattern
+  MUMEI_TEST_CMD="a*b" run mumei_is_test_command "axxb run"
+  [ "$status" -ne 0 ]
+  MUMEI_TEST_CMD="a*b" run mumei_is_test_command "a*b run"
+  [ "$status" -eq 0 ]
 }

@@ -3,7 +3,9 @@
 #
 # Target file: .mumei/specs/<feature>/verify-log.jsonl (spec vehicle) or
 # .mumei/plans/<slug>/verify-log.jsonl (plan vehicle). Per-feature,
-# JSONL append-only.
+# JSONL append-only. The vehicle is resolved with mumei_state_active_vehicle
+# so dual-state (both dirs present) lands in the spec dir, matching the
+# repo-wide active-vehicle precedence.
 #
 # Two observation sources record the same invariant (tests green) from
 # different angles, distinguished by the `source` field:
@@ -30,50 +32,53 @@ if ! declare -F mumei_log_info >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
-if ! declare -F mumei_state_is_plan_vehicle >/dev/null 2>&1; then
+if ! declare -F mumei_state_active_vehicle >/dev/null 2>&1; then
   # shellcheck disable=SC1091
   source "$(dirname "${BASH_SOURCE[0]}")/state.sh"
 fi
 
-# Echo the verify-log path for a given feature. spec-vehicle features land
-# under .mumei/specs/, plan-vehicle slugs under .mumei/plans/, so the
-# verify-log travels with the feature into archive/. No I/O, no mkdir.
+# Echo the verify-log path for a given feature, resolved via the active
+# vehicle (spec-preferred on dual-state). Returns non-zero with no output
+# when no active vehicle state exists, so callers can skip silently rather
+# than fabricate a record under a stale/deleted feature. No mkdir.
 mumei_verify_log_path() {
-  local feature="$1"
-  if mumei_state_is_plan_vehicle "$feature" 2>/dev/null; then
-    printf '.mumei/plans/%s/verify-log.jsonl' "$feature"
-  else
-    printf '.mumei/specs/%s/verify-log.jsonl' "$feature"
-  fi
+  local feature="$1" vehicle
+  vehicle="$(mumei_state_active_vehicle "$feature" 2>/dev/null)"
+  case "$vehicle" in
+  plan) printf '.mumei/plans/%s/verify-log.jsonl' "$feature" ;;
+  spec) printf '.mumei/specs/%s/verify-log.jsonl' "$feature" ;;
+  *) return 1 ;;
+  esac
 }
 
 # Append one observed test run to the verify-log. Silent on success.
-# No-op when feature is empty (keeps non-mumei callers safe).
+# No-op when feature is empty or no active vehicle state exists.
 # Args: feature source command exit_code [head]
 #   source    : "commit-gate" | "agent-run"
-#   exit_code : observed integer exit code (non-numeric coerced to null)
+#   exit_code : observed integer exit code (non-numeric / empty -> JSON null)
 #   head      : optional tail of test output (omitted from record when empty)
 mumei_verify_log_append() {
   local feature="$1" src="$2" command="$3" exit_code="$4" head="${5:-}"
   [[ -n "$feature" ]] || return 0
-  local path vehicle exit_json
-  path="$(mumei_verify_log_path "$feature")"
-  if mumei_state_is_plan_vehicle "$feature" 2>/dev/null; then
-    vehicle="plan"
-  else
-    vehicle="spec"
-  fi
-  # exit_code must serialize as a JSON number; coerce non-numeric to null.
+  local path
+  path="$(mumei_verify_log_path "$feature")" || return 0
+  local vehicle
+  case "$path" in
+  .mumei/plans/*) vehicle="plan" ;;
+  *) vehicle="spec" ;;
+  esac
+  local exit_json
   if [[ "$exit_code" =~ ^-?[0-9]+$ ]]; then
     exit_json="$exit_code"
   else
-    # Non-numeric / empty exit code records as JSON null — never a fabricated 0.
+    # Empty / non-numeric exit code records as JSON null — never a fabricated 0.
     exit_json="null"
   fi
-  # Cap head by characters: 500 chars of 4-byte UTF-8 = 2000 bytes, well under
-  # PIPE_BUF (4096) with JSON-envelope headroom, so concurrent appends stay
-  # line-atomic. Char slicing (not byte) keeps the UTF-8 boundary valid for jq.
-  head="${head:0:500}"
+  # Cap head to keep records small. verify-log does NOT guarantee PIPE_BUF
+  # atomicity (a record can exceed Darwin's 512B PIPE_BUF); it relies on pre/
+  # post Bash hooks being serialized per tool call, so concurrent appends to
+  # one feature do not occur in practice (hook-stats / cost-log precedent).
+  head="${head:0:300}"
   local dir
   dir="$(dirname "$path")"
   if ! mkdir -p "$dir" 2>/dev/null; then
@@ -95,23 +100,22 @@ mumei_verify_log_append() {
   fi
 }
 
-# Return 0 when cmd looks like a test invocation: a known runner
-# (npm test / pytest / cargo test / go test / bats), or a substring match
-# against MUMEI_TEST_CMD when that env var is set.
+# Return 0 when cmd looks like a test invocation. Splits the command on
+# segment separators (; && || |) and matches a known runner at the START of
+# any segment (not as a free substring), so `cat pytest.ini` / `go testdata`
+# do not false-positive and `npm test && git status` is still detected.
+# A non-empty MUMEI_TEST_CMD matches as a literal prefix (no glob semantics).
 mumei_is_test_command() {
-  local cmd="$1"
-  # git commands (esp. commit -m messages) often embed a runner name as a
-  # substring but never execute tests; exclude them to avoid spurious rows.
-  case "$cmd" in
-  git\ * | *" git "*) return 1 ;;
-  esac
-  case "$cmd" in
-  *"npm test"* | *pytest* | *"cargo test"* | *"go test"* | *bats*) return 0 ;;
-  esac
-  if [[ -n "${MUMEI_TEST_CMD:-}" ]]; then
-    case "$cmd" in
-    *"$MUMEI_TEST_CMD"*) return 0 ;;
+  local cmd="$1" seg normalized
+  normalized="$(printf '%s' "$cmd" | awk '{gsub(/&&|\|\||;|\|/, "\n"); print}')"
+  while IFS= read -r seg; do
+    seg="${seg#"${seg%%[![:space:]]*}"}"
+    case "$seg" in
+    "npm test" | "npm test "* | pytest | "pytest "* | "cargo test" | "cargo test "* | "go test" | "go test "* | bats | "bats "*) return 0 ;;
     esac
-  fi
+    if [[ -n "${MUMEI_TEST_CMD:-}" ]] && [[ "${seg:0:${#MUMEI_TEST_CMD}}" == "$MUMEI_TEST_CMD" ]]; then
+      return 0
+    fi
+  done <<<"$normalized"
   return 1
 }
