@@ -70,8 +70,10 @@ mumei_verify_log_append() {
     # Non-numeric / empty exit code records as JSON null — never a fabricated 0.
     exit_json="null"
   fi
-  # Cap head well under PIPE_BUF (4096) so concurrent appends stay line-atomic.
-  head="${head:0:1500}"
+  # Cap head by characters: 500 chars of 4-byte UTF-8 = 2000 bytes, well under
+  # PIPE_BUF (4096) with JSON-envelope headroom, so concurrent appends stay
+  # line-atomic. Char slicing (not byte) keeps the UTF-8 boundary valid for jq.
+  head="${head:0:500}"
   local dir
   dir="$(dirname "$path")"
   if ! mkdir -p "$dir" 2>/dev/null; then
