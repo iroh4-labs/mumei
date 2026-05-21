@@ -80,6 +80,20 @@ _write_config() {
   [ "$status" -eq 1 ]
 }
 
+@test "mumei_config_golden_paths emits nothing when golden_paths is not an array (object)" {
+  _write_config '{"golden_paths": {"x": "*"}}'
+  run mumei_config_golden_paths
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "mumei_config_golden_paths emits nothing when golden_paths is a bare string" {
+  _write_config '{"golden_paths": "*"}'
+  run mumei_config_golden_paths
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "mumei_config_path_is_golden honors a pattern containing whitespace" {
   _write_config '{"golden_paths": ["my golden/*"]}'
   run mumei_config_path_is_golden "my golden/snap.json"

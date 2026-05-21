@@ -135,10 +135,13 @@ mumei_command_target_tokens() {
         done
         ;;
       env)
+        # Only flags that ALWAYS take a separate operand consume the next token.
+        # --block-signal is OPTIONAL-arg in GNU env, so it must NOT swallow the
+        # following command; it falls through to the generic `-*` arm.
         _ci=$((_ci + 1))
         while [[ "$_ci" -lt "${#words[@]}" ]]; do
           case "${words[$_ci]}" in
-          -u | -S | -C | --unset | --chdir | --split-string | --block-signal) _ci=$((_ci + 2)) ;;
+          -u | -S | -C | -a | --unset | --chdir | --split-string | --argv0) _ci=$((_ci + 2)) ;;
           --)
             _ci=$((_ci + 1))
             break
@@ -148,7 +151,7 @@ mumei_command_target_tokens() {
           esac
         done
         ;;
-      command | exec | builtin | nohup | setsid) _ci=$((_ci + 1)) ;;
+      command | exec | builtin | nohup | setsid | time) _ci=$((_ci + 1)) ;;
       *) break ;;
       esac
     done
@@ -157,10 +160,31 @@ mumei_command_target_tokens() {
     words[0]="${words[0]##*/}" # /bin/rm -> rm
     local i a
     case "${words[0]}" in
-    rm | truncate | tee)
+    rm | tee)
       for ((i = 1; i < ${#words[@]}; i++)); do
         a="${words[i]}"
         case "$a" in -*) continue ;; esac
+        printf '%s\n' "$a"
+      done
+      ;;
+    truncate)
+      # -r/--reference REF and -s/--size SIZE take operands; -r's REF is a
+      # READ-only reference file, not a write target. Emit only the remaining
+      # file operands.
+      local _tskip=0
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        if [[ "$_tskip" == 1 ]]; then
+          _tskip=0
+          continue
+        fi
+        case "$a" in
+        -r | --reference | -s | --size)
+          _tskip=1
+          continue
+          ;;
+        -*) continue ;;
+        esac
         printf '%s\n' "$a"
       done
       ;;
@@ -251,6 +275,11 @@ while IFS= read -r _tok; do
   # (./tests/golden/x, ../repo/tests/golden/x, symlinks) cannot bypass the glob.
   _tok_rel="$(mumei_state_canonicalize_path "$_tok" 2>/dev/null || printf '%s' "$_tok")"
   _tok_rel="${_tok_rel#"${_G2_PROOT}/"}"
+  # Only enforce on IN-REPO targets: if the canonical path is outside the
+  # project root the strip leaves it absolute (leading /), and a broad glob
+  # like `*.snap` would otherwise false-deny `/tmp/foo.snap`. golden_paths is a
+  # project-local immutability rule, not a global one.
+  case "$_tok_rel" in /*) continue ;; esac
   # Match the canonicalized path ONLY: matching the raw token too would
   # false-deny a non-golden write that traverses a golden prefix
   # (e.g. `> tests/golden/../safe.txt` canonicalizes to safe.txt).

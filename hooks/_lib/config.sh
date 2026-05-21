@@ -33,10 +33,12 @@ fi
 mumei_config_golden_paths() {
   local cf=".mumei/config.json"
   [[ -f "$cf" ]] || return 0
-  # `.golden_paths // []` tolerates a missing key; `jq` failure on malformed
-  # JSON is swallowed so a hand-edited broken config degrades to no-op rather
-  # than breaking the calling hook.
-  jq -r '.golden_paths // [] | .[]' "$cf" 2>/dev/null || return 0
+  # Emit entries only when golden_paths is an ARRAY. A missing key, malformed
+  # JSON, or a type mismatch (object/string from a hand-edit) all degrade to
+  # no-op — without the type guard, `.golden_paths // [] | .[]` would emit an
+  # object's values (e.g. {"x":"*"} → `*`) and unexpectedly make everything
+  # golden, blocking all edits. Fail closed to empty.
+  jq -r 'if (.golden_paths | type) == "array" then .golden_paths[] else empty end' "$cf" 2>/dev/null || return 0
 }
 
 # Exit 0 if $1 matches any configured golden glob, 1 otherwise.

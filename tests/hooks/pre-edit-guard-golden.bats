@@ -72,6 +72,13 @@ _edit_input() {
   [ -z "$output" ]
 }
 
+@test "G1: an external (out-of-repo) path is not denied by a broad glob" {
+  _write_config '{"golden_paths": ["*.snap"]}'
+  _run_hook "$(_edit_input "/tmp/foo.snap")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "G1: editing a non-golden path is allowed" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   _run_hook "$(_edit_input "src/app.py")"

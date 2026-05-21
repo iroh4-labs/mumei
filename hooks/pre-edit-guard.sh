@@ -136,7 +136,11 @@ fi
 _GOLDEN_REL="$CANON_PATH"
 _GOLDEN_PROOT="$(pwd -P 2>/dev/null || pwd)"
 _GOLDEN_REL="${_GOLDEN_REL#"${_GOLDEN_PROOT}/"}"
-if mumei_config_path_is_golden "$_GOLDEN_REL"; then
+# Only enforce on IN-REPO paths: if the canonical path is outside the project
+# root the strip leaves it absolute, and a broad glob like `*.snap` would
+# otherwise false-deny an unrelated external edit (e.g. /tmp/foo.snap). golden
+# protection is project-local.
+if [[ "$_GOLDEN_REL" != /* ]] && mumei_config_path_is_golden "$_GOLDEN_REL"; then
   if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"

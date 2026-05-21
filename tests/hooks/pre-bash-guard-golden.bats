@@ -283,6 +283,41 @@ _write_config() {
   [ -z "$output" ]
 }
 
+@test "G2: time wrapper before a mutator is denied" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "time rm conftest.py")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: env --argv0 X (option operand) before a mutator is denied" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "env --argv0 x rm conftest.py")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: env --block-signal (optional-arg) does not swallow the mutator" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "env --block-signal rm conftest.py")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: truncate -r reads a golden reference without false-denying" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "truncate -r tests/golden/ref.bin src/app.bin")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "G2: an external (out-of-repo) path is not denied by a broad glob" {
+  _write_config '{"golden_paths": ["*.snap"]}'
+  _run_hook "$(_bash_input "rm /tmp/foo.snap")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "G2: MUMEI_BYPASS=1 allows mutating a golden path" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   local input_file
