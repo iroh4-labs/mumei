@@ -157,6 +157,20 @@ _write_config() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G2: a no-space redirect to a golden path is denied" {
+  _write_config '{"golden_paths": ["conftest.py"]}'
+  _run_hook "$(_bash_input "echo x>conftest.py")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: an fd-prefixed redirect to a golden path is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "run 2> tests/golden/log.txt")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
 @test "G2: MUMEI_BYPASS=1 allows mutating a golden path" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   local input_file

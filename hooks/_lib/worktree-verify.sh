@@ -96,9 +96,10 @@ mumei_worktree_run_test() {
     MUMEI_WT_TAIL="$(printf '%s' "$out" | tail -n 30)"
   fi
 
-  # Explicit cleanup (no RETURN trap: a RETURN trap fires when the inner
-  # mumei_config_golden_paths returns, removing the worktree before we run
-  # the test). set -e is off, so this always runs on the normal path.
+  # Explicit cleanup on the normal path (set -e is off, so this always runs).
+  # A `trap ... RETURN` is deliberately NOT used: a RETURN trap fires on every
+  # nested function return, which in an earlier version removed the worktree
+  # before the test ran.
   git worktree remove --force "$wt" >/dev/null 2>&1
   git worktree prune >/dev/null 2>&1
   rm -rf "$wtbase"

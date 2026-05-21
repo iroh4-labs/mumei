@@ -78,15 +78,17 @@ COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 # as input) from false-denying, while still enforcing leading-wildcard globs.
 mumei_command_target_tokens() {
   local cmd="$1" seg
-  # Redirect targets: the token following > / >> / >| (clobber). Strip quoted
-  # spans first so a quoted literal `>` (e.g. `echo 'note > golden'`) is not
-  # mistaken for a redirection, and require start-of-string or whitespace
-  # before the operator. Best-effort: nested / escaped quotes are not parsed —
-  # the clean-HEAD worktree measurement is the authoritative guard.
+  # Redirect targets: the token following a redirection operator —
+  # `>` / `>>` / `>|` (clobber), with an optional fd or `&` prefix
+  # (`2>`, `1>>`, `&>`). Quoted spans are stripped first so a quoted literal
+  # `>` (e.g. `echo 'note > golden'`) is not mistaken for a redirection; that
+  # removes the need for a whitespace anchor, so no-space forms like
+  # `echo x>golden` are still caught. Best-effort: nested / escaped quotes are
+  # not parsed — the clean-HEAD worktree measurement is the authoritative guard.
   local unquoted
   unquoted="$(printf '%s' "$cmd" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')"
-  printf '%s' "$unquoted" | grep -oE '(^|[[:space:]])>>?\|?[[:space:]]*[^[:space:];|&<>]+' |
-    sed -E 's/^[[:space:]]*>>?\|?[[:space:]]*//'
+  printf '%s' "$unquoted" | grep -oE '([0-9]+|&)?>>?\|?[[:space:]]*[^[:space:];|&<>]+' |
+    sed -E 's/^([0-9]+|&)?>>?\|?[[:space:]]*//'
   # Mutating-command write targets, per separator-delimited segment.
   # printf adds a trailing newline so `read` does not drop the final
   # (unterminated) segment.
