@@ -7,6 +7,7 @@
 #   I1: edit a task whose dependencies are not yet complete -> deny
 #   I2: edit a file not listed in any task's _Files: meta (scope creep) -> deny
 #   W1: edit files for the next Wave while the current Wave is uncommitted -> deny
+#   G1: edit/write a golden path from .mumei/config.json (project-wide) -> deny
 #
 # Design principles:
 #   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
@@ -48,6 +49,8 @@ source "${PLUGIN_ROOT}/hooks/_lib/log.sh"
 source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/config.sh"
 
 # Read JSON from stdin
 INPUT="$(cat)"
@@ -65,51 +68,6 @@ TOOL_NAME="$(printf '%s' "$INPUT" | jq -r '.tool_name // "Edit"')"
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR"* ]]; then
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
-
-# --- Path canonicalization helper (shared by M1 and S1) ---
-# Resolves symlinks, `./` prefixes, `..` traversal, and absolute paths so
-# glob bypass via non-normalized inputs is closed for any deny rule that
-# matches on a path pattern.
-mumei_state_canonicalize_path() {
-  local p="$1"
-  # Resolve ALL components (including the leaf basename) via realpath /
-  # python3 os.path.realpath. Without leaf resolution a symlink whose
-  # target points into a protected path would slip past a case-glob deny —
-  # the OS Edit/Write follows the symlink and the protected file gets
-  # clobbered (review iter 1 adv-F-002).
-  if command -v realpath >/dev/null 2>&1; then
-    realpath -m "$p" 2>/dev/null && return 0
-  fi
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$p" 2>/dev/null && return 0
-  fi
-  # Fallback: parent-only canonicalise (best-effort; leaf symlink check
-  # depends on realpath/python3 availability — if neither is on PATH we
-  # log a warn but still produce a useful result so the hook can match
-  # at least the literal path).
-  mumei_log_warn "state-protection leaf-symlink check skipped: realpath / python3 missing on PATH"
-  case "$p" in
-  /*)
-    local p_dir p_base
-    p_dir="$(dirname "$p")"
-    p_base="$(basename "$p")"
-    local anc="$p_dir"
-    local tail=""
-    while [[ ! -d "$anc" && "$anc" != "/" && -n "$anc" ]]; do
-      tail="/$(basename "$anc")$tail"
-      anc="$(dirname "$anc")"
-    done
-    local canon_anc
-    canon_anc="$(cd "$anc" 2>/dev/null && pwd -P || echo "$anc")"
-    printf '%s' "${canon_anc}${tail}/${p_base}"
-    ;;
-  *)
-    local pwd_p
-    pwd_p="$(pwd -P)"
-    printf '%s' "$(cd "$pwd_p" && cd "$(dirname "$p")" 2>/dev/null && pwd -P || echo "${pwd_p}/$(dirname "$p")")/$(basename "$p")"
-    ;;
-  esac
-}
 
 # --- M1: deny direct write to reviewer MEMORY.md (vehicle/feature independent) ---
 # Memory entries flow through memory-curator + the orchestrator's atomic
@@ -158,6 +116,38 @@ if [[ "$CANON_PATH" =~ /\.mumei/current$ ]] ||
   fi
   jq -n --arg r "Direct write to ${FILE_PATH} is denied. mumei harness internal state (current pointer / state.json / spec-reviews / reviews) flows through orchestrator helpers in hooks/_lib/state.sh and hooks/_lib/review.sh." \
     --arg c "Use /mumei:plan or /mumei:review to mutate state legitimately. Edits to requirements.md / design.md / tasks.md are not covered by this rule. Set MUMEI_BYPASS=1 only for emergency manual edits." \
+    '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
+  exit 0
+fi
+
+# --- G1: deny Edit/Write to a configured golden path (project-wide) ---
+# golden_paths in .mumei/config.json mark immutable specification / oracle
+# files. Placed BEFORE the FEATURE check like M1/S1 because golden protection
+# is project-wide and vehicle/feature independent. The clean-HEAD worktree
+# measurement (hooks/_lib/worktree-verify.sh) is the deeper wall for Bash-route
+# tampering; G1 is the direct Edit/Write block.
+#
+# Match the canonicalized project-relative path (CANON_PATH with the project
+# root stripped) ONLY. Matching the raw FILE_PATH as well would both miss
+# alternate spellings AND false-block a non-golden write that merely traverses
+# a golden prefix (e.g. tests/golden/../safe.txt resolves to safe.txt but the
+# raw string matches tests/golden/*). The canonical form resolves ./ / .. /
+# symlinks, so it is the single correct thing to match.
+_GOLDEN_REL="$CANON_PATH"
+_GOLDEN_PROOT="$(pwd -P 2>/dev/null || pwd)"
+_GOLDEN_REL="${_GOLDEN_REL#"${_GOLDEN_PROOT}/"}"
+# Only enforce on IN-REPO paths: if the canonical path is outside the project
+# root the strip leaves it absolute, and a broad glob like `*.snap` would
+# otherwise false-deny an unrelated external edit (e.g. /tmp/foo.snap). golden
+# protection is project-local.
+if [[ "$_GOLDEN_REL" != /* ]] && mumei_config_path_is_golden "$_GOLDEN_REL"; then
+  if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+    mumei_hook_stats_record "G1" "deny" "${TOOL_NAME:-Edit}" "Edit/Write to golden path denied"
+  fi
+  jq -n --arg r "Edit/Write to ${FILE_PATH} is denied: it is a golden path (immutable specification / oracle) in .mumei/config.json." \
+    --arg c "Golden files pin expected behaviour so generated code cannot quietly redefine the test of record. To restore the committed version: git checkout HEAD -- '${FILE_PATH}'. To intentionally change the spec, edit .mumei/config.json's golden_paths first, or set MUMEI_BYPASS=1 for a one-off override." \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
   exit 0
 fi

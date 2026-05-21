@@ -7,6 +7,10 @@
 #       (checks both .mumei/specs/<key>/reviews/ and .mumei/plans/<key>/reviews/)
 #   W2: git commit while the current Wave still has unchecked [ ] tasks -> deny
 #       (spec vehicle only — plan vehicle has no Wave concept)
+#   G2: Bash-route write to a golden path (redirect / rm / mv / cp dest / tee /
+#       truncate / sed -i) -> deny (project-wide, best-effort; the clean-HEAD
+#       worktree measurement is the real wall)
+#   G3: test-tampering signature in a Bash command -> warn only (advisory)
 #
 # Design principles:
 #   - escape: MUMEI_BYPASS=1 -> exit 0 immediately
@@ -44,10 +48,261 @@ source "${PLUGIN_ROOT}/hooks/_lib/state.sh"
 source "${PLUGIN_ROOT}/hooks/_lib/tasks.sh"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/verify-log.sh"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/worktree-verify.sh"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/config.sh"
 
 INPUT="$(cat)"
 COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 [[ -n "$COMMAND" ]] || exit 0
+
+# --- G2: deny Bash-route tampering of a golden path (project-wide, best-effort) ---
+# golden_paths in .mumei/config.json are immutable. G1 blocks Edit/Write; G2
+# catches the obvious Bash route (sed -i / redirect / tee / mv / rm / cp /
+# truncate writing to a golden path). Best-effort with a known ceiling —
+# obfuscated commands evade it. The real wall is the worktree clean-HEAD
+# measurement (hooks/_lib/worktree-verify.sh runs tests against golden's HEAD
+# content) and G1.
+# Fires before the active-feature check because golden protection is
+# project-wide and vehicle/feature independent.
+#
+# Targets are the actual WRITE destinations — redirect targets plus the
+# write arguments of mutating commands — NOT every path-shaped substring and
+# NOT read-only inputs. Per-command semantics:
+#   rm / mv / truncate / tee : every non-flag arg (deleted / moved / written)
+#   cp                       : only the destination (last non-flag arg);
+#                              sources are reads
+#   sed                      : only with -i (in-place); the file operands.
+#                              Plain `sed 's/…/…/' file > out` reads file.
+# This keeps `echo "tests/golden/x" > notes.txt` and `cp golden out` (golden
+# as input) from false-denying, while still enforcing leading-wildcard globs.
+mumei_command_target_tokens() {
+  local cmd="$1" seg
+  # Redirect targets: the token following a redirection operator —
+  # `>` / `>>` / `>|` (clobber), with an optional fd or `&` prefix
+  # (`2>`, `1>>`, `&>`). Strip quoted spans that CONTAIN a `>` so a quoted
+  # literal `>` (e.g. `echo 'note > golden'`) is not mistaken for a redirection,
+  # while a quoted redirect *target* (`echo x > "conftest.py"`) is preserved.
+  # Also strip `[[ … ]]` / `(( … ))` spans so a `>` *comparison*
+  # (`[[ a > conftest.py ]]`) is not misread as a redirect. That also removes
+  # the need for a whitespace anchor, so no-space forms like `echo x>golden`
+  # are still caught. Best-effort: nested / escaped quotes are not parsed —
+  # the clean-HEAD worktree measurement is the authoritative guard.
+  # Also drop backslash-escaped `\>` / `\<`: those are never redirections
+  # (a literal `>` to echo, or a POSIX `[ a \> b ]` string comparison), so
+  # leaving them in would false-flag a non-mutating conditional as a write.
+  local unquoted
+  unquoted="$(printf '%s' "$cmd" |
+    sed -e 's/\\[<>]//g' -e "s/'[^']*>[^']*'//g" -e 's/"[^"]*>[^"]*"//g' -e 's/\[\[[^]]*\]\]//g' -e 's/(([^)]*))//g')"
+  printf '%s' "$unquoted" | grep -oE '([0-9]+|&)?>>?\|?[[:space:]]*[^[:space:];|&<>]+' |
+    sed -E 's/^([0-9]+|&)?>>?\|?[[:space:]]*//'
+  # Mutating-command write targets, per separator-delimited segment.
+  # printf adds a trailing newline so `read` does not drop the final
+  # (unterminated) segment.
+  # ANSI-C $'\n\n\n' so the shell produces real newlines (no reliance on tr's
+  # own escape interpretation); maps each separator char to a newline.
+  # shellcheck disable=SC2020
+  printf '%s\n' "$cmd" | tr ';|&' $'\n\n\n' | while IFS= read -r seg; do
+    [[ -n "$seg" ]] || continue
+    local words=()
+    read -ra words <<<"$seg"
+    [[ "${#words[@]}" -gt 0 ]] || continue
+    # Strip leading command wrappers so `sudo rm golden`, `sudo -u root rm …`,
+    # `env -u FOO rm …`, `env VAR=1 rm …`, `command rm …`, `/bin/rm …` are
+    # still recognized as mutators. Option-taking wrapper flags consume their
+    # operand (so the operand is not mistaken for the command name).
+    local _ci=0
+    while [[ "$_ci" -lt "${#words[@]}" ]]; do
+      case "${words[$_ci]}" in
+      sudo | doas)
+        # Short and long option forms that take a SEPARATE operand
+        # (`-u root` / `--user root`). The `=` form (`--user=root`) is one
+        # token, handled by the generic `-*` arm.
+        _ci=$((_ci + 1))
+        while [[ "$_ci" -lt "${#words[@]}" ]]; do
+          case "${words[$_ci]}" in
+          -u | -g | -C | -p | -r | -t | -T | -h | -U | -R | -D | --user | --group | --chdir | --prompt | --role | --type | --other-user | --host | --close-from | --command-timeout)
+            _ci=$((_ci + 2))
+            ;;
+          --)
+            _ci=$((_ci + 1))
+            break
+            ;;
+          -*) _ci=$((_ci + 1)) ;;
+          *) break ;;
+          esac
+        done
+        ;;
+      env)
+        # Only flags that ALWAYS take a separate operand consume the next token.
+        # --block-signal is OPTIONAL-arg in GNU env, so it must NOT swallow the
+        # following command; it falls through to the generic `-*` arm.
+        _ci=$((_ci + 1))
+        while [[ "$_ci" -lt "${#words[@]}" ]]; do
+          case "${words[$_ci]}" in
+          -u | -S | -C | -a | --unset | --chdir | --split-string | --argv0) _ci=$((_ci + 2)) ;;
+          --)
+            _ci=$((_ci + 1))
+            break
+            ;;
+          -* | [A-Za-z_]*=*) _ci=$((_ci + 1)) ;;
+          *) break ;;
+          esac
+        done
+        ;;
+      command | exec | builtin | nohup | setsid | time) _ci=$((_ci + 1)) ;;
+      *) break ;;
+      esac
+    done
+    words=("${words[@]:$_ci}")
+    [[ "${#words[@]}" -gt 0 ]] || continue
+    words[0]="${words[0]##*/}" # /bin/rm -> rm
+    local i a
+    case "${words[0]}" in
+    rm | tee)
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        case "$a" in -*) continue ;; esac
+        printf '%s\n' "$a"
+      done
+      ;;
+    truncate)
+      # -r/--reference REF and -s/--size SIZE take operands; -r's REF is a
+      # READ-only reference file, not a write target. Emit only the remaining
+      # file operands.
+      local _tskip=0
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        if [[ "$_tskip" == 1 ]]; then
+          _tskip=0
+          continue
+        fi
+        case "$a" in
+        -r | --reference | -s | --size)
+          _tskip=1
+          continue
+          ;;
+        -*) continue ;;
+        esac
+        printf '%s\n' "$a"
+      done
+      ;;
+    mv)
+      # all non-flag args (covers `mv src dest`) PLUS any -t/--target-directory
+      # directory (separate / attached `-tDIR` / `--target-directory=DIR`).
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        case "${words[i]}" in
+        -t | --target-directory) printf '%s\n' "${words[i + 1]:-}" ;;
+        -t?*) printf '%s\n' "${words[i]#-t}" ;;
+        --target-directory=*) printf '%s\n' "${words[i]#--target-directory=}" ;;
+        esac
+      done
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        case "$a" in -*) continue ;; esac
+        printf '%s\n' "$a"
+      done
+      ;;
+    cp)
+      # destination = -t/--target-directory DIR if present (GNU; separate /
+      # attached `-tDIR` / `--target-directory=DIR`), else the last non-flag
+      # argument; sources are reads.
+      local dest=""
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        case "${words[i]}" in
+        -t | --target-directory)
+          dest="${words[i + 1]:-}"
+          break
+          ;;
+        -t?*)
+          dest="${words[i]#-t}"
+          break
+          ;;
+        --target-directory=*)
+          dest="${words[i]#--target-directory=}"
+          break
+          ;;
+        esac
+      done
+      if [[ -z "$dest" ]]; then
+        for ((i = 1; i < ${#words[@]}; i++)); do
+          a="${words[i]}"
+          case "$a" in -*) continue ;; esac
+          dest="$a"
+        done
+      fi
+      [[ -n "$dest" ]] && printf '%s\n' "$dest"
+      ;;
+    sed)
+      # only an in-place edit mutates the file operands
+      local inplace=0
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        case "${words[i]}" in -i | -i* | --in-place | --in-place=*) inplace=1 ;; esac
+      done
+      if [[ "$inplace" == "1" ]]; then
+        local _skip=0
+        for ((i = 1; i < ${#words[@]}; i++)); do
+          a="${words[i]}"
+          if [[ "$_skip" == 1 ]]; then
+            _skip=0
+            continue
+          fi
+          # -e SCRIPT / -f SCRIPTFILE consume the next token as a (read-only)
+          # script, not a write target.
+          case "$a" in
+          -e | -f)
+            _skip=1
+            continue
+            ;;
+          -*) continue ;;
+          esac
+          printf '%s\n' "$a"
+        done
+      fi
+      ;;
+    esac
+  done
+}
+_G2_PROOT="$(pwd -P 2>/dev/null || pwd)"
+while IFS= read -r _tok; do
+  [[ -n "$_tok" ]] || continue
+  # Strip a single layer of surrounding quotes so quoted targets glob-match.
+  _tok="${_tok#[\"\']}"
+  _tok="${_tok%[\"\']}"
+  [[ -n "$_tok" ]] || continue
+  # Canonicalize to a project-relative path so alternate spellings
+  # (./tests/golden/x, ../repo/tests/golden/x, symlinks) cannot bypass the glob.
+  _tok_rel="$(mumei_state_canonicalize_path "$_tok" 2>/dev/null || printf '%s' "$_tok")"
+  _tok_rel="${_tok_rel#"${_G2_PROOT}/"}"
+  # Only enforce on IN-REPO targets: if the canonical path is outside the
+  # project root the strip leaves it absolute (leading /), and a broad glob
+  # like `*.snap` would otherwise false-deny `/tmp/foo.snap`. golden_paths is a
+  # project-local immutability rule, not a global one.
+  case "$_tok_rel" in /*) continue ;; esac
+  # Match the canonicalized path ONLY: matching the raw token too would
+  # false-deny a non-golden write that traverses a golden prefix
+  # (e.g. `> tests/golden/../safe.txt` canonicalizes to safe.txt).
+  if mumei_config_path_is_golden "$_tok_rel" || mumei_config_dir_holds_golden_glob "$_tok_rel"; then
+    if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+      # shellcheck disable=SC1091
+      source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+      mumei_hook_stats_record "G2" "deny" "Bash" "Bash-route mutation of golden path denied"
+    fi
+    jq -n --arg r "This command writes to a golden path ('${_tok}' matches .mumei/config.json golden_paths). Golden files are immutable specification / oracle files." \
+      --arg c "To restore the committed version: git checkout HEAD -- '${_tok}'. To intentionally change the spec, edit .mumei/config.json's golden_paths first, or set MUMEI_BYPASS=1 for a one-off override. Note: this is best-effort; the authoritative protection is the clean-HEAD worktree measurement at commit time." \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
+    exit 0
+  fi
+done < <(mumei_command_target_tokens "$COMMAND")
+
+# --- G3: warn on test-tampering signatures in a Bash command (advisory) ---
+# Not a block: denylist grep is easy to evade and would false-positive on
+# legitimate code. The worktree clean-HEAD measurement is the real check; G3
+# just surfaces the obvious reward-hacking signatures for visibility.
+if printf '%s' "$COMMAND" | grep -qE '__eq__.*return True|sys\.exit\(0\)|TestReport'; then
+  mumei_log_warn "G3: command contains a test-tampering signature (__eq__→True / sys.exit(0) / TestReport). Advisory only; the clean-HEAD worktree measurement at commit time is the authoritative check."
+fi
 
 KEY="$(mumei_current_feature 2>/dev/null || true)"
 [[ -n "$KEY" ]] || exit 0
@@ -170,6 +425,26 @@ if mumei_is_git_commit "$COMMAND"; then
         "Tests failing. Fix before committing." \
         "Test command: ${TEST_CMD}\n\n${TEST_TAIL}" \
         "I3"
+    fi
+
+    # --- I3 (worktree double-measurement + divergence flag) ---
+    # The working-tree run passed. Re-run the SAME test against a detached
+    # worktree checked out at HEAD, so uncommitted tampering (rigged
+    # conftest.py / monkeypatched TestReport / edited bytecode) cannot mask a
+    # real failure. A divergence — working-tree green but clean-HEAD red — is
+    # strong evidence of uncommitted manipulation and is denied under I3.
+    # Records the clean-HEAD result to verify-log as source="worktree-clean",
+    # forming a two-angle audit pair with the commit-gate record above.
+    mumei_worktree_run_test "$TEST_CMD"
+    WT_EXIT=$?
+    if [[ "${MUMEI_WT_RAN:-0}" == "1" ]]; then
+      mumei_verify_log_append "$FEATURE" "worktree-clean" "$TEST_CMD" "$WT_EXIT" "${MUMEI_WT_TAIL:-}" || true
+      if [[ "$WT_EXIT" -ne 0 ]]; then
+        mumei_deny \
+          "Working-tree tests pass but a clean HEAD worktree fails — uncommitted tampering OR an environment difference." \
+          "Test command: ${TEST_CMD}\n\nThe test was re-run against a detached worktree at HEAD. Gitignored runtime artifacts (node_modules / build output / venvs) are symlinked in and submodules are initialized offline, so the usual cause is uncommitted edits to TRACKED files masking a real failure (e.g. a rigged conftest.py or monkeypatched TestReport) — commit the genuine fix. If instead the clean-HEAD run failed for an environment reason the worktree could not reproduce (a build step, fetched-but-uncommitted submodule objects, or an absolute path in MUMEI_TEST_CMD pointing outside the repo), set MUMEI_BYPASS=1 for this commit.\n\n${MUMEI_WT_TAIL:-}" \
+          "I3"
+      fi
     fi
   fi
 fi

@@ -50,8 +50,10 @@ Generate `.mumei/.gitignore` so team-shared spec content (requirements / design 
 ```bash
 if [[ ! -f .mumei/.gitignore ]]; then
   cat > .mumei/.gitignore <<'EOF'
-# mumei: per-developer state only. Everything else (specs/*/{requirements,design,tasks}.md,
-# spec-reviews/, reviews/, scratch/, archive/) is tracked for team handoff.
+# mumei: per-developer state only. Everything else (config.json,
+# specs/*/{requirements,design,tasks}.md, spec-reviews/, reviews/, scratch/,
+# archive/) is tracked for team handoff — config.json carries golden_paths, so
+# it MUST be committed for G1/G2 to behave the same across teammates / CI.
 current
 specs/*/state.json
 EOF
@@ -121,7 +123,34 @@ test -f .gitignore && grep -qxF ".claude/agent-memory-local/" .gitignore
 
 Report success or what is missing.
 
-### Step 6 — Detector binary check
+### Step 6 — Register golden paths
+
+Golden paths are immutable specification / oracle files (snapshot fixtures,
+conftest.py, locked test data). mumei pins them so generated code cannot
+quietly redefine the test of record: G1 blocks Edit/Write, G2 blocks the
+obvious Bash mutation route, and the commit-gate re-runs tests against a clean
+HEAD worktree with golden files force-restored.
+
+If `.mumei/config.json` does not exist, ask the user which path globs to treat
+as golden (single-level globs only — `tests/golden/*`, `conftest.py`,
+`src/crypto/*.py`; use multiple entries for multi-level coverage). Create the
+file even when the user has none yet, so the key is discoverable:
+
+```bash
+if [[ ! -f .mumei/config.json ]]; then
+  cat > .mumei/config.json <<'EOF'
+{
+  "golden_paths": []
+}
+EOF
+fi
+```
+
+`.mumei/config.json` is tracked (team-shared) and hand-editable — it is not
+protected by the harness-state rules, so the user can update `golden_paths`
+directly at any time.
+
+### Step 7 — Detector binary check
 
 mumei's review pipeline (`/mumei:plan` Stage 0) executes deterministic
 detectors as ground truth before LLM reviewers run. These binaries are a
@@ -149,7 +178,7 @@ Surface the warning verbatim to the user. Do NOT block init on missing
 binaries — let the user decide when to install. The hard fail happens
 later, at review time.
 
-### Step 7 — Suggest first feature
+### Step 8 — Suggest first feature
 
 > Setup complete. To create your first feature, run `/mumei:brainstorm <topic>` for an interactive brainstorm, or `/mumei:plan <feature-slug>` if you already know what you want.
 

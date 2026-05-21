@@ -349,3 +349,55 @@ mumei_plan_state_set() {
   fi
   mv "$tmp" "$sf"
 }
+
+# --- Path canonicalization helper (shared by pre-edit-guard M1/S1/G1 and
+# pre-bash-guard G2) ---
+# Resolves symlinks, `./` prefixes, `..` traversal, and absolute paths so a
+# glob-based deny rule cannot be bypassed via a non-normalized spelling.
+mumei_state_canonicalize_path() {
+  local p="$1"
+  # Resolve ALL components (including the leaf basename) via realpath /
+  # python3 os.path.realpath. -m / os.path.realpath tolerate non-existent
+  # paths (a file about to be created or removed).
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m "$p" 2>/dev/null && return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$p" 2>/dev/null && return 0
+  fi
+  # Fallback (realpath AND python3 both absent). Resolve a leaf symlink chain
+  # via plain `readlink` (POSIX, on BSD + GNU) so a symlink-to-golden still
+  # cannot bypass G1/G2 in this degraded environment, then parent-only
+  # canonicalise the result.
+  mumei_log_warn "path canonicalization using readlink fallback: realpath / python3 missing on PATH"
+  local _depth=0 _t
+  while [[ -L "$p" && "$_depth" -lt 10 ]]; do
+    _t="$(readlink "$p" 2>/dev/null)" || break
+    case "$_t" in
+    /*) p="$_t" ;;
+    *) p="$(dirname "$p")/$_t" ;;
+    esac
+    _depth=$((_depth + 1))
+  done
+  case "$p" in
+  /*)
+    local p_dir p_base
+    p_dir="$(dirname "$p")"
+    p_base="$(basename "$p")"
+    local anc="$p_dir"
+    local tail=""
+    while [[ ! -d "$anc" && "$anc" != "/" && -n "$anc" ]]; do
+      tail="/$(basename "$anc")$tail"
+      anc="$(dirname "$anc")"
+    done
+    local canon_anc
+    canon_anc="$(cd "$anc" 2>/dev/null && pwd -P || echo "$anc")"
+    printf '%s' "${canon_anc}${tail}/${p_base}"
+    ;;
+  *)
+    local pwd_p
+    pwd_p="$(pwd -P)"
+    printf '%s' "$(cd "$pwd_p" && cd "$(dirname "$p")" 2>/dev/null && pwd -P || echo "${pwd_p}/$(dirname "$p")")/$(basename "$p")"
+    ;;
+  esac
+}
