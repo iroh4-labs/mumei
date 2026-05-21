@@ -120,9 +120,12 @@ if mumei_is_git_commit "$COMMAND"; then
   # would observe the trailing command's status), weakening I3. MUMEI_TEST_CMD
   # is operator-controlled (same trust boundary as MUMEI_BYPASS), so warn
   # rather than block — but make the risk visible.
+  # Pipelines ('|') are handled by pipefail below, so they are NOT warned.
+  # Sequence (';'), or-chain ('||'), and background ('&') can still mask a
+  # failing exit even with pipefail.
   case "$TEST_CMD" in
-  *";"* | *"|"* | *"&"*)
-    mumei_log_warn "MUMEI_TEST_CMD contains ';', '|', or '&'; a failing test exit may be masked (sequence/pipeline/background), weakening the I3 commit gate"
+  *";"* | *"||"* | *"&"*)
+    mumei_log_warn "MUMEI_TEST_CMD contains ';', '||', or '&'; a failing test exit may be masked (sequence/or-chain/background), weakening the I3 commit gate"
     ;;
   esac
   if [[ "$TEST_CMD" == *$'\n'* ]]; then
@@ -155,17 +158,17 @@ if mumei_is_git_commit "$COMMAND"; then
     )"
     TEST_EXIT=$?
     # On failure capture the last 30 lines for both the verify-log record and
-    # the deny reason; empty on success (head is omitted from the record).
-    TEST_HEAD=""
+    # the deny reason; empty on success (excerpt is omitted from the record).
+    TEST_TAIL=""
     if [[ "$TEST_EXIT" -ne 0 ]]; then
-      TEST_HEAD="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
+      TEST_TAIL="$(printf '%s' "$TEST_OUTPUT" | tail -n 30)"
     fi
     # X4: record the observed commit-gate exit code (pass and fail) to verify-log.
-    mumei_verify_log_append "$FEATURE" "commit-gate" "$TEST_CMD" "$TEST_EXIT" "$TEST_HEAD" || true
+    mumei_verify_log_append "$FEATURE" "commit-gate" "$TEST_CMD" "$TEST_EXIT" "$TEST_TAIL" || true
     if [[ "$TEST_EXIT" -ne 0 ]]; then
       mumei_deny \
         "Tests failing. Fix before committing." \
-        "Test command: ${TEST_CMD}\n\n${TEST_HEAD}" \
+        "Test command: ${TEST_CMD}\n\n${TEST_TAIL}" \
         "I3"
     fi
   fi
