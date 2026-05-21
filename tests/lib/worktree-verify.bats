@@ -49,6 +49,24 @@ _git_repo_with_commit() {
   [ "$output" = "cargo test --quiet" ]
 }
 
+@test "normalize_pytest does NOT match pytest mentioned as an argument" {
+  run mumei_worktree_normalize_pytest "npm test -- --grep pytest"
+  [ "$status" -eq 0 ]
+  [ "$output" = "npm test -- --grep pytest" ]
+}
+
+@test "normalize_pytest matches python -m pytest" {
+  run mumei_worktree_normalize_pytest "python -m pytest tests/"
+  [ "$status" -eq 0 ]
+  [ "$output" = "PYTHONDONTWRITEBYTECODE=1 python -m pytest tests/ -p no:cacheprovider -p no:randomly" ]
+}
+
+@test "normalize_pytest matches pytest after a separator" {
+  run mumei_worktree_normalize_pytest "cd app && pytest -q"
+  [ "$status" -eq 0 ]
+  [ "$output" = "PYTHONDONTWRITEBYTECODE=1 cd app && pytest -q -p no:cacheprovider -p no:randomly" ]
+}
+
 # --- run_test no-op paths ---
 
 @test "run_test is a no-op on empty test command" {

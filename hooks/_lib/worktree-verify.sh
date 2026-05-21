@@ -38,20 +38,21 @@ if ! declare -F mumei_config_golden_paths >/dev/null 2>&1; then
 fi
 
 # Normalize a pytest invocation so cached bytecode and plugin nondeterminism
-# cannot mask a failure. Only touches commands that actually invoke pytest;
-# every other runner (npm / cargo / go / bats / ...) is returned unchanged —
-# we normalize the environment we understand rather than blocklist what we
-# don't.
+# cannot mask a failure. Only touches commands where pytest is actually the
+# invoked program (command position: start, after a separator, optionally
+# preceded by env-var assignments or `python -m`). A bare mention as an
+# argument (e.g. `npm test -- --grep pytest`) must NOT trigger normalization,
+# since the pytest-only flags would then fail in the worktree rerun and raise
+# a false I3 divergence. Every other runner is returned unchanged — we
+# normalize the environment we understand rather than blocklist what we don't.
 mumei_worktree_normalize_pytest() {
   local cmd="$1"
-  case "$cmd" in
-  pytest | "pytest "* | *" pytest" | *" pytest "*)
+  local re='(^|[;&|][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+)*(python[0-9.]*[[:space:]]+-m[[:space:]]+)?pytest([[:space:]]|$)'
+  if printf '%s' "$cmd" | grep -qE "$re"; then
     printf 'PYTHONDONTWRITEBYTECODE=1 %s -p no:cacheprovider -p no:randomly' "$cmd"
-    ;;
-  *)
+  else
     printf '%s' "$cmd"
-    ;;
-  esac
+  fi
 }
 
 # Run $1 (the canonical test command) against a detached worktree at HEAD.

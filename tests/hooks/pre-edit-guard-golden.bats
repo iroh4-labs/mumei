@@ -50,6 +50,21 @@ _edit_input() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
 }
 
+@test "G1: golden deny is not bypassed by a ./ alternate spelling" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_edit_input "./tests/golden/snapshot.json")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G1: golden deny is not bypassed by a .. traversal spelling" {
+  mkdir -p sub
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_edit_input "sub/../tests/golden/snapshot.json")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
 @test "G1: editing a non-golden path is allowed" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   _run_hook "$(_edit_input "src/app.py")"

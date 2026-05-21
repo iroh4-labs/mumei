@@ -87,6 +87,27 @@ _write_config() {
   [ -z "$output" ]
 }
 
+@test "G2: leading-wildcard golden glob (*.snap) is enforced" {
+  _write_config '{"golden_paths": ["*.snap"]}'
+  _run_hook "$(_bash_input "rm foo.snap")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "G2: golden path as a non-target argument does not false-deny" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "echo \"tests/golden/snap.json\" > notes.txt")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "G2: mv INTO a golden path is denied" {
+  _write_config '{"golden_paths": ["tests/golden/*"]}'
+  _run_hook "$(_bash_input "mv /tmp/x tests/golden/snap.json")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
 @test "G2: MUMEI_BYPASS=1 allows mutating a golden path" {
   _write_config '{"golden_paths": ["tests/golden/*"]}'
   local input_file

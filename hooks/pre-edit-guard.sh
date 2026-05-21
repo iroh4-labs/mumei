@@ -168,11 +168,19 @@ fi
 # --- G1: deny Edit/Write to a configured golden path (project-wide) ---
 # golden_paths in .mumei/config.json mark immutable specification / oracle
 # files. Placed BEFORE the FEATURE check like M1/S1 because golden protection
-# is project-wide and vehicle/feature independent. Matched against the
-# project-relative FILE_PATH (golden globs are project-relative). The worktree
-# HEAD-restore (hooks/_lib/worktree-verify.sh) is the deeper wall for Bash-route
-# tampering; G1 is the direct Edit/Write block.
-if mumei_config_path_is_golden "$FILE_PATH"; then
+# is project-wide and vehicle/feature independent. The worktree HEAD-restore
+# (hooks/_lib/worktree-verify.sh) is the deeper wall for Bash-route tampering;
+# G1 is the direct Edit/Write block.
+#
+# Match BOTH the raw project-relative FILE_PATH and a canonicalized
+# project-relative path (CANON_PATH with the project root stripped), so an
+# alternate spelling (./tests/golden/x, ../repo/tests/golden/x, a symlink)
+# that resolves to the same protected file cannot bypass the glob via a
+# string mismatch.
+_GOLDEN_REL="$CANON_PATH"
+_GOLDEN_PROOT="$(pwd -P 2>/dev/null || pwd)"
+_GOLDEN_REL="${_GOLDEN_REL#"${_GOLDEN_PROOT}/"}"
+if mumei_config_path_is_golden "$FILE_PATH" || mumei_config_path_is_golden "$_GOLDEN_REL"; then
   if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"

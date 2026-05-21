@@ -59,36 +59,60 @@ COMMAND="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
 # --- G2: deny Bash-route tampering of a golden path (project-wide, best-effort) ---
 # golden_paths in .mumei/config.json are immutable. G1 blocks Edit/Write; G2
 # catches the obvious Bash route (sed -i / redirect / tee / mv / rm / cp /
-# truncate referencing a golden path). This is a cheap supplementary grep with
-# a known ceiling — obfuscated commands evade it. The real wall is the worktree
-# clean-HEAD measurement (hooks/_lib/worktree-verify.sh restores golden to HEAD)
-# and G1. Fires before the active-feature check because golden protection is
+# truncate writing to a golden path). Best-effort with a known ceiling —
+# obfuscated commands evade it. The real wall is the worktree clean-HEAD
+# measurement (hooks/_lib/worktree-verify.sh restores golden to HEAD) and G1.
+# Fires before the active-feature check because golden protection is
 # project-wide and vehicle/feature independent.
-mumei_command_mutates_path() {
-  printf '%s' "$1" | grep -qE '(sed[[:space:]]+-i|>>?|[[:space:]]tee([[:space:]]|$)|(^|[[:space:];|&])(mv|rm|cp|truncate)[[:space:]])'
-}
-if mumei_command_mutates_path "$COMMAND"; then
-  while IFS= read -r _g_pat; do
-    [[ -n "$_g_pat" ]] || continue
-    # Anchor = the literal leading component before the first glob metachar,
-    # so `tests/golden/*` matches commands referencing `tests/golden/...`.
-    _g_anchor="${_g_pat%%[\*\?\[]*}"
-    [[ -n "$_g_anchor" ]] || continue
-    case "$COMMAND" in
-    *"$_g_anchor"*)
-      if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
-        # shellcheck disable=SC1091
-        source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
-        mumei_hook_stats_record "G2" "deny" "Bash" "Bash-route mutation of golden path denied"
-      fi
-      jq -n --arg r "This command mutates a golden path (matched .mumei/config.json golden_paths anchor '${_g_anchor}'). Golden files are immutable specification / oracle files." \
-        --arg c "To restore the committed version: git checkout HEAD -- <path>. To intentionally change the spec, edit .mumei/config.json's golden_paths first, or set MUMEI_BYPASS=1 for a one-off override. Note: this grep is best-effort; the authoritative protection is the clean-HEAD worktree measurement at commit time." \
-        '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
-      exit 0
+#
+# Targets are the actual mutation destinations — redirect targets plus the
+# arguments of mutating commands — NOT every path-shaped substring. This keeps
+# `echo "tests/golden/x" > notes.txt` (golden text is an echo arg, not a write
+# target) from false-denying, and glob-matches each target so leading-wildcard
+# patterns (e.g. `*.snap`) are still enforced.
+mumei_command_target_tokens() {
+  local cmd="$1" seg
+  # Redirect targets: the token following > or >> (not >&, not <).
+  printf '%s' "$cmd" | grep -oE '>>?[[:space:]]*[^[:space:];|&<>]+' |
+    sed -E 's/^>>?[[:space:]]*//'
+  # Mutating-command argument targets, per separator-delimited segment.
+  # printf adds a trailing newline so `read` does not drop the final
+  # (unterminated) segment.
+  # shellcheck disable=SC2020  # mapping each separator char to a newline is intended
+  printf '%s\n' "$cmd" | tr ';|&' '\n\n\n' | while IFS= read -r seg; do
+    [[ -n "$seg" ]] || continue
+    local words=()
+    read -ra words <<<"$seg"
+    [[ "${#words[@]}" -gt 0 ]] || continue
+    case "${words[0]}" in
+    rm | mv | cp | tee | truncate | sed)
+      local i a
+      for ((i = 1; i < ${#words[@]}; i++)); do
+        a="${words[i]}"
+        case "$a" in -*) continue ;; esac
+        printf '%s\n' "$a"
+      done
       ;;
     esac
-  done < <(mumei_config_golden_paths)
-fi
+  done
+}
+while IFS= read -r _tok; do
+  [[ -n "$_tok" ]] || continue
+  # Strip a single layer of surrounding quotes so quoted targets glob-match.
+  _tok="${_tok#[\"\']}"
+  _tok="${_tok%[\"\']}"
+  if mumei_config_path_is_golden "$_tok"; then
+    if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+      # shellcheck disable=SC1091
+      source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+      mumei_hook_stats_record "G2" "deny" "Bash" "Bash-route mutation of golden path denied"
+    fi
+    jq -n --arg r "This command writes to a golden path ('${_tok}' matches .mumei/config.json golden_paths). Golden files are immutable specification / oracle files." \
+      --arg c "To restore the committed version: git checkout HEAD -- ${_tok}. To intentionally change the spec, edit .mumei/config.json's golden_paths first, or set MUMEI_BYPASS=1 for a one-off override. Note: this is best-effort; the authoritative protection is the clean-HEAD worktree measurement at commit time." \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
+    exit 0
+  fi
+done < <(mumei_command_target_tokens "$COMMAND")
 
 # --- G3: warn on test-tampering signatures in a Bash command (advisory) ---
 # Not a block: denylist grep is easy to evade and would false-positive on
