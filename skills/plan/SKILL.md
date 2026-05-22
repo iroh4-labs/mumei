@@ -333,6 +333,17 @@ As a <role>, I want <feature>, so that <benefit>.
 
 Tag each AC with `[CONFIRMED]`, `[ASSUMPTION]`, or `[NEEDS CLARIFICATION: ...]`. By the time clarification (Phase 1.1) finishes, there should be no `[NEEDS CLARIFICATION]` left in scope. If any remain, they should be moved to `## Open Questions` (deferred to design phase) or revisited with the user before drafting.
 
+#### Invariant candidate proposal (opt-in, pillar B)
+
+For each AC, judge whether one of the 4 property types fits and, when it does, propose an `_Invariant:_` line beneath the AC. This is **opt-in**: ACs where no property fits (CRUD, wiring, UI) get no `_Invariant:_` line and are skipped by the property pipeline. Never force an invariant onto an AC that has none — a tautological invariant verifies nothing and is rejected downstream.
+
+- **round-trip** — an encode/serialize paired with a decode/parse: `_Invariant: type=roundtrip fn=encode inverse=decode_`
+- **idempotency** — applying twice equals applying once (normalize, dedupe, clamp): `_Invariant: type=idempotency fn=normalize_`
+- **invariant-preservation** — a predicate that must hold before and after (balance ≥ 0, sorted): `_Invariant: type=invariant-preservation fn=apply invariant=balance_nonneg_`
+- **oracle-match** — an optimized impl that must match a trusted reference: `_Invariant: type=oracle-match fn=fastpath oracle=reference_`
+
+`fn` must differ from `inverse` / `oracle` (a tautological form is rejected by `mumei_property_validate_invariant`). The user confirms or edits proposed invariants at the single approval gate (Phase 3.5); the blind `property-author` writes the test in Phase 4.0.
+
 #### Inline Examples per AC
 
 For each AC, emit an inline `Examples:` block of zero, one, or two natural-language list items beneath the AC line:
