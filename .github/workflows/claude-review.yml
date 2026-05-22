@@ -1,0 +1,50 @@
+name: claude-review
+
+# Automated PR review by Anthropic's Claude Code Action, complementing the
+# Codex (per-push) and Gemini (per-open) bots. Triggers on PR open AND every
+# push (synchronize) — the dual-trigger Gemini lacks. Authenticates with a
+# Claude Max subscription via CLAUDE_CODE_OAUTH_TOKEN (no API key, no separate
+# billing — consumes the subscription quota). Generate the token locally with
+# `claude setup-token` and store it as the CLAUDE_CODE_OAUTH_TOKEN repo secret.
+# Do NOT also set ANTHROPIC_API_KEY: a static API key takes precedence and
+# would bill the API account instead of the subscription.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One review per PR at a time; a newer push cancels the in-flight review so
+# rapid pushes do not pile up (and do not waste subscription quota).
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: anthropics/claude-code-action@4481e6d3c7bbb88db2a928ca3444c536f589c7c1 # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request as an automated reviewer for the mumei repository.
+            Read AGENTS.md for review guidance and CLAUDE.md / .claude/rules/ for project rules.
+
+            Focus on:
+            - Correctness bugs introduced by this diff (logic errors, edge cases, races, silent failures).
+            - Security (OWASP Top 10): injection, secrets, auth bypass, unsafe deserialization, SSRF.
+            - mumei conventions: bash uses `set -u` and never `set -e`; functions are `mumei_`-prefixed;
+              `${CLAUDE_PLUGIN_ROOT}` (never hardcoded paths); BSD-awk compatible; jq null-safe.
+            - Distribution boundary: shipped artifacts (agents/ skills/ hooks/ README* AGENTS.md) must be
+              English; Japanese only in HTML comments.
+            - doc-sync: code changes that alter behavior must update the matching docs in the same PR.
+
+            Post findings as inline comments on the exact lines, tagged by severity. Only post findings
+            you are highly confident about — skip style nits and speculation, since false positives erode
+            trust. If you find no issues, post a brief confirmation comment.
