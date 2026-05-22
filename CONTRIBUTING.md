@@ -84,7 +84,7 @@ Sub-namespaces:
   (`task cost`, `task cost:hook-stats`, etc.). Most accept a feature
   slug via `task cost -- <slug>`.
 - `pr:*` / `main:watch` — PR helpers (`task pr:watch`,
-  `task pr:create`, `task main:watch`).
+  `task pr:create -- <args>`, `task main:watch`).
 
 Tasks are thin wrappers around `scripts/*.sh` and `npm run …`. CI
 installs Task via [`go-task/setup-task`](https://github.com/go-task/setup-task)
@@ -223,9 +223,9 @@ creates a topic branch in this repo.
    sufficient — automated reviewers also post feedback:
    - `task pr:watch` — wait for the latest CI run on this branch
    - `gh pr checks <N>` — CI status snapshot
-   - Automated reviewers (Gemini Code Assist, GitHub Copilot) comment
-     asynchronously on PR open and on pushes. Review their findings in
-     the GitHub PR UI, triage them, push fix commits, and resolve the
+   - **GitHub PR UI** — review findings from automated reviewers (Gemini
+     Code Assist, GitHub Copilot) that comment asynchronously on PR open
+     and on pushes. Triage them, push fix commits, and resolve the
      threads before merging. Reviewer monitoring is the PR author's
      responsibility; an AI agent driving the PR watches CI only.
 9. Self-merge via squash or rebase (linear history; merge commits should
