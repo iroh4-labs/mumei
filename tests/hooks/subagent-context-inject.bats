@@ -84,3 +84,13 @@ _ctx() { jq -r '.hookSpecificOutput.additionalContext' <<<"$output"; }
   [[ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")" == *"first 200 lines"* ]]
   [[ "$stderr" == *"not a positive integer"* ]]
 }
+
+@test "falls back to 200 lines when MUMEI_CONTEXT_LINES is 0 (head -n 0 would drop the body)" {
+  _init_feature REQ-1-foo implement 1
+  printf '# foo\nbody line\n## Open Questions\nNone\n' >.mumei/specs/REQ-1-foo/requirements.md
+  run --separate-stderr bash -c \
+    "printf '%s' '{\"agent_id\":\"a1\"}' | MUMEI_CONTEXT_LINES=0 bash '${CLAUDE_PLUGIN_ROOT}/hooks/subagent-context-inject.sh'"
+  [ "$status" -eq 0 ]
+  [[ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")" == *"body line"* ]]
+  [[ "$stderr" == *"not a positive integer"* ]]
+}

@@ -2,13 +2,13 @@
 # Generation-time control helpers (pillar E).
 #
 # Shared parsing logic for the entrance gates:
-#   - pre-edit-guard.sh  E1 (Open Questions block) / E2 (test-first pin)
+#   - pre-edit-guard.sh  E1 (Open Questions block)
 #   - subagent-context-inject.sh  E3 (context re-injection reads the artifact)
 #
 # The "artifact" is the spec document that carries the `## Open Questions`
-# and `## Acceptance Test` sections: requirements.md for the spec vehicle,
-# plan.md for the plan vehicle. Both vehicles are handled here so the gates
-# behave identically regardless of which vehicle drove the feature.
+# section: requirements.md for the spec vehicle, plan.md for the plan vehicle.
+# Both vehicles are handled here so the gates behave identically regardless of
+# which vehicle drove the feature.
 #
 # Every reader degrades to a SAFE default (do not block) when the artifact is
 # missing or unparsable, so non-mumei projects and feature-less sessions are
