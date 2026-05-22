@@ -1120,18 +1120,20 @@ source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/residual.sh"
 # needs-architecture-review residual. declare -p is the portable existence check
 # (bash 3.2+); warn loudly rather than degrade silently.
 if ! declare -p reviewer_outputs >/dev/null 2>&1 || [ "${#reviewer_outputs[@]}" -eq 0 ]; then
+  # Unpopulated map = upstream wiring failure. Skip the loop entirely (rather
+  # than dereference an undeclared array, which raises unbound-variable under
+  # set -u) and warn loudly so the empty result is not byte-indistinguishable
+  # from a clean review.
   mumei_log_warn "residual: reviewer_outputs unpopulated — filtered_out residuals will be absent"
-  # Declare it empty so the loop's ${reviewer_outputs[$r]:-{}} cannot raise an
-  # unbound-variable error under set -u on bash versions where :- does not guard
-  # an undeclared associative array. No-op (|| true) on bash 3.2, which lacks -A.
-  declare -A reviewer_outputs 2>/dev/null || true
+  reviewer_filtered_out='[]'
+else
+  reviewer_filtered_out="$(
+    for r in spec-compliance security adversarial; do
+      jq -c --arg r "$r" '(.filtered_out // [])[] | . + {reviewer: $r}' \
+        <<<"${reviewer_outputs[$r]:-{}}" 2>/dev/null
+    done | jq -sc '.'
+  )"
 fi
-reviewer_filtered_out="$(
-  for r in spec-compliance security adversarial; do
-    jq -c --arg r "$r" '(.filtered_out // [])[] | . + {reviewer: $r}' \
-      <<<"${reviewer_outputs[$r]:-{}}" 2>/dev/null
-  done | jq -sc '.'
-)"
 residual_json="$(mumei_residual_collect "$surfaced_json" "$reviewer_filtered_out" "$(mumei_review_ceiling_disclaimer)")"
 # include --argjson residual "$residual_json" + `residual: $residual` in the review JSON builder.
 ```
