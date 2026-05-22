@@ -1009,13 +1009,28 @@ for finding in "${all_findings[@]}"; do
   fi
 
   if [[ "$skippable" == "no" ]]; then
-    Task(subagent_type: "issue-validator", reviewer: "$reviewer", finding: $finding, ...)
+    # Cross-feature ledger annotation (REQ-22.8): if this finding's
+    # fingerprint was judged a false positive in a prior review, tell the
+    # validator — as DATA, not a verdict. The validator still decides
+    # independently; a HIGH/CRITICAL is never auto-suppressed (REQ-22.9).
+    fp="$(mumei_ledger_fingerprint "$finding")"
+    prior_fp="$(mumei_ledger_prior_fp_count "$fp")"
+    fp_note=""
+    if [[ "$prior_fp" -gt 0 ]]; then
+      fp_note="<ledger_note>This fingerprint (${fp}) was marked a false positive ${prior_fp} time(s) in prior reviews. Treat as context only; decide independently from the code. Do NOT auto-dismiss — especially not a HIGH/CRITICAL.</ledger_note>"
+    fi
+    Task(subagent_type: "issue-validator", reviewer: "$reviewer", finding: $finding, ledger_note: "$fp_note", ...)
   else
     # skipped — annotate inline with valid_by_assertion (distinct from "valid")
     finding="$(jq '. + {validator: {decision: "valid_by_assertion", confidence: "HIGH (skipped — reviewer self-asserted HIGH confidence)"}}' <<<"$finding")"
   fi
 done
 ```
+
+`mumei_ledger_fingerprint` / `mumei_ledger_prior_fp_count` come from
+`hooks/_lib/ledger.sh` (source it at the top of Phase 5 alongside
+`review.sh`). The `ledger_note` is appended to the validator prompt suffix
+as data; the validator's body documents how to treat it.
 
 Stage 5 filter rule: treat both `"valid"` and
 `"valid_by_assertion"` as keep-conditions for `findings_surfaced`. The
@@ -1158,6 +1173,26 @@ the review JSON appears clean.
     ...then the LLM reviewer findings...
   ]
 }
+```
+
+### Stage 6.4 — Record findings to the cross-feature ledger (REQ-22.7)
+
+After the review JSON is persisted, append every validated finding (from
+BOTH `findings_surfaced` and `findings_filtered`) to the cross-feature
+ledger so future reviews can annotate the validator on recurring false
+positives. `findings_filtered` carries the `decision: "invalid"` entries —
+those are exactly the false-positive marks the ledger exists to remember.
+The orchestrator is the single writer; the validator never touches the file.
+
+```bash
+source "/Users/shunichi/.claude/plugins/cache/mumei/mumei/0.5.3/hooks/_lib/ledger.sh"
+# all_validated = surfaced ++ filtered, each carrying .validator.decision
+jq -c '.[]' <<<"$all_validated_json" | while IFS= read -r finding; do
+  decision="$(jq -r '.validator.decision // "unsure"' <<<"$finding")"
+  severity="$(jq -r '.severity // "MEDIUM"' <<<"$finding")"
+  reviewer="$(jq -r '.reviewer // "unknown"' <<<"$finding")"
+  mumei_ledger_append "$finding" "$feature" "$reviewer" "$decision" "$severity"
+done
 ```
 
 ### Stage 6.5 — Memory candidate curation (sync, non-blocking)

@@ -221,6 +221,14 @@ For each finding returned by the reviewers, apply the same severity-conditional 
 - MEDIUM / LOW + reviewer.confidence == HIGH → skip with `valid_by_assertion`, except for the ~20% hash-sample calibration path (`shasum -a 256 | cut -c1` ∈ {0,1,2}).
 - All other cases → `issue-validator` mandatory.
 
+Before launching a validator, apply the cross-feature ledger annotation
+(REQ-22.8): compute the finding's fingerprint with `mumei_ledger_fingerprint`
+and look up `mumei_ledger_prior_fp_count` (both from `hooks/_lib/ledger.sh`).
+When the count is > 0, append a `<ledger_note>` to the validator prompt
+stating the fingerprint was a false positive N times before — as DATA only.
+The validator decides independently; a HIGH/CRITICAL is never auto-suppressed
+on a ledger mark (REQ-22.9).
+
 The validator returns `decision: "valid" | "invalid" | "unsure"`. Keep `valid` and `valid_by_assertion`; move `invalid` to `findings_filtered`; surface `unsure` with a warning marker.
 
 The validator also returns `severity_action` and `axes.reproducible` (grounding, REQ-22.2). Merge each validator result into its finding under a `validator` object (`{decision, confidence, severity_action, axes}`), then apply the deterministic advisory-downgrade before aggregating the verdict:
@@ -279,6 +287,25 @@ review_json="$(jq -c $drf_arg "$drf_jq" <<<"$review_json")"
 
 written="$(printf '%s' "$review_json" | mumei_review_persist "$review_dir")"
 echo "review written: ${written}"
+```
+
+### Step 8.4 — Record findings to the cross-feature ledger (REQ-22.7)
+
+After the review JSON is persisted, append every validated finding (from
+BOTH `findings_surfaced` and `findings_filtered`) to the cross-feature
+ledger. `findings_filtered` carries the `decision: "invalid"` entries —
+the false-positive marks the ledger remembers so a later review can
+annotate the validator. The orchestrator is the single writer.
+
+```bash
+source "/Users/shunichi/.claude/plugins/cache/mumei/mumei/0.5.3/hooks/_lib/ledger.sh"
+jq -c '.[]' <<<"$(jq -nc --argjson s "$surfaced_json" --argjson f "$filtered_json" '$s + $f')" |
+  while IFS= read -r finding; do
+    decision="$(jq -r '.validator.decision // "unsure"' <<<"$finding")"
+    severity="$(jq -r '.severity // "MEDIUM"' <<<"$finding")"
+    reviewer="$(jq -r '.reviewer // "unknown"' <<<"$finding")"
+    mumei_ledger_append "$finding" "$slug" "$reviewer" "$decision" "$severity"
+  done
 ```
 
 ### Step 8.5 — Memory candidate curation (sync, non-blocking)
