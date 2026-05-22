@@ -19,6 +19,12 @@ const FindingSchema = Type.Object({
   category: Type.Optional(Type.String()),
   location: Type.Optional(Type.String()),
   message: Type.Optional(Type.String()),
+  trace: Type.Optional(
+    Type.String({
+      description:
+        'Falsifiable basis for a HIGH/CRITICAL finding (pillar C, REQ-22.1): the input -> bad-output / source -> sink path the issue-validator checks on its REPRODUCIBLE axis. Distinct from `message`/`evidence`.',
+    }),
+  ),
   source: Type.Optional(
     Type.String({
       description:
@@ -118,6 +124,12 @@ export const ReviewSchema = Type.Object(
       Type.String({
         description:
           'Path to the prior review JSON when this entry is a REQ-7.7 short-circuit synthetic record.',
+      }),
+    ),
+    confidence_ceiling: Type.Optional(
+      Type.String({
+        description:
+          'One-line honesty disclaimer (pillar C, REQ-22.10): names the Claude-family shared blind spot and the real-bug detection ceiling. Never claims human review is unnecessary.',
       }),
     ),
   },

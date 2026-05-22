@@ -42,6 +42,7 @@ mumei/
 │   │   ├── safe-grep.sh    # null-safe grep + git check-ignore helper
 │   │   ├── detectors.sh    # semgrep / osv-scanner runners + severity normalizer
 │   │   ├── review.sh       # shared Phase 5 / /mumei:review pipeline helpers
+│   │   ├── ledger.sh       # cross-feature finding ledger (pillar C: move-resistant fingerprint + FP annotation, annotate-only)
 │   │   ├── memory.sh       # memory-curator atomic helpers (score → operation, validate, apply)
 │   │   ├── cost-log.sh     # optional pre/post wrap helpers; SubagentStop hook is authoritative
 │   │   ├── verify-log.sh   # test-run audit trail (commit-gate / worktree-clean / agent-run exit codes)
@@ -208,6 +209,32 @@ Key constraints:
   Edit/Write to `.claude/agent-memory/<r>/MEMORY.md` is denied by the M1
   hook rule (above). The plan-vehicle equivalent runs as **Step 8.5** in
   `/mumei:review`.
+- **Grounding (advisory downgrade).** Reviewers must attach a falsifiable
+  `trace` (input → bad-output / source → sink) to every HIGH/CRITICAL
+  finding. The `issue-validator` evaluates it on a 4th `REPRODUCIBLE` axis;
+  an ungrounded HIGH/CRITICAL is stamped `severity_action: report_only` by
+  `mumei_review_apply_advisory_downgrade` — surfaced as advisory, never
+  dropped, and no longer pins the verdict. A HIGH/CRITICAL is never
+  auto-suppressed on grounding grounds.
+- **Input asymmetry.** The orchestrator injects full spec context
+  (requirements.md + design.md, or plan.md) into `security-reviewer` while
+  `adversarial-reviewer` sees the diff only (cold). This — not model
+  rotation — is the diversity mechanism; all reviewers and the validator run
+  on opus.
+- **Framing neutralization.** Every diff-facing reviewer and the validator
+  carries an immutable agent-body prefix instructing it to ignore
+  "safe"/"reviewed"/"intentional" claims in the diff/PR/comments and
+  re-derive from the code.
+- **Cross-feature finding ledger.** `hooks/_lib/ledger.sh` records a
+  move-resistant fingerprint (rule + enclosing symbol, line-independent)
+  per validated finding to `.mumei/finding-ledger.jsonl`. When a fingerprint
+  recurs that was previously a false positive, the orchestrator annotates the
+  validator's context — annotation only, never auto-suppression. The
+  orchestrator is the single writer (the validator stays read-only).
+- **Ceiling disclaimer.** Every review JSON carries a `confidence_ceiling`
+  one-liner (`mumei_review_ceiling_disclaimer`) naming the Claude-family
+  blind spot and real-bug detection ceiling — AI review is an assist, not a
+  replacement for human review.
 
 ## File-based state model
 

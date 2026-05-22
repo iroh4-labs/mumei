@@ -36,6 +36,7 @@ All steps below assume the current working directory is the project root and a g
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/state.sh"
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/review.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/ledger.sh"
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/cost-log.sh"
 
 slug="$(mumei_current_feature 2>/dev/null || true)"
@@ -201,6 +202,14 @@ extension: `requirements.md` → spec-vehicle EARS comparison;
 (scope_creep / silent_reinterpretation findings only, no
 ac_drift / missing_ac).
 
+**Input asymmetry (REQ-22.4 / REQ-22.5)**: the `security-reviewer` prompt
+carries the full plan context (`Plan: .mumei/plans/${slug}/plan.md`) so it
+judges the diff against intent, while the `adversarial-reviewer` prompt
+carries the diff and prior findings only — no plan — so it evaluates cold.
+Keep this asymmetry intact: it is the sole diversity mechanism (both run on
+the same model; model rotation is intentionally not used). Do NOT add the
+plan path to the adversarial prompt.
+
 When `high_count > 0`, inject the HIGH detector findings into all running
 reviewer prompts as a `<detector_findings ground_truth="true">` block
 exactly as Phase 5 does (see `skills/plan/SKILL.md` Stage 1).
@@ -213,7 +222,24 @@ For each finding returned by the reviewers, apply the same severity-conditional 
 - MEDIUM / LOW + reviewer.confidence == HIGH → skip with `valid_by_assertion`, except for the ~20% hash-sample calibration path (`shasum -a 256 | cut -c1` ∈ {0,1,2}).
 - All other cases → `issue-validator` mandatory.
 
+Before launching a validator, apply the cross-feature ledger annotation
+(REQ-22.8): compute the finding's fingerprint with `mumei_ledger_fingerprint`
+and look up `mumei_ledger_prior_fp_count` (both from `hooks/_lib/ledger.sh`).
+When the count is > 0, append a `<ledger_note>` to the validator prompt
+stating the fingerprint was a false positive N times before — as DATA only.
+The validator decides independently; a HIGH/CRITICAL is never auto-suppressed
+on a ledger mark (REQ-22.9).
+
 The validator returns `decision: "valid" | "invalid" | "unsure"`. Keep `valid` and `valid_by_assertion`; move `invalid` to `findings_filtered`; surface `unsure` with a warning marker.
+
+The validator also returns `severity_action` and `axes.reproducible` (grounding, REQ-22.2). Merge each validator result into its finding under a `validator` object (`{decision, confidence, severity_action, axes}`), then apply the deterministic advisory-downgrade before aggregating the verdict:
+
+```bash
+# Stamp severity_action="report_only" on HIGH/CRITICAL findings the validator
+# judged not reproducible (ungrounded). They stay in surfaced_json — never
+# dropped — but no longer pin the verdict (REQ-22.2 / REQ-22.3).
+surfaced_json="$(mumei_review_apply_advisory_downgrade "$surfaced_json")"
+```
 
 ### Step 8 — Aggregate verdict + persist
 
@@ -249,12 +275,14 @@ review_json="$(jq -nc \
   --argjson next_iter_reviewers "$next_iter_reviewers" \
   --argjson detector_skipped "$detector_skipped" \
   --arg detector_report "$detector_report" \
+  --arg confidence_ceiling "$(mumei_review_ceiling_disclaimer)" \
   '{feature: $feature, wave: "all", iteration: $iteration,
     iter_head: $iter_head, verdict: $verdict, reviewers: $reviewers,
     findings_surfaced: $surfaced, findings_filtered: $filtered,
     next_iter_reviewers: $next_iter_reviewers,
     detector_skipped: $detector_skipped,
-    detector_report: $detector_report}')"
+    detector_report: $detector_report,
+    confidence_ceiling: $confidence_ceiling}')"
 
 # Inject detector_reused_from with proper JSON typing.
 # shellcheck disable=SC2086
@@ -262,6 +290,25 @@ review_json="$(jq -c $drf_arg "$drf_jq" <<<"$review_json")"
 
 written="$(printf '%s' "$review_json" | mumei_review_persist "$review_dir")"
 echo "review written: ${written}"
+```
+
+### Step 8.4 — Record findings to the cross-feature ledger (REQ-22.7)
+
+After the review JSON is persisted, append every validated finding (from
+BOTH `findings_surfaced` and `findings_filtered`) to the cross-feature
+ledger. `findings_filtered` carries the `decision: "invalid"` entries —
+the false-positive marks the ledger remembers so a later review can
+annotate the validator. The orchestrator is the single writer.
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/ledger.sh"
+jq -c '.[]' <<<"$(jq -nc --argjson s "$surfaced_json" --argjson f "$filtered_json" '$s + $f')" |
+  while IFS= read -r finding; do
+    decision="$(jq -r '.validator.decision // "unsure"' <<<"$finding")"
+    severity="$(jq -r '.severity // "MEDIUM"' <<<"$finding")"
+    reviewer="$(jq -r '.reviewer // "unknown"' <<<"$finding")"
+    mumei_ledger_append "$finding" "$slug" "$reviewer" "$decision" "$severity"
+  done
 ```
 
 ### Step 8.5 — Memory candidate curation (sync, non-blocking)

@@ -689,10 +689,13 @@ detector findings that the LLM reviewers treat as ground truth.
 
 This phase relies on shared helpers in `hooks/_lib/review.sh` (extracted in
 this lib so the plan-vehicle `/mumei:review` skill can reuse them).
-Source the lib once at the top of Phase 5:
+Source the libs once at the top of Phase 5. `ledger.sh` MUST be sourced
+here (not lazily in Stage 6.4) because Stage 4 calls
+`mumei_ledger_fingerprint` / `mumei_ledger_prior_fp_count` before Stage 6:
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/review.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/ledger.sh"
 review_dir=".mumei/specs/${feature}/reviews"
 ```
 
@@ -924,6 +927,20 @@ Pass each reviewer:
   prompt as a literal `scope_source=<path>` suffix. The reviewer dispatches
   on this parameter to select spec-vehicle vs plan-vehicle scope-comparison
   logic. Spec vehicle always uses requirements.md.
+- **Input asymmetry (REQ-22.4 / REQ-22.5)**: inject the full spec context
+  (the verbatim bodies of `requirements.md` AND `design.md`) into the
+  **`security-reviewer`** prompt suffix as a `<spec_context>` block, so it
+  judges the diff against intent. Do **NOT** inject spec context into the
+  **`adversarial-reviewer`** prompt — it evaluates the diff cold (diff only).
+  This asymmetry is the sole diversity mechanism (all reviewers run on the
+  same model); model rotation is intentionally not used.
+
+  ```text
+  <spec_context>
+  [verbatim requirements.md, then design.md]
+  </spec_context>
+  ```
+
 - **HIGH detector findings** (only when `high_count > 0`) injected into the
   prompt as a `<detector_findings ground_truth="true">` block. The block
   contains the JSON array from `.findings.HIGH` of the detectors report.
@@ -995,13 +1012,28 @@ for finding in "${all_findings[@]}"; do
   fi
 
   if [[ "$skippable" == "no" ]]; then
-    Task(subagent_type: "issue-validator", reviewer: "$reviewer", finding: $finding, ...)
+    # Cross-feature ledger annotation (REQ-22.8): if this finding's
+    # fingerprint was judged a false positive in a prior review, tell the
+    # validator — as DATA, not a verdict. The validator still decides
+    # independently; a HIGH/CRITICAL is never auto-suppressed (REQ-22.9).
+    fp="$(mumei_ledger_fingerprint "$finding")"
+    prior_fp="$(mumei_ledger_prior_fp_count "$fp")"
+    fp_note=""
+    if [[ "$prior_fp" -gt 0 ]]; then
+      fp_note="<ledger_note>This fingerprint (${fp}) was marked a false positive ${prior_fp} time(s) in prior reviews. Treat as context only; decide independently from the code. Do NOT auto-dismiss — especially not a HIGH/CRITICAL.</ledger_note>"
+    fi
+    Task(subagent_type: "issue-validator", reviewer: "$reviewer", finding: $finding, ledger_note: "$fp_note", ...)
   else
     # skipped — annotate inline with valid_by_assertion (distinct from "valid")
     finding="$(jq '. + {validator: {decision: "valid_by_assertion", confidence: "HIGH (skipped — reviewer self-asserted HIGH confidence)"}}' <<<"$finding")"
   fi
 done
 ```
+
+`mumei_ledger_fingerprint` / `mumei_ledger_prior_fp_count` come from
+`hooks/_lib/ledger.sh` (source it at the top of Phase 5 alongside
+`review.sh`). The `ledger_note` is appended to the validator prompt suffix
+as data; the validator's body documents how to treat it.
 
 Stage 5 filter rule: treat both `"valid"` and
 `"valid_by_assertion"` as keep-conditions for `findings_surfaced`. The
@@ -1023,7 +1055,17 @@ Wait for all.
 
 ### Stage 5 — Filter
 
-Keep only findings where `decision == "valid"`. Move `invalid` to `filtered_out`. Surface `unsure` with a warning marker.
+Keep only findings where `decision == "valid"` (and `valid_by_assertion`). Move `invalid` to `filtered_out`. Surface `unsure` with a warning marker.
+
+The validator also returns `severity_action` and `axes.reproducible` (grounding, REQ-22.2). Merge each validator result into its finding under a `validator` object (`{decision, confidence, severity_action, axes}`), then apply the deterministic advisory-downgrade to the surfaced array before Stage 6 aggregates the verdict:
+
+```bash
+# Stamp severity_action="report_only" on HIGH/CRITICAL findings the validator
+# judged not reproducible (ungrounded). They stay in findings_surfaced — never
+# dropped — but no longer pin the verdict (REQ-22.2 / REQ-22.3). Detector
+# ground-truth findings are exempt.
+surfaced_json="$(mumei_review_apply_advisory_downgrade "$surfaced_json")"
+```
 
 ### Stage 6 — Persist + verdict aggregation
 
@@ -1045,9 +1087,17 @@ the next iteration:
   "summary": "...",
   "next_iter_reviewers": ["<reviewer1>", "<reviewer2>", "adversarial"],
   "detector_skipped": false,
-  "detector_reused_from": null
+  "detector_reused_from": null,
+  "confidence_ceiling": "<mumei_review_ceiling_disclaimer output>"
 }
 ```
+
+**`confidence_ceiling`** (REQ-22.10): stamp the fixed one-line disclaimer
+from `mumei_review_ceiling_disclaimer` onto every persisted review JSON.
+It states AI review is an assist with family-shared blind spots and a
+real-bug detection ceiling — never that human review is unnecessary. Set
+it via `--arg confidence_ceiling "$(mumei_review_ceiling_disclaimer)"` when
+building the review JSON.
 
 **`iter_head`**: capture `git rev-parse HEAD` at iter
 completion. The next iter's Stage 0 reads this to compute the diff
@@ -1134,6 +1184,26 @@ the review JSON appears clean.
     ...then the LLM reviewer findings...
   ]
 }
+```
+
+### Stage 6.4 — Record findings to the cross-feature ledger (REQ-22.7)
+
+After the review JSON is persisted, append every validated finding (from
+BOTH `findings_surfaced` and `findings_filtered`) to the cross-feature
+ledger so future reviews can annotate the validator on recurring false
+positives. `findings_filtered` carries the `decision: "invalid"` entries —
+those are exactly the false-positive marks the ledger exists to remember.
+The orchestrator is the single writer; the validator never touches the file.
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/ledger.sh"
+# all_validated = surfaced ++ filtered, each carrying .validator.decision
+jq -c '.[]' <<<"$all_validated_json" | while IFS= read -r finding; do
+  decision="$(jq -r '.validator.decision // "unsure"' <<<"$finding")"
+  severity="$(jq -r '.severity // "MEDIUM"' <<<"$finding")"
+  reviewer="$(jq -r '.reviewer // "unknown"' <<<"$finding")"
+  mumei_ledger_append "$finding" "$feature" "$reviewer" "$decision" "$severity"
+done
 ```
 
 ### Stage 6.5 — Memory candidate curation (sync, non-blocking)
