@@ -281,6 +281,10 @@ iter_head="$(mumei_review_iter_head)"
 # portable existence check (bash 3.2+); warn loudly rather than degrade silently.
 if ! declare -p reviewer_outputs >/dev/null 2>&1 || [ "${#reviewer_outputs[@]}" -eq 0 ]; then
   mumei_log_warn "residual: reviewer_outputs unpopulated — filtered_out residuals will be absent"
+  # Declare it empty so the loop's ${reviewer_outputs[$r]:-{}} cannot raise an
+  # unbound-variable error under set -u on bash versions where :- does not guard
+  # an undeclared associative array. No-op (|| true) on bash 3.2, which lacks -A.
+  declare -A reviewer_outputs 2>/dev/null || true
 fi
 reviewer_filtered_out="$(
   for r in spec-compliance security adversarial; do
