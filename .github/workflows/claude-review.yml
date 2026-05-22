@@ -36,10 +36,12 @@ jobs:
     # Also skip Dependabot: on pull_request its runs do not receive repository
     # secrets, so CLAUDE_CODE_OAUTH_TOKEN is empty by design and the action
     # would fail auth on every dependency-bump PR. Dependency bumps do not need
-    # an AI review.
+    # an AI review. Gate on the PR author (pull_request.user.login), not
+    # github.actor — on reopened/synchronize the actor can be the human who
+    # acted, letting a Dependabot-authored PR slip past an actor-based check.
     if: >-
       github.event.pull_request.head.repo.fork == false &&
-      github.actor != 'dependabot[bot]'
+      github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       # No secret-presence guard: a missing / expired CLAUDE_CODE_OAUTH_TOKEN
