@@ -9,8 +9,11 @@
 # worse than an over-reported one).
 #
 # Sources (all derived deterministically from existing signals):
-#   - surfaced finding severity_action == report_only (pillar C advisory)
-#       → ungrounded-concern
+#   - surfaced finding severity_action == report_only AND severity != PRE_EXISTING
+#       → ungrounded-concern (pillar C advisory: a HIGH/CRITICAL the validator
+#         judged not reproducible). PRE_EXISTING is grounded legacy debt, also
+#         report_only, but NOT an ungrounded concern — it is excluded here and
+#         falls through to its validator-decision category (or none).
 #   - surfaced finding validator.decision == unsure
 #       → insufficient-context
 #   - surfaced finding validator.decision == valid_by_assertion (validator skip)
@@ -61,8 +64,9 @@ mumei_residual_collect() {
     --arg ceiling "$ceiling" '
     [ $surfaced[] | objects
       | (.severity_action // "") as $sa
+      | (.severity // "") as $sev
       | (.validator.decision // "") as $vd
-      | if $sa == "report_only" then
+      | if $sa == "report_only" and $sev != "PRE_EXISTING" then
           {category: "ungrounded-concern",   source: "advisory",         ref: ((.id // "-") | tostring), note: ((.message // "") | tostring)}
         elif $vd == "unsure" then
           {category: "insufficient-context", source: "validator-unsure", ref: ((.id // "-") | tostring), note: ((.message // "") | tostring)}

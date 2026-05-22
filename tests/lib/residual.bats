@@ -22,6 +22,30 @@ _cats() { jq -c '[.[].category]'; }
   [ "$(jq -r '.[] | select(.category=="ungrounded-concern") | .ref' <<<"$out")" = "F-1" ]
 }
 
+@test "PRE_EXISTING report_only is NOT ungrounded-concern (grounded legacy debt)" {
+  surfaced='[{"id":"F-PE","severity":"PRE_EXISTING","severity_action":"report_only","message":"legacy debt"}]'
+  out="$(mumei_residual_collect "$surfaced" '[]' "$CEIL")"
+  [ "$(jq -r '[.[] | select(.category=="ungrounded-concern")] | length' <<<"$out")" = "0" ]
+  # only the always-on ceiling remains
+  [ "$(jq 'length' <<<"$out")" = "1" ]
+  [ "$(jq -r '.[0].category' <<<"$out")" = "ai-blindspot-ceiling" ]
+}
+
+@test "PRE_EXISTING report_only still surfaces via its validator decision (unsure)" {
+  # PRE_EXISTING is excluded from ungrounded-concern but falls through: if the
+  # validator marked it unsure it still earns insufficient-context.
+  surfaced='[{"id":"F-PE2","severity":"PRE_EXISTING","severity_action":"report_only","validator":{"decision":"unsure"},"message":"m"}]'
+  out="$(mumei_residual_collect "$surfaced" '[]' "$CEIL")"
+  [ "$(jq -r '[.[] | select(.category=="ungrounded-concern")] | length' <<<"$out")" = "0" ]
+  [ "$(jq -r '[.[] | select(.category=="insufficient-context")] | length' <<<"$out")" = "1" ]
+}
+
+@test "non-PRE_EXISTING report_only still maps to ungrounded-concern" {
+  surfaced='[{"id":"F-A","severity":"HIGH","severity_action":"report_only","message":"m"}]'
+  out="$(mumei_residual_collect "$surfaced" '[]' "$CEIL")"
+  [ "$(jq -r '.[] | select(.category=="ungrounded-concern") | .ref' <<<"$out")" = "F-A" ]
+}
+
 @test "validator unsure maps to insufficient-context" {
   surfaced='[{"id":"F-2","validator":{"decision":"unsure"},"message":"m"}]'
   out="$(mumei_residual_collect "$surfaced" '[]' "$CEIL")"

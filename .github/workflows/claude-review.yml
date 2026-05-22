@@ -33,26 +33,28 @@ jobs:
     # Skip PRs from forks: an untrusted head could tamper with the review
     # context files (AGENTS.md / CLAUDE.md / .claude/rules), steering the
     # reviewer (prompt injection). mumei takes no external-fork PRs.
-    if: github.event.pull_request.head.repo.fork == false
+    # Also skip Dependabot: on pull_request its runs do not receive repository
+    # secrets, so CLAUDE_CODE_OAUTH_TOKEN is empty by design and the action
+    # would fail auth on every dependency-bump PR. Dependency bumps do not need
+    # an AI review. Gate on the PR author (pull_request.user.login), not
+    # github.actor — on reopened/synchronize the actor can be the human who
+    # acted, letting a Dependabot-authored PR slip past an actor-based check.
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Require the OAuth secret
-        id: guard
-        env:
-          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::CLAUDE_CODE_OAUTH_TOKEN not set; skipping Claude review"
-            echo "skip=true" >>"$GITHUB_OUTPUT"
-          fi
-
-      - if: steps.guard.outputs.skip != 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      # No secret-presence guard: a missing / expired CLAUDE_CODE_OAUTH_TOKEN
+      # makes the action below fail its auth step (a loud red check), which is
+      # the fail-fast behavior we want. An explicit guard that skipped the job
+      # would instead report a successful check and silently disable the
+      # reviewer. Fork PRs (where the secret is unavailable) are excluded at the
+      # job level, so on same-repo PRs the secret must be present.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
-      - if: steps.guard.outputs.skip != 'true'
-        uses: anthropics/claude-code-action@4481e6d3c7bbb88db2a928ca3444c536f589c7c1 # v1
+      - uses: anthropics/claude-code-action@4481e6d3c7bbb88db2a928ca3444c536f589c7c1 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: true
