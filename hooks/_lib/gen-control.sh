@@ -64,13 +64,16 @@ mumei_gencontrol_oq_section() {
 }
 
 # Exit 0 when the artifact has UNRESOLVED Open Questions (= caller should
-# block), exit 1 when resolved (= allow). "Unresolved" means any of:
-#   - the artifact exists but has no `## Open Questions` heading (REQ-20.1)
-#   - the section contains at least one unchecked `- [ ]` item
-#   - the section is empty / prose-only without the literal `None`
-# Resolved means every item is `- [x]`, OR the section holds the literal
-# `None`. A missing artifact FILE returns 1 (do not block) — that is the
-# feature-less / pre-spec safety case, not a section-absence block.
+# block), exit 1 when resolved (= allow). The section is RESOLVED only when
+# its non-blank content is either:
+#   - exactly the literal `None` (explicitly empty), OR
+#   - composed solely of resolved `- [x]` checkboxes (no unchecked items, and
+#     no other narrative/prose lines).
+# Anything else is unresolved: heading absent, an unchecked `- [ ]`, an empty
+# section, prose-only, OR a mix of `- [x]` with stray prose (a checkbox does
+# not "cover" an unresolved narrative question in the same block). A missing
+# artifact FILE returns 1 (do not block) — the feature-less / pre-spec safety
+# case, not a section-absence block.
 mumei_gencontrol_oq_unresolved() {
   local artifact="$1"
   [[ -f "$artifact" ]] || return 1
@@ -80,25 +83,25 @@ mumei_gencontrol_oq_unresolved() {
     return 0
   fi
 
-  local sec
+  local sec nonblank
   sec="$(mumei_gencontrol_oq_section "$artifact")"
 
   # Any unchecked checkbox -> unresolved.
   if printf '%s\n' "$sec" | grep -qE '^[[:space:]]*-[[:space:]]+\[[[:space:]]\]'; then
     return 0
   fi
-  # No unchecked items, but at least one resolved checkbox -> resolved.
-  if printf '%s\n' "$sec" | grep -qE '^[[:space:]]*-[[:space:]]+\[[xX]\]'; then
-    return 1
-  fi
-  # No checkboxes at all: allow ONLY when the section's sole non-blank line is
-  # the literal `None` (explicitly empty). Prose plus a stray `None` line stays
-  # blocked — `None` must be the entire content, not just present somewhere.
-  local nonblank
+
+  # Non-blank content, trimmed per line.
   nonblank="$(printf '%s\n' "$sec" | grep -vE '^[[:space:]]*$' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-  if [[ "$nonblank" == "None" ]]; then
-    return 1
+
+  # Empty section without an explicit None -> unresolved.
+  [[ -z "$nonblank" ]] && return 0
+  # Sole non-blank line is the literal None -> resolved.
+  [[ "$nonblank" == "None" ]] && return 1
+  # Otherwise resolved only when EVERY non-blank line is a resolved `- [x]`
+  # checkbox; any other line (prose / narrative question) -> unresolved.
+  if printf '%s\n' "$nonblank" | grep -qvE '^-[[:space:]]+\[[xX]\]'; then
+    return 0
   fi
-  # Section present but empty / prose-only (with or without a stray None) -> unresolved.
-  return 0
+  return 1
 }

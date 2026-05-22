@@ -191,6 +191,17 @@ mumei_deny() {
   exit 0
 }
 
+# Plan vehicle exits before ALL spec-only rules (P2/P3, E1, P1/I2/I1/W1), which
+# assume spec-format artifacts (requirements.md with a `## Open Questions`
+# section, design.md, tasks.md _Files: meta) that plan vehicle lacks — its
+# plan.md is captured verbatim from ExitPlanMode. Exiting here (before P2/P3)
+# also prevents spec-phase denials on a mixed/stale tree. Pillar E
+# generation-time gating for the plan vehicle awaits plan-capture producer
+# support (a follow-up feature).
+if [[ "$VEHICLE" == "plan" ]]; then
+  exit 0
+fi
+
 PHASE="$(mumei_state_phase "$FEATURE")"
 
 # --- P2: design.md is being written while requirements.md still has [NEEDS CLARIFICATION] ---
@@ -283,16 +294,6 @@ mumei_is_meta_path() {
 }
 
 # R3 was relocated above (vehicle/feature-independent gate); see line ~45.
-
-# spec-only rules below (E1, P1/I2/I1/W1) assume spec-format artifacts
-# (requirements.md with a `## Open Questions` section, tasks.md _Files: meta,
-# design.md). Plan vehicle has none — its plan.md is captured verbatim from
-# ExitPlanMode and carries no Open Questions section, so an OQ gate would
-# deadlock every accepted plan. Exit here; pillar E generation-time gating for
-# the plan vehicle awaits plan-capture producer support (a follow-up feature).
-if [[ "$VEHICLE" == "plan" ]]; then
-  exit 0
-fi
 
 # --- E1: Open Questions block (pillar E, spec vehicle) ---
 # In implement phase, refuse edits to production (non-meta) files while

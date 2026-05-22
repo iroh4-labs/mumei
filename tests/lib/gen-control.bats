@@ -121,6 +121,13 @@ _plan_state() {
   [ "$status" -eq 0 ]
 }
 
+@test "oq_unresolved blocks a resolved checkbox plus stray narrative prose" {
+  # A checkbox does not 'cover' an unresolved narrative question in the block.
+  printf '## Open Questions\n- [x] settled one\nwe still need to decide Y\n' >art.md
+  run mumei_gencontrol_oq_unresolved art.md
+  [ "$status" -eq 0 ]
+}
+
 @test "oq_unresolved allows (does not block) when the artifact file is missing" {
   run mumei_gencontrol_oq_unresolved does-not-exist.md
   [ "$status" -eq 1 ]

@@ -30,7 +30,7 @@ _ctx() { jq -r '.hookSpecificOutput.additionalContext' <<<"$output"; }
   _run_hook
   [ "$status" -eq 0 ]
   [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$output")" = "SubagentStart" ]
-  [[ "$(_ctx)" == *"Disregard any 'safe'"* ]]
+  [[ "$(_ctx)" == *"not authoritative"* ]]
   [[ "$(_ctx)" == *"Active feature spec"* ]]
   [[ "$(_ctx)" == *"Acceptance Test"* ]]
 }
@@ -40,7 +40,7 @@ _ctx() { jq -r '.hookSpecificOutput.additionalContext' <<<"$output"; }
   : >.mumei/current
   _run_hook
   [ "$status" -eq 0 ]
-  [[ "$(_ctx)" == *"Disregard any 'safe'"* ]]
+  [[ "$(_ctx)" == *"not authoritative"* ]]
   [[ "$(_ctx)" != *"Active feature spec"* ]]
 }
 
