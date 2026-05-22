@@ -59,24 +59,24 @@ mumei_residual_collect() {
     --argjson surfaced "$surfaced_json" \
     --argjson filtered "$filtered_out_json" \
     --arg ceiling "$ceiling" '
-    [ $surfaced[]
+    [ $surfaced[] | objects
       | (.severity_action // "") as $sa
       | (.validator.decision // "") as $vd
       | if $sa == "report_only" then
-          {category: "ungrounded-concern",   source: "advisory",         ref: (.id // "-"), note: (.message // "")}
+          {category: "ungrounded-concern",   source: "advisory",         ref: ((.id // "-") | tostring), note: ((.message // "") | tostring)}
         elif $vd == "unsure" then
-          {category: "insufficient-context", source: "validator-unsure", ref: (.id // "-"), note: (.message // "")}
+          {category: "insufficient-context", source: "validator-unsure", ref: ((.id // "-") | tostring), note: ((.message // "") | tostring)}
         elif $vd == "valid_by_assertion" then
-          {category: "unvalidated-assertion", source: "validator-skip",  ref: (.id // "-"), note: (.message // "")}
+          {category: "unvalidated-assertion", source: "validator-skip",  ref: ((.id // "-") | tostring), note: ((.message // "") | tostring)}
         else empty end
     ]
     +
-    [ $filtered[]
+    [ $filtered[] | objects
       | (.reason // "") as $r
       | if $r == "needs_dynamic_analysis" then
-          {category: "needs-dynamic-analysis",   source: "reviewer-filtered", ref: (.reviewer // "-"), note: (.would_have_flagged // "")}
+          {category: "needs-dynamic-analysis",   source: "reviewer-filtered", ref: ((.reviewer // "-") | tostring), note: ((.would_have_flagged // "") | tostring)}
         elif $r == "needs_architecture_review" then
-          {category: "needs-architecture-review", source: "reviewer-filtered", ref: (.reviewer // "-"), note: (.would_have_flagged // "")}
+          {category: "needs-architecture-review", source: "reviewer-filtered", ref: ((.reviewer // "-") | tostring), note: ((.would_have_flagged // "") | tostring)}
         else empty end
     ]
     +

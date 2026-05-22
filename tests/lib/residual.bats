@@ -122,3 +122,21 @@ _cats() { jq -c '[.[].category]'; }
   [ "$(jq 'length' <<<"$out")" = "1" ]
   [ "$(jq -r '.[0].category' <<<"$out")" = "ai-blindspot-ceiling" ]
 }
+
+@test "non-object members in the array do not crash aggregation (objects filter)" {
+  # a valid-but-non-object member (number / string / null) mixed with real
+  # findings must be skipped, not type-error the whole jq.
+  surfaced='[42,{"id":"F-1","severity_action":"report_only","message":"m"},"bare",null]'
+  out="$(mumei_residual_collect "$surfaced" '[]' "$CEIL")"
+  [ "$(jq -r '[.[] | select(.category=="ungrounded-concern")] | length' <<<"$out")" = "1" ]
+  # F-1 + ceiling, scalars dropped
+  [ "$(jq 'length' <<<"$out")" = "2" ]
+}
+
+@test "non-string id/message are coerced to string (tostring)" {
+  surfaced='[{"id":123,"severity_action":"report_only","message":456}]'
+  out="$(mumei_residual_collect "$surfaced" '[]' "$CEIL")"
+  [ "$(jq -r '.[] | select(.category=="ungrounded-concern") | .ref' <<<"$out")" = "123" ]
+  run jq -e '.[] | select(.category=="ungrounded-concern") | (.ref|type=="string") and (.note|type=="string")' <<<"$out"
+  [ "$status" -eq 0 ]
+}
