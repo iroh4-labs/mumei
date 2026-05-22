@@ -36,23 +36,25 @@ jobs:
     if: github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     steps:
+      # Fail loud (not skip) when the secret is absent. A skipped job reports as
+      # a successful check, which would silently disable this reviewer on token
+      # expiry / misconfiguration while PRs keep merging unreviewed. Fork PRs are
+      # already excluded at the job level, so on same-repo PRs the secret must be
+      # present; its absence is a real misconfiguration worth a red check.
       - name: Require the OAuth secret
-        id: guard
         env:
           TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::warning::CLAUDE_CODE_OAUTH_TOKEN not set; skipping Claude review"
-            echo "skip=true" >>"$GITHUB_OUTPUT"
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN not set; Claude review cannot run" >&2
+            exit 1
           fi
 
-      - if: steps.guard.outputs.skip != 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
-      - if: steps.guard.outputs.skip != 'true'
-        uses: anthropics/claude-code-action@4481e6d3c7bbb88db2a928ca3444c536f589c7c1 # v1
+      - uses: anthropics/claude-code-action@4481e6d3c7bbb88db2a928ca3444c536f589c7c1 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: true
