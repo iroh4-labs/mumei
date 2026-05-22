@@ -33,23 +33,21 @@ jobs:
     # Skip PRs from forks: an untrusted head could tamper with the review
     # context files (AGENTS.md / CLAUDE.md / .claude/rules), steering the
     # reviewer (prompt injection). mumei takes no external-fork PRs.
-    if: github.event.pull_request.head.repo.fork == false
+    # Also skip Dependabot: on pull_request its runs do not receive repository
+    # secrets, so CLAUDE_CODE_OAUTH_TOKEN is empty by design and the action
+    # would fail auth on every dependency-bump PR. Dependency bumps do not need
+    # an AI review.
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      # Fail loud (not skip) when the secret is absent. A skipped job reports as
-      # a successful check, which would silently disable this reviewer on token
-      # expiry / misconfiguration while PRs keep merging unreviewed. Fork PRs are
-      # already excluded at the job level, so on same-repo PRs the secret must be
-      # present; its absence is a real misconfiguration worth a red check.
-      - name: Require the OAuth secret
-        env:
-          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::error::CLAUDE_CODE_OAUTH_TOKEN not set; Claude review cannot run" >&2
-            exit 1
-          fi
-
+      # No secret-presence guard: a missing / expired CLAUDE_CODE_OAUTH_TOKEN
+      # makes the action below fail its auth step (a loud red check), which is
+      # the fail-fast behavior we want. An explicit guard that skipped the job
+      # would instead report a successful check and silently disable the
+      # reviewer. Fork PRs (where the secret is unavailable) are excluded at the
+      # job level, so on same-repo PRs the secret must be present.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
