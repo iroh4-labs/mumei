@@ -234,3 +234,119 @@ _complete_wave1() {
   decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
   [ "$decision" = "deny" ]
 }
+
+# ─── I5: deterministic tool gates ───────────────────────────
+
+@test "I5: declared tool_gate failing → deny" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "exit 1"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"lint"* ]]
+}
+
+@test "I5: declared tool_gate not found (exit 127) → deny as config error" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"semgrep": "this_command_does_not_exist_xyz123"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"not found"* ]]
+}
+
+@test "I5: tool_gate run is recorded to verify-log (source=tool-gate, command=key)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "exit 1"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ -f .mumei/specs/REQ-1-foo/verify-log.jsonl ]
+  rec="$(jq -rc 'select(.source=="tool-gate")' .mumei/specs/REQ-1-foo/verify-log.jsonl | head -1)"
+  [ -n "$rec" ]
+  [ "$(printf '%s' "$rec" | jq -r '.command')" = "lint" ]
+  [ "$(printf '%s' "$rec" | jq -r '.exit_code')" = "1" ]
+}
+
+@test "I5: no tool_gates declared → skip, commit passes cleanly" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"golden_paths": []}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "I5: passing tool_gate does not block and records exit 0" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "true"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  ec="$(jq -r 'select(.source=="tool-gate") | .exit_code' .mumei/specs/REQ-1-foo/verify-log.jsonl | head -1)"
+  [ "$ec" = "0" ]
+}
+
+@test "I5: a stdin-reading tool_gate does not skip later gates (fd-0 drain guard)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  # 'a_reader' (cat) reads stdin. Without the </dev/null guard it would drain
+  # the process-substitution feeding the gate loop, so the later 'z_fail' gate
+  # would never run and the commit would pass. With the guard, z_fail runs and
+  # denies the commit.
+  printf '%s' '{"tool_gates": {"a_reader": "cat", "z_fail": "exit 3"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"z_fail"* ]]
+}
+
+@test "I5: empty tool_gate command is denied (config error, not silent skip)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": ""}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"empty command"* ]]
+}
+
+@test "I5: failure-masking chain in a tool_gate command warns on stderr" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "true || true"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [[ "$stderr" == *"may be masked"* ]]
+}
+
+@test "I5: tool-gate verify-log record carries no tool output (secret safety)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  # A scanner-like gate that prints a secret then fails. The deny message may
+  # show the tail (operator-facing), but the verify-log record must not.
+  printf '%s' '{"tool_gates": {"scan": "echo SECRET_TOKEN_abc; exit 1"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  rec="$(jq -rc 'select(.source=="tool-gate")' .mumei/specs/REQ-1-foo/verify-log.jsonl | head -1)"
+  [ -n "$rec" ]
+  [ "$(printf '%s' "$rec" | jq -r 'has("excerpt")')" = "false" ]
+  [[ "$rec" != *SECRET_TOKEN* ]]
+}
+
+@test "I5: deny additionalContext renders real newlines, not literal backslash-n" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "exit 1"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  # jq -r unescapes JSON; a real newline means the literal two-char \n is absent.
+  [[ "$ctx" != *'\n'* ]]
+}

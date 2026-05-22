@@ -333,6 +333,17 @@ As a <role>, I want <feature>, so that <benefit>.
 
 Tag each AC with `[CONFIRMED]`, `[ASSUMPTION]`, or `[NEEDS CLARIFICATION: ...]`. By the time clarification (Phase 1.1) finishes, there should be no `[NEEDS CLARIFICATION]` left in scope. If any remain, they should be moved to `## Open Questions` (deferred to design phase) or revisited with the user before drafting.
 
+#### Invariant candidate proposal (opt-in, pillar B)
+
+For each AC, judge whether one of the 4 property types fits and, when it does, propose an `_Invariant:_` line beneath the AC. This is **opt-in**: ACs where no property fits (CRUD, wiring, UI) get no `_Invariant:_` line and are skipped by the property pipeline. Never force an invariant onto an AC that has none — a tautological invariant verifies nothing and is rejected downstream.
+
+- **round-trip** — an encode/serialize paired with a decode/parse: `_Invariant: type=roundtrip fn=encode inverse=decode_`
+- **idempotency** — applying twice equals applying once (normalize, dedupe, clamp): `_Invariant: type=idempotency fn=normalize_`
+- **invariant-preservation** — a predicate that must hold before and after (balance ≥ 0, sorted): `_Invariant: type=invariant-preservation fn=apply invariant=balance_nonneg_`
+- **oracle-match** — an optimized impl that must match a trusted reference: `_Invariant: type=oracle-match fn=fastpath oracle=reference_`
+
+`fn` must differ from `inverse` / `oracle` (a tautological form is rejected by `mumei_property_validate_invariant`). The user confirms or edits proposed invariants at the single approval gate (Phase 3.5); the blind `property-author` writes the test in Phase 4.0.
+
 #### Inline Examples per AC
 
 For each AC, emit an inline `Examples:` block of zero, one, or two natural-language list items beneath the AC line:
@@ -613,6 +624,46 @@ This is the single user approval gate. There is no per-spec approval before this
 ## Phase 4 — Implement (Wave by Wave)
 
 The user (or Claude through their guidance) implements Wave 1's tasks. After each task, mark `[x]` in `tasks.md` (the post-edit-guard hook will verify the implementation actually exists).
+
+### Phase 4.0 — Blind property authoring (opt-in, pillar B)
+
+Before implementing a Wave, check whether any AC in scope carries an
+`_Invariant:` line. This is **opt-in**: ACs without one are skipped and the
+Wave proceeds normally (no deadlock when a feature has no invariants).
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/property.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/config.sh"
+# Each line is "REQ-N.M<TAB>type=… fn=… …" for an opted-in AC; no output → skip.
+mumei_property_acs_with_invariant ".mumei/specs/${feature}/requirements.md"
+```
+
+For each opted-in AC: validate the invariant structure, then launch the
+`property-author` subagent. Pass it ONLY the `_Invariant:` spec, the AC body,
+and the target function signature / type definitions — never the implementation
+body. The SubagentStart hook also withholds the full requirements.md from this
+agent, keeping it blind so its test cannot pander to a flawed implementation.
+
+```bash
+# Rejects unknown types and tautological forms (fn == inverse / fn == oracle).
+mumei_property_validate_invariant "type=roundtrip fn=encode inverse=decode" ||
+  echo "invalid invariant — fix requirements.md or drop the _Invariant: line"
+```
+
+```text
+Task(subagent_type: "property-author",
+     prompt: "_Invariant: <spec>. AC: <AC body>. Signature: <fn signature / type defs>. Write one property test.")
+```
+
+After the agent writes the test, freeze it as a golden file so the implement
+actor cannot tune it to a flawed implementation (G1):
+
+```bash
+mumei_config_add_golden_path "<generated property test path>"
+```
+
+The implement actor may READ the property test (to satisfy it), but any
+Edit/Write is denied by G1 and the file is restored from HEAD.
 
 When all tasks in current Wave are `[x]`:
 

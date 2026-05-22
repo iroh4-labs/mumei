@@ -28,6 +28,14 @@ if ! declare -F mumei_log_warn >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
+# mumei_config_add_golden_path normalizes paths via mumei_state_canonicalize_path
+# so a stored golden entry matches what G1 compares against. state.sh does not
+# source config.sh, so this is not circular.
+if ! declare -F mumei_state_canonicalize_path >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/state.sh"
+fi
+
 # Echo each configured golden path glob on its own line. No output (return 0)
 # when .mumei/config.json is absent, unparsable, or has no golden_paths.
 mumei_config_golden_paths() {
@@ -80,4 +88,69 @@ mumei_config_dir_holds_golden_glob() {
     esac
   done < <(mumei_config_golden_paths)
   return 1
+}
+
+# Echo each configured tool gate as "key<TAB>command" on its own line. No
+# output (return 0) when .mumei/config.json is absent, unparsable, or has no
+# tool_gates object. Only an OBJECT with STRING values is honored (mirrors the
+# golden_paths array type-guard): a string/array tool_gates from a hand-edit,
+# or a non-string value (number/object/array), degrades to no-op for that entry
+# rather than emitting a malformed pair. Tool presence is the user's
+# responsibility — mumei only invokes the declared command and gates on exit.
+mumei_config_tool_gates() {
+  local cf=".mumei/config.json"
+  [[ -f "$cf" ]] || return 0
+  jq -r 'if (.tool_gates | type) == "object"
+         then .tool_gates | to_entries[]
+              | select((.value | type) == "string")
+              | "\(.key)\t\(.value)"
+         else empty end' "$cf" 2>/dev/null || return 0
+}
+
+# Append a single path to golden_paths in .mumei/config.json (atomic tmp+mv).
+# No-op (return 0) when the path is already present. Creates config.json with a
+# golden_paths array when the file is absent. Used by /mumei:plan to freeze a
+# generated property test so the implement actor cannot edit it (G1). Returns 1
+# on an empty path argument or a write/jq failure.
+mumei_config_add_golden_path() {
+  local path="$1"
+  [[ -n "$path" ]] || return 1
+  # Normalize to the same repo-relative canonical form G1 compares against
+  # (mumei_state_canonicalize_path = realpath -m, then strip the project root).
+  # Without this a caller passing './tests/x.test.ts' stores the './'-prefixed
+  # spelling while G1 matches the canonical 'tests/x.test.ts', so the freeze is
+  # silently bypassable by path spelling. Out-of-repo / unresolved paths (still
+  # absolute after the strip) are left verbatim — they cannot be golden anyway.
+  if declare -F mumei_state_canonicalize_path >/dev/null 2>&1; then
+    local _proot _canon
+    _proot="$(pwd -P 2>/dev/null || pwd)"
+    _canon="$(mumei_state_canonicalize_path "$path" 2>/dev/null || printf '%s' "$path")"
+    _canon="${_canon#"${_proot}/"}"
+    [[ "$_canon" != /* ]] && path="$_canon"
+  fi
+  local cf=".mumei/config.json" tmp
+  mkdir -p .mumei 2>/dev/null || return 1
+  if [[ -f "$cf" ]]; then
+    # Already registered → no-op. index() returns a number (truthy under -e)
+    # when present, null (falsy) when absent.
+    if jq -e --arg p "$path" '(.golden_paths // []) | index($p)' "$cf" >/dev/null 2>&1; then
+      return 0
+    fi
+    tmp="$(mktemp "${cf}.XXXXXX")" || return 1
+    if jq --arg p "$path" '.golden_paths = ((.golden_paths // []) + [$p])' "$cf" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$cf"
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  else
+    tmp="$(mktemp "${cf}.XXXXXX")" || return 1
+    if jq -n --arg p "$path" '{golden_paths: [$p]}' >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$cf"
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  fi
+  return 0
 }

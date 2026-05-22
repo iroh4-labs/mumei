@@ -117,3 +117,93 @@ _write_config() {
   run mumei_config_dir_holds_golden_glob "tests/goldenextra"
   [ "$status" -eq 1 ]
 }
+
+# ─── mumei_config_tool_gates ─────────────────────────────────
+
+@test "mumei_config_tool_gates emits nothing when config.json is absent" {
+  run mumei_config_tool_gates
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "mumei_config_tool_gates emits nothing on malformed JSON" {
+  _write_config '{ not json'
+  run mumei_config_tool_gates
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "mumei_config_tool_gates emits nothing when tool_gates key is absent" {
+  _write_config '{"golden_paths": ["x"]}'
+  run mumei_config_tool_gates
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "mumei_config_tool_gates emits key<TAB>command for each string entry" {
+  _write_config '{"tool_gates": {"typecheck": "npm run tc", "lint": "eslint ."}}'
+  run mumei_config_tool_gates
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'typecheck\tnpm run tc'* ]]
+  [[ "$output" == *$'lint\teslint .'* ]]
+}
+
+@test "mumei_config_tool_gates skips non-string values" {
+  _write_config '{"tool_gates": {"good": "echo ok", "bad": 123, "arr": ["x"]}}'
+  run mumei_config_tool_gates
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'good\techo ok'* ]]
+  [[ "$output" != *bad* ]]
+  [[ "$output" != *arr* ]]
+}
+
+@test "mumei_config_tool_gates emits nothing when tool_gates is not an object" {
+  _write_config '{"tool_gates": ["typecheck"]}'
+  run mumei_config_tool_gates
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# ─── mumei_config_add_golden_path ────────────────────────────
+
+@test "add_golden_path creates config.json with golden_paths when absent" {
+  run mumei_config_add_golden_path "tests/p.test.ts"
+  [ "$status" -eq 0 ]
+  run jq -c '.golden_paths' .mumei/config.json
+  [ "$output" = '["tests/p.test.ts"]' ]
+}
+
+@test "add_golden_path appends to an existing golden_paths" {
+  _write_config '{"golden_paths": ["a"]}'
+  mumei_config_add_golden_path "b"
+  run jq -c '.golden_paths' .mumei/config.json
+  [ "$output" = '["a","b"]' ]
+}
+
+@test "add_golden_path is a no-op for a duplicate" {
+  _write_config '{"golden_paths": ["a"]}'
+  mumei_config_add_golden_path "a"
+  run jq -r '.golden_paths | length' .mumei/config.json
+  [ "$output" = "1" ]
+}
+
+@test "add_golden_path preserves other keys (tool_gates)" {
+  _write_config '{"golden_paths": ["a"], "tool_gates": {"lint": "x"}}'
+  mumei_config_add_golden_path "b"
+  run jq -c '.tool_gates' .mumei/config.json
+  [ "$output" = '{"lint":"x"}' ]
+}
+
+@test "add_golden_path returns 1 on an empty path" {
+  run mumei_config_add_golden_path ""
+  [ "$status" -eq 1 ]
+}
+
+@test "add_golden_path normalizes a ./-prefixed path to repo-relative (G1 match)" {
+  mkdir -p tests
+  mumei_config_add_golden_path "./tests/x.property.test.ts"
+  run jq -c '.golden_paths' .mumei/config.json
+  # stored canonical so G1 (which compares the canonical repo-relative path)
+  # actually matches it — not the './'-prefixed spelling.
+  [ "$output" = '["tests/x.property.test.ts"]' ]
+}
