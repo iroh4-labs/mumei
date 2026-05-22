@@ -117,6 +117,10 @@
           "message": {
             "type": "string"
           },
+          "trace": {
+            "description": "Falsifiable basis for a HIGH/CRITICAL finding (pillar C, REQ-22.1): the input -> bad-output / source -> sink path the issue-validator checks on its REPRODUCIBLE axis. Distinct from `message`/`evidence`.",
+            "type": "string"
+          },
           "source": {
             "description": "Detector ground-truth marker: 'semgrep' / 'osv-scanner' / 'structural-integrity' for deterministic findings.",
             "type": "string"
@@ -192,6 +196,10 @@
           "message": {
             "type": "string"
           },
+          "trace": {
+            "description": "Falsifiable basis for a HIGH/CRITICAL finding (pillar C, REQ-22.1): the input -> bad-output / source -> sink path the issue-validator checks on its REPRODUCIBLE axis. Distinct from `message`/`evidence`.",
+            "type": "string"
+          },
           "source": {
             "description": "Detector ground-truth marker: 'semgrep' / 'osv-scanner' / 'structural-integrity' for deterministic findings.",
             "type": "string"
@@ -255,6 +263,10 @@
     },
     "short_circuited_from": {
       "description": "Path to the prior review JSON when this entry is a REQ-7.7 short-circuit synthetic record.",
+      "type": "string"
+    },
+    "confidence_ceiling": {
+      "description": "One-line honesty disclaimer (pillar C, REQ-22.10): names the Claude-family shared blind spot and the real-bug detection ceiling. Never claims human review is unnecessary.",
       "type": "string"
     }
   }

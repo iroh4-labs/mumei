@@ -274,12 +274,14 @@ review_json="$(jq -nc \
   --argjson next_iter_reviewers "$next_iter_reviewers" \
   --argjson detector_skipped "$detector_skipped" \
   --arg detector_report "$detector_report" \
+  --arg confidence_ceiling "$(mumei_review_ceiling_disclaimer)" \
   '{feature: $feature, wave: "all", iteration: $iteration,
     iter_head: $iter_head, verdict: $verdict, reviewers: $reviewers,
     findings_surfaced: $surfaced, findings_filtered: $filtered,
     next_iter_reviewers: $next_iter_reviewers,
     detector_skipped: $detector_skipped,
-    detector_report: $detector_report}')"
+    detector_report: $detector_report,
+    confidence_ceiling: $confidence_ceiling}')"
 
 # Inject detector_reused_from with proper JSON typing.
 # shellcheck disable=SC2086

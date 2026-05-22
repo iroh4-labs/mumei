@@ -1084,9 +1084,17 @@ the next iteration:
   "summary": "...",
   "next_iter_reviewers": ["<reviewer1>", "<reviewer2>", "adversarial"],
   "detector_skipped": false,
-  "detector_reused_from": null
+  "detector_reused_from": null,
+  "confidence_ceiling": "<mumei_review_ceiling_disclaimer output>"
 }
 ```
+
+**`confidence_ceiling`** (REQ-22.10): stamp the fixed one-line disclaimer
+from `mumei_review_ceiling_disclaimer` onto every persisted review JSON.
+It states AI review is an assist with family-shared blind spots and a
+real-bug detection ceiling — never that human review is unnecessary. Set
+it via `--arg confidence_ceiling "$(mumei_review_ceiling_disclaimer)"` when
+building the review JSON.
 
 **`iter_head`**: capture `git rev-parse HEAD` at iter
 completion. The next iter's Stage 0 reads this to compute the diff

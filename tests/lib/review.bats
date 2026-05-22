@@ -287,3 +287,24 @@ EOF
   verdict="$(mumei_review_aggregate_verdict 0 "$downgraded" '{}')"
   [ "$verdict" = "NEEDS_IMPROVEMENT" ]
 }
+
+# --- mumei_review_ceiling_disclaimer (REQ-22.10) ---
+
+@test "ceiling: disclaimer is non-empty" {
+  out="$(mumei_review_ceiling_disclaimer)"
+  [ -n "$out" ]
+}
+
+@test "ceiling: names family blind spot and detection ceiling" {
+  out="$(mumei_review_ceiling_disclaimer)"
+  grep -qi 'family' <<<"$out"
+  grep -qiE 'ceiling|fraction of real bugs' <<<"$out"
+}
+
+@test "ceiling: does not claim human review is unnecessary" {
+  out="$(mumei_review_ceiling_disclaimer)"
+  # asserts the honest framing: it must say it does NOT make human review unnecessary
+  grep -qi 'does not make human review unnecessary' <<<"$out"
+  # and must not contain a bare "human review unnecessary" claim without the negation
+  ! grep -qiE '(no|without) human review' <<<"$out"
+}

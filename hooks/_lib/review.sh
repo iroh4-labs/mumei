@@ -375,6 +375,17 @@ mumei_review_iter_head() {
   git rev-parse HEAD 2>/dev/null || true
 }
 
+# The fixed one-line ceiling disclaimer (pillar C, REQ-22.10). The
+# orchestrator stamps this onto every review JSON's `confidence_ceiling`
+# field. It names the two honest limits of AI review — the Claude-family
+# shared blind spot and the real-bug detection ceiling — and explicitly
+# refuses to claim human review is unnecessary. This is the residual signal
+# pointing at pillar D; do not soften it into a "review passed, ship it"
+# message.
+mumei_review_ceiling_disclaimer() {
+  printf '%s' "AI review is an assist, not a guarantee: reviewers share Claude-family blind spots and detect only a fraction of real bugs. This review reduces and concentrates human review onto the residual — it does not make human review unnecessary."
+}
+
 # Stage 6.6: run deterministic structural integrity checks
 # (lint-hook-ids.sh + lint-docs-drift.sh) and emit a JSON array of
 # findings. The array is empty when both scripts pass; each failing
