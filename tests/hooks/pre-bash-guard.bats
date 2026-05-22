@@ -308,3 +308,45 @@ _complete_wave1() {
   reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
   [[ "$reason" == *"z_fail"* ]]
 }
+
+@test "I5: empty tool_gate command is denied (config error, not silent skip)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": ""}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"empty command"* ]]
+}
+
+@test "I5: failure-masking chain in a tool_gate command warns on stderr" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "true || true"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  [[ "$stderr" == *"may be masked"* ]]
+}
+
+@test "I5: tool-gate verify-log record carries no tool output (secret safety)" {
+  _init_feature_with_tasks
+  _complete_wave1
+  # A scanner-like gate that prints a secret then fails. The deny message may
+  # show the tail (operator-facing), but the verify-log record must not.
+  printf '%s' '{"tool_gates": {"scan": "echo SECRET_TOKEN_abc; exit 1"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  rec="$(jq -rc 'select(.source=="tool-gate")' .mumei/specs/REQ-1-foo/verify-log.jsonl | head -1)"
+  [ -n "$rec" ]
+  [ "$(printf '%s' "$rec" | jq -r 'has("excerpt")')" = "false" ]
+  [[ "$rec" != *SECRET_TOKEN* ]]
+}
+
+@test "I5: deny additionalContext renders real newlines, not literal backslash-n" {
+  _init_feature_with_tasks
+  _complete_wave1
+  printf '%s' '{"tool_gates": {"lint": "exit 1"}}' >.mumei/config.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git commit -m foo"}}'
+  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  # jq -r unescapes JSON; a real newline means the literal two-char \n is absent.
+  [[ "$ctx" != *'\n'* ]]
+}

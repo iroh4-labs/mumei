@@ -28,6 +28,14 @@ if ! declare -F mumei_log_warn >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
+# mumei_config_add_golden_path normalizes paths via mumei_state_canonicalize_path
+# so a stored golden entry matches what G1 compares against. state.sh does not
+# source config.sh, so this is not circular.
+if ! declare -F mumei_state_canonicalize_path >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/state.sh"
+fi
+
 # Echo each configured golden path glob on its own line. No output (return 0)
 # when .mumei/config.json is absent, unparsable, or has no golden_paths.
 mumei_config_golden_paths() {
@@ -107,6 +115,19 @@ mumei_config_tool_gates() {
 mumei_config_add_golden_path() {
   local path="$1"
   [[ -n "$path" ]] || return 1
+  # Normalize to the same repo-relative canonical form G1 compares against
+  # (mumei_state_canonicalize_path = realpath -m, then strip the project root).
+  # Without this a caller passing './tests/x.test.ts' stores the './'-prefixed
+  # spelling while G1 matches the canonical 'tests/x.test.ts', so the freeze is
+  # silently bypassable by path spelling. Out-of-repo / unresolved paths (still
+  # absolute after the strip) are left verbatim — they cannot be golden anyway.
+  if declare -F mumei_state_canonicalize_path >/dev/null 2>&1; then
+    local _proot _canon
+    _proot="$(pwd -P 2>/dev/null || pwd)"
+    _canon="$(mumei_state_canonicalize_path "$path" 2>/dev/null || printf '%s' "$path")"
+    _canon="${_canon#"${_proot}/"}"
+    [[ "$_canon" != /* ]] && path="$_canon"
+  fi
   local cf=".mumei/config.json" tmp
   mkdir -p .mumei 2>/dev/null || return 1
   if [[ -f "$cf" ]]; then

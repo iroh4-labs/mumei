@@ -198,3 +198,12 @@ _write_config() {
   run mumei_config_add_golden_path ""
   [ "$status" -eq 1 ]
 }
+
+@test "add_golden_path normalizes a ./-prefixed path to repo-relative (G1 match)" {
+  mkdir -p tests
+  mumei_config_add_golden_path "./tests/x.property.test.ts"
+  run jq -c '.golden_paths' .mumei/config.json
+  # stored canonical so G1 (which compares the canonical repo-relative path)
+  # actually matches it — not the './'-prefixed spelling.
+  [ "$output" = '["tests/x.property.test.ts"]' ]
+}

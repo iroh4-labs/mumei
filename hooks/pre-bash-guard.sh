@@ -353,6 +353,9 @@ mumei_deny() {
   local reason="$1"
   local context="${2:-}"
   local hook_id="${3:-pre-bash-guard}"
+  # Render literal '\n' as real newlines: callers write '\n\n' for readability,
+  # but jq --arg would otherwise emit them as backslash-n in additionalContext.
+  context="${context//\\n/$'\n'}"
   if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
@@ -408,22 +411,45 @@ if mumei_is_git_commit "$COMMAND"; then
   # eval them; XSS / injection / secret detection is delegated here (semgrep /
   # gitleaks) rather than to probabilistic AI review. Both vehicles.
   while IFS=$'\t' read -r _tg_key _tg_cmd; do
-    [[ -n "$_tg_key" && -n "$_tg_cmd" ]] || continue
+    [[ -n "$_tg_key" ]] || continue
+    # An empty command for a DECLARED key is a config error, not a skip — a
+    # declared gate must never silently become a no-op (it would hide that the
+    # gate is not actually running).
+    if [[ -z "$_tg_cmd" ]]; then
+      mumei_deny \
+        "tool_gate '${_tg_key}' has an empty command in .mumei/config.json. Fix or remove the entry." \
+        "An empty command would turn the declared gate into a silent no-op (no deny, no record)." \
+        "I5"
+    fi
+    # A failure-masking chain (';' / '||' / '&') can make a failing gate exit 0,
+    # defeating I5. tool_gates is operator-authored (same trust boundary as
+    # MUMEI_TEST_CMD), so warn rather than block — but make the risk visible.
+    case "$_tg_cmd" in
+    *";"* | *"||"* | *"&"*)
+      mumei_log_warn "tool_gate '${_tg_key}' contains ';', '||', or '&'; a failing exit may be masked, weakening the I5 gate"
+      ;;
+    esac
     mumei_log_info "running tool gate '${_tg_key}' before commit: ${_tg_cmd}"
-    # Redirect stdin from /dev/null: this loop is fed by process substitution on
-    # fd 0, so a gate command that reads stdin would otherwise drain the
-    # remaining gate lines and silently skip every later gate.
-    TG_OUTPUT="$(
+    # Stream output to a temp file rather than a shell variable: a noisy gate
+    # (e.g. semgrep) could otherwise balloon memory in the commit hook. Only the
+    # tail is read, and only on failure.
+    # </dev/null: this loop is fed by process substitution on fd 0, so a gate
+    # that reads stdin would otherwise drain the remaining gate lines and
+    # silently skip every later gate.
+    _tg_tmp="$(mktemp)"
+    (
       set -o pipefail
-      eval "$_tg_cmd" </dev/null 2>&1
-    )"
+      eval "$_tg_cmd" </dev/null
+    ) >"$_tg_tmp" 2>&1
     TG_EXIT=$?
     TG_TAIL=""
-    [[ "$TG_EXIT" -ne 0 ]] && TG_TAIL="$(printf '%s' "$TG_OUTPUT" | tail -n 30)"
-    # Record the observed tool-gate exit (pass and fail) to verify-log. The
-    # command field carries the declaration KEY (typecheck / lint / …) so the
-    # record reads {ts, source: tool-gate, command: <key>, exit_code}.
-    mumei_verify_log_append "$FEATURE" "tool-gate" "$_tg_key" "$TG_EXIT" "$TG_TAIL" || true
+    [[ "$TG_EXIT" -ne 0 ]] && TG_TAIL="$(tail -n 30 "$_tg_tmp")"
+    rm -f "$_tg_tmp"
+    # Record ONLY the declaration key + exit code to verify-log — never the tool
+    # output. A secret scanner (gitleaks) surfaces secrets in its output; those
+    # must not be persisted to verify-log.jsonl (even gitignored). The tail is
+    # shown only in the operator-facing deny message below.
+    mumei_verify_log_append "$FEATURE" "tool-gate" "$_tg_key" "$TG_EXIT" || true
     if [[ "$TG_EXIT" -eq 127 ]]; then
       mumei_deny \
         "Declared tool_gate '${_tg_key}' not found (exit 127). Install it or fix .mumei/config.json." \

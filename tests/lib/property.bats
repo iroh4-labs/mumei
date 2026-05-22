@@ -126,3 +126,17 @@ EOF
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+@test "acs_with_invariant ignores _Invariant: mentioned in prose, not AC metadata" {
+  cat >req.md <<'EOF'
+- REQ-1.1 [CONFIRMED] WHEN x, the system SHALL y.
+  - _Invariant: type=roundtrip fn=encode inverse=decode_
+## Open Questions
+- [x] the _Invariant: 4-type spec is resolved in design.md
+EOF
+  run mumei_property_acs_with_invariant req.md
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"REQ-1.1"*"roundtrip"* ]]
+  # The Open Questions prose mention must NOT produce a second (fake) line.
+  [ "$(printf '%s\n' "$output" | grep -c .)" = "1" ]
+}

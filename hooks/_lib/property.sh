@@ -133,7 +133,11 @@ mumei_property_acs_with_invariant() {
       }
       next
     }
-    /_Invariant:/ {
+    # Only an AC metadata line ("  - _Invariant: …_") counts. Matching any line
+    # containing _Invariant: would pick up prose mentions (e.g. an Open Questions
+    # bullet describing the _Invariant: syntax) and emit them as a fake invariant
+    # for the preceding AC.
+    /^[[:space:]]*-[[:space:]]+_Invariant:/ {
       l = $0
       sub(/^.*_Invariant:[[:space:]]*/, "", l)
       sub(/_[[:space:]]*$/, "", l)
