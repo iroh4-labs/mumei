@@ -261,6 +261,20 @@ next_iter_reviewers="$(mumei_review_compute_next_iter_reviewers \
   "$surfaced_json" "$prev_reviewers" "$slug" "$current_iter")"
 iter_head="$(mumei_review_iter_head)"
 
+# Residual exposition (pillar D, REQ-23): aggregate every reviewer's
+# filtered_out (annotating each with its reviewer name), then deterministically
+# collect the residual array. mumei_residual_collect reads only surfaced +
+# filtered_out + ceiling — never findings_filtered — so invalid findings are
+# structurally excluded (REQ-23.7). Do NOT add any reduction-ratio/count KPI
+# field (REQ-23.10).
+reviewer_filtered_out="$(
+  for r in spec-compliance security adversarial; do
+    jq -c --arg r "$r" '(.filtered_out // [])[] | . + {reviewer: $r}' \
+      <<<"${reviewer_outputs[$r]:-{}}" 2>/dev/null
+  done | jq -sc '.'
+)"
+residual_json="$(mumei_residual_collect "$surfaced_json" "$reviewer_filtered_out" "$(mumei_review_ceiling_disclaimer)")"
+
 # Construct argjson plumbing so detector_reused_from is JSON null (not "null").
 if [[ -n "$detector_reused_from" ]]; then
   drf_arg="--arg detector_reused_from $detector_reused_from"
@@ -282,13 +296,15 @@ review_json="$(jq -nc \
   --argjson detector_skipped "$detector_skipped" \
   --arg detector_report "$detector_report" \
   --arg confidence_ceiling "$(mumei_review_ceiling_disclaimer)" \
+  --argjson residual "$residual_json" \
   '{feature: $feature, wave: "all", iteration: $iteration,
     iter_head: $iter_head, verdict: $verdict, reviewers: $reviewers,
     findings_surfaced: $surfaced, findings_filtered: $filtered,
     next_iter_reviewers: $next_iter_reviewers,
     detector_skipped: $detector_skipped,
     detector_report: $detector_report,
-    confidence_ceiling: $confidence_ceiling}')"
+    confidence_ceiling: $confidence_ceiling,
+    residual: $residual}')"
 
 # Inject detector_reused_from with proper JSON typing.
 # shellcheck disable=SC2086
