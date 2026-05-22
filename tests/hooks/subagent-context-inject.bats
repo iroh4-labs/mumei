@@ -23,6 +23,13 @@ _run_hook() {
 
 _ctx() { jq -r '.hookSpecificOutput.additionalContext' <<<"$output"; }
 
+# Run the hook with an explicit agent_type in the SubagentStart payload.
+_run_hook_agent() {
+  local at="$1"
+  run --separate-stderr bash -c \
+    "printf '%s' '{\"agent_id\":\"a1\",\"agent_type\":\"${at}\"}' | bash '${CLAUDE_PLUGIN_ROOT}/hooks/subagent-context-inject.sh'"
+}
+
 @test "injects framing prefix + artifact when an active feature is set" {
   _init_feature REQ-1-foo implement 1
   printf '# foo\n## Acceptance Test\n- tests/acc.bats\n\n## Open Questions\nNone\n' \
@@ -93,4 +100,29 @@ _ctx() { jq -r '.hookSpecificOutput.additionalContext' <<<"$output"; }
   [ "$status" -eq 0 ]
   [[ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")" == *"body line"* ]]
   [[ "$stderr" == *"not a positive integer"* ]]
+}
+
+# ─── property-author blind branch (pillar B / REQ-21.7) ──────
+
+@test "property-author gets framing + blind reminder but NOT the requirements artifact" {
+  _init_feature REQ-1-foo implement 1
+  printf '# foo\n## Acceptance Criteria\n- REQ-1.1 WHEN x SHALL y.\n  - _Invariant: type=roundtrip fn=encode inverse=decode_\n\n## Open Questions\nNone\n' \
+    >.mumei/specs/REQ-1-foo/requirements.md
+  _run_hook_agent property-author
+  [ "$status" -eq 0 ]
+  ctx="$(_ctx)"
+  [[ "$ctx" == *"blind property-author"* ]]
+  [[ "$ctx" == *"not authoritative"* ]]
+  # Blindness: the full requirements.md ("Active feature spec" block) is NOT injected.
+  [[ "$ctx" != *"Active feature spec"* ]]
+}
+
+@test "non-property-author agent still receives the full artifact (no regression)" {
+  _init_feature REQ-1-foo implement 1
+  printf '# foo\nbody line\n## Open Questions\nNone\n' >.mumei/specs/REQ-1-foo/requirements.md
+  _run_hook_agent security-reviewer
+  [ "$status" -eq 0 ]
+  ctx="$(_ctx)"
+  [[ "$ctx" == *"Active feature spec"* ]]
+  [[ "$ctx" == *"body line"* ]]
 }

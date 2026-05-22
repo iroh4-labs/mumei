@@ -18,7 +18,7 @@ mumei/
 ├── .claude-plugin/
 │   ├── plugin.json         # plugin manifest (name / version / author / homepage)
 │   └── marketplace.json    # self-hosted marketplace catalog
-├── agents/                 # 8 reviewer / validator / curator agents (Sonnet / Opus)
+├── agents/                 # 9 reviewer / validator / curator / author agents (Sonnet / Opus)
 │   ├── requirements-reviewer.md
 │   ├── design-reviewer.md
 │   ├── tasks-reviewer.md
@@ -26,7 +26,8 @@ mumei/
 │   ├── security-reviewer.md
 │   ├── adversarial-reviewer.md
 │   ├── issue-validator.md
-│   └── memory-curator.md
+│   ├── memory-curator.md
+│   └── property-author.md
 ├── skills/                 # user-invocable orchestration
 │   ├── plan/               # /mumei:plan — the orchestrator
 │   ├── brainstorm/         # /mumei:brainstorm — pre-spec Q&A
@@ -76,7 +77,7 @@ mumei/
 │   ├── session-end-audit.sh  # SessionEnd: session metadata audit log
 │   ├── post-tool-failure-audit.sh  # PostToolUseFailure: tool failure audit log
 │   ├── subagent-cost-log-start.sh  # SubagentStart: pin active feature to .mumei/in-flight-agents/<agent_id>
-│   ├── subagent-context-inject.sh  # SubagentStart (matcher *): inject framing prefix + active feature artifact (pillar E.3)
+│   ├── subagent-context-inject.sh  # SubagentStart (matcher *): framing prefix + active feature artifact (pillar E.3); property-author receives blind context only (pillar B)
 │   ├── subagent-cost-log.sh  # SubagentStop: agent_id-based subagent jsonl usage extraction
 │   └── stop-cost-backfill.sh  # Stop (async): safety-net cost-backfill for SubagentStop hooks that lost the jsonl-flush race
 ├── scripts/
