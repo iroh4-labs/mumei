@@ -37,6 +37,7 @@ All steps below assume the current working directory is the project root and a g
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/state.sh"
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/review.sh"
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/ledger.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/residual.sh"
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/cost-log.sh"
 
 slug="$(mumei_current_feature 2>/dev/null || true)"
