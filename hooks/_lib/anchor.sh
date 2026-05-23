@@ -42,7 +42,6 @@ if [[ -n "${CLAUDE_PROJECT_DIR:-}" && -d "$CLAUDE_PROJECT_DIR" ]]; then
       declare -F mumei_hook_stats_record >/dev/null 2>&1; then
       mumei_hook_stats_record "$(basename "$0" .sh)" "error" "pre-anchor" "cwd-anchor-failed" 2>/dev/null || true
     fi
-    unset _mumei_anchor_plugin_root
     exit 0
   fi
 fi
