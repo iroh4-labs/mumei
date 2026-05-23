@@ -22,6 +22,17 @@ permissions: read-all
 jobs:
   scan:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      # Point osv-scanner at the repo-level osv-scanner.toml so its
+      # `IgnoredVulns` block (CVE entries with documented exploit-path
+      # assessment + a finite `ignoreUntil`) is honoured. The reusable
+      # workflow's default scan-args is empty, so without this flag
+      # the CLI does not auto-discover the config file from the runner's
+      # CWD layout. Pass `./` last so the recursive scan target is
+      # explicit alongside the config flag.
+      scan-args: |-
+        --config=osv-scanner.toml
+        ./
     permissions:
       contents: read
       security-events: write
