@@ -15,7 +15,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEventStream } from '@/hooks/useEventStream'
 import { useFeatures } from '@/hooks/useFeatures'
-import { useMeta } from '@/hooks/useMeta'
 import { useTrendHooks } from '@/hooks/useTrendHooks'
 import { useTrendReviews } from '@/hooks/useTrendReviews'
 import { useTrendTokens } from '@/hooks/useTrendTokens'
@@ -28,6 +27,7 @@ import { HBar, LegendDot, LineChart, StackedBar } from './charts'
 import { DetailPanel } from './DetailPanel'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
+import { Header } from './Header'
 import { PhaseBadge, PulseRing, VerdictBadge } from './primitives'
 
 const SECTION_INVALIDATIONS: Record<string, ReadonlyArray<readonly (string | number)[]>> = {
@@ -56,7 +56,7 @@ export function Dashboard(): ReactElement {
     <div className="w-full h-dvh min-h-[640px] bg-zinc-950 paper-bg relative text-zinc-200 flex flex-col font-sans overflow-hidden">
       <ErrorBoundarySection name="meta">
         <Suspense fallback={<TopBarSkeleton />}>
-          <TopBar connected={live.connected} disconnected={live.disconnected} />
+          <Header connected={live.connected} disconnected={live.disconnected} />
         </Suspense>
       </ErrorBoundarySection>
 
@@ -182,43 +182,10 @@ function ErrorBoundarySection({
   )
 }
 
-function TopBar({ disconnected }: { connected: boolean; disconnected: boolean }): ReactElement {
-  const meta = useMeta().data
-  return (
-    <header className="shrink-0">
-      {disconnected && (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="bg-red-950/60 px-4 py-1.5 text-center font-mono text-xs text-red-200"
-        >
-          Live updates disconnected — auto-reconnecting…
-        </div>
-      )}
-      <div className="h-[80px] flex items-center px-3 sm:px-5 gap-3 sm:gap-5">
-        <div className="flex items-center gap-2 shrink-0">
-          <img
-            src="/mumei-mascot.png"
-            alt="mumei"
-            className="w-12 h-12 shrink-0"
-            style={{ imageRendering: 'pixelated' }}
-          />
-          <span className="font-mono text-[26px] font-semibold tracking-tight text-zinc-100">
-            mumei
-          </span>
-        </div>
-        <div className="hidden sm:flex items-center gap-2 max-w-md font-mono text-[17px] min-w-0">
-          <span className="text-zinc-200 truncate">{meta.projectLabel}</span>
-        </div>
-      </div>
-    </header>
-  )
-}
-
 function TopBarSkeleton(): ReactElement {
   return (
-    <header className="h-[80px] shrink-0 border-b border-zinc-800 flex items-center px-3 sm:px-5">
-      <Skeleton className="h-6 w-32" />
+    <header className="h-[72px] shrink-0 flex items-center px-5 sm:px-8">
+      <Skeleton className="h-9 w-32 rounded-full" />
     </header>
   )
 }

@@ -11,7 +11,7 @@ export const MetaSchema = Type.Object(
     $id: 'https://mumei.dev/schemas/meta.schema.json',
     title: 'mumei dashboard meta',
     description:
-      'Backend identity used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.',
+      'Backend identity used by the Header. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.',
     additionalProperties: false,
   },
 )
@@ -48,7 +48,7 @@ export const MetaStatsSchema = Type.Object(
     $id: 'https://mumei.dev/schemas/meta-stats.schema.json',
     title: 'mumei dashboard meta stats',
     description:
-      'Aggregate counters used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.',
+      'Aggregate counters used by the Header. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.',
     additionalProperties: false,
   },
 )
