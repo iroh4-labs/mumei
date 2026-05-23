@@ -25,13 +25,16 @@ jobs:
     with:
       # Point osv-scanner at the repo-level osv-scanner.toml so its
       # `IgnoredVulns` block (CVE entries with documented exploit-path
-      # assessment + a finite `ignoreUntil`) is honoured. The reusable
-      # workflow's default scan-args is empty, so without this flag
-      # the CLI does not auto-discover the config file from the runner's
-      # CWD layout. Pass `./` last so the recursive scan target is
-      # explicit alongside the config flag.
+      # assessment + a finite `ignoreUntil`) is honoured. Setting
+      # `scan-args` here replaces the reusable workflow's default
+      # (`-r ./`), so re-include `-r` explicitly to preserve recursive
+      # scanning across nested manifests (dashboard/package.json,
+      # .github/requirements/**/requirements.txt, etc.) — without `-r`
+      # the scan would only look at the repo root and miss every
+      # nested ecosystem manifest.
       scan-args: |-
         --config=osv-scanner.toml
+        -r
         ./
     permissions:
       contents: read
