@@ -24,8 +24,12 @@ Two prompts are run against the same fixture diff:
   bias-neutralization + honest-ceiling.
 
 A finding is counted as a TP when the reviewer surfaces a comment that names
-the seeded line (±2 lines) or the seeded bug's category. Any other finding is
-counted as FP. Recall = TP / |seeded|, precision = TP / (TP + FP).
+the seeded line (±`tolerance_lines`, with a digit-boundary check so `:14` does
+not match `:140`) AND mentions one of the bug's `match_keywords`, with both
+matches on the same line. FP candidates are output lines that look like
+findings — either bullet-style (`- ...` / `* ...`) or any line containing a
+`:NN` / `line NN` / `line: NN` reference — that do not match a seeded bug.
+Recall = TP / |seeded|, precision = TP / (TP + FP).
 
 The seeded set is intentionally small (4 bugs, 1 fixture). The numbers are
 intended as a sanity-grade sign of recall and precision differences, not a

@@ -35,10 +35,13 @@ Files:
   .github/review-rubric.md                    canonical universal rubric
 
 Methodology (see tests/review-fixtures/README.md): a finding is a TP when the
-output references the seeded line within +/- tolerance_lines AND mentions one
-of the bug's match_keywords (case-insensitive). Recall = TP / |seeded|;
-precision = TP / (TP + FP). FPs are output lines that look like findings
-(start with '-' or contain ':NN' line references) but match no seeded bug.
+output has a line that references the seeded line within +/- tolerance_lines
+AND mentions one of the bug's match_keywords on the SAME line (case
+insensitive, with a digit-boundary check so ':14' does not match ':140').
+Recall = TP / |seeded|; precision = TP / (TP + FP). FP candidates are output
+lines that look like findings — bullet-style ('- ...' / '* ...') OR any line
+that carries a ':NN' / 'line NN' / 'line: NN' reference — that do not match a
+seeded bug.
 USAGE
 }
 
@@ -62,7 +65,7 @@ _mumei_print_baseline_prompt() {
 Review the following code change for bugs and security issues.
 
 \`\`\`python
-$(cat "$FIXTURE")
+$(awk '{ printf "%4d: %s\n", NR, $0 }' "$FIXTURE")
 \`\`\`
 EOF
 }
@@ -92,7 +95,7 @@ osv-scanner: no lockfile present (signal absent — note in output).
 ## File under review
 
 \`\`\`python
-$(cat "$FIXTURE")
+$(awk '{ printf "%4d: %s\n", NR, $0 }' "$FIXTURE")
 \`\`\`
 EOF
   rm -f "$block_file"
@@ -113,52 +116,64 @@ _mumei_score() {
   local seeded_count
   seeded_count="$(jq -r '.seeded | length' "$ANSWER_KEY")"
 
-  # Read each seeded bug. For each, scan the output for a line reference
-  # within tolerance AND a case-insensitive match on any keyword.
-  # Array-quoted iteration to dodge shellharden 4.3.1's unquoted-for parse bug.
+  # Single jq call producing one TSV row per seeded bug (Gemini HIGH review
+  # finding: avoid per-bug jq spawns; use objects + tostring for type safety).
   local tp=0
   local detected_ids=""
-  local seeded_keys=()
-  while IFS= read -r k; do seeded_keys+=("$k"); done < <(jq -r '.seeded | keys[]' "$ANSWER_KEY")
-  local i
-  for i in "${seeded_keys[@]}"; do
-    local id seeded_line keywords
-    id="$(jq -r ".seeded[$i].id" "$ANSWER_KEY")"
-    seeded_line="$(jq -r ".seeded[$i].line" "$ANSWER_KEY")"
-    keywords="$(jq -r ".seeded[$i].match_keywords | join(\"|\")" "$ANSWER_KEY")"
-
-    # Scan for a line-number reference within tolerance AND a keyword match,
-    # using awk (avoid grep -qE with built alternation regex which trips
-    # shellharden 4.3.1's parser per scripts/lint-bash-prefix style memory).
+  while IFS=$'\t' read -r id seeded_line keywords; do
+    [[ -z "${id:-}" ]] && continue
     local lo=$((seeded_line - tol))
     local hi=$((seeded_line + tol))
-    local line_hit
-    line_hit="$(awk -v lo="$lo" -v hi="$hi" '
+    # Per-line same-line AND match with digit-boundary check (Gemini HIGH):
+    # require BOTH a line-number reference within tolerance AND a keyword hit
+    # on the SAME line; the boundary check ensures ":14" does not match ":140".
+    local hit
+    hit="$(awk -v lo="$lo" -v hi="$hi" -v kw="$keywords" '
+      BEGIN {
+        n_kw = split(kw, kw_parts, "|")
+        for (i = 1; i <= n_kw; i++) kw_lower[i] = tolower(kw_parts[i])
+      }
       {
         s = tolower($0)
+        has_kw = 0
+        for (i = 1; i <= n_kw; i++) {
+          if (index(s, kw_lower[i]) > 0) { has_kw = 1; break }
+        }
+        if (!has_kw) next
         for (n = lo; n <= hi; n++) {
-          if (index(s, ":" n) > 0 || index(s, "line " n) > 0 || index(s, "line: " n) > 0) {
-            print "1"; exit
+          patt[1] = ":" n; patt[2] = "line " n; patt[3] = "line: " n
+          for (p = 1; p <= 3; p++) {
+            pos = index(s, patt[p])
+            if (pos > 0) {
+              after = substr(s, pos + length(patt[p]), 1)
+              if (after !~ /[0-9]/) { print "1"; exit }
+            }
           }
         }
       }' "$output_file")"
-    local kw_hit
-    kw_hit="$(awk -v kw="$keywords" '
-      BEGIN { n = split(kw, parts, "|"); for (i = 1; i <= n; i++) lower[i] = tolower(parts[i]) }
-      { s = tolower($0); for (i = 1; i <= n; i++) if (index(s, lower[i]) > 0) { print "1"; exit } }
-    ' "$output_file")"
-
-    if [[ "$line_hit" == "1" ]] && [[ "$kw_hit" == "1" ]]; then
+    if [[ "$hit" == "1" ]]; then
       tp=$((tp + 1))
       detected_ids="${detected_ids} ${id}"
     fi
-  done
+  done < <(jq -r '.seeded[] | objects | [ (.id | tostring), (.line | tostring), (.match_keywords | join("|")) ] | @tsv' "$ANSWER_KEY")
 
-  # FP heuristic: bullet-style findings ("- ..." or "*    ...") that name a
-  # line reference but match no seeded bug.
+  # FP-candidate set (Codex P2): any line that LOOKS like a finding — either a
+  # bullet-style line OR a line that carries a `:NN` / `line NN` / `line: NN`
+  # reference. A reviewer that emits prose / numbered findings without bullets
+  # but cites lines must still have those counted, otherwise verbose harness
+  # output is penalised vs terse baseline (matches the README methodology).
   local total_findings
-  total_findings="$(grep -cE '^[[:space:]]*[-*][[:space:]]' "$output_file" || true)"
-  # If TP > total_findings (because TP can include narrative mentions), clamp.
+  total_findings="$(awk '
+    {
+      s = tolower($0)
+      if ($0 ~ /^[[:space:]]*[-*][[:space:]]/) { c++; next }
+      if (s ~ /:[0-9]+/)                       { c++; next }
+      if (s ~ /line[: ]+[0-9]+/)               { c++ }
+    }
+    END { print c+0 }
+  ' "$output_file")"
+  # tp can exceed total_findings if the same finding spans multiple bullets;
+  # clamp so fp >= 0.
   if [[ "$tp" -gt "$total_findings" ]]; then
     total_findings="$tp"
   fi
