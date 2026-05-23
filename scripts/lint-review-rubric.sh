@@ -117,7 +117,7 @@ for f in "${files[@]}"; do
     ref_carrier="$f"
   elif ! cmp -s "$ref_file_path" "$block_path"; then
     echo "lint-review-rubric: block in $f differs from $ref_carrier" >&2
-    diff "$ref_file_path" "$block_path" >&2 || true
+    diff "$ref_file_path" "$block_path" >&2
     status=1
   fi
 done

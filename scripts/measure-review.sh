@@ -135,7 +135,7 @@ _mumei_score() {
   # Use ASCII FS (\034) as the keyword-list delimiter so a literal `|` in a
   # keyword does not split the list (Gemini iter-6 medium). jq's `objects` +
   # `tostring` keep field extraction type-safe.
-  jq -r '.seeded[] | objects | [ (.id|tostring), (.line|tostring), (.match_keywords|join("")) ] | @tsv' "$ANSWER_KEY" >"$seeded_tsv"
+  jq -r '.seeded[] | objects | [ (.id|tostring), (.line|tostring), (.match_keywords|join("\u001c")) ] | @tsv' "$ANSWER_KEY" >"$seeded_tsv"
   local detected
   # BSD awk forbids newlines in -v values, so pass seeded TSV as the FIRST
   # file (FNR==NR pre-pass) and the reviewer output as the SECOND file.
