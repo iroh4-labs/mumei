@@ -17,20 +17,6 @@ set -u
 
 # Anchor cwd to the project root so relative .mumei/ paths land
 # in the right place when invoked from a subdir (monorepo dev).
-if [[ -n "${CLAUDE_PROJECT_DIR:-}" && -d "$CLAUDE_PROJECT_DIR" ]]; then
-  if ! cd "$CLAUDE_PROJECT_DIR"; then
-    printf '[mumei] %s: cd CLAUDE_PROJECT_DIR=%s failed; gate not enforced\n' \
-      "$(basename "$0")" "$CLAUDE_PROJECT_DIR" >&2
-    _MUMEI_PLUGIN_ROOT_FALLBACK="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}"
-    # shellcheck disable=SC1091
-    if source "${_MUMEI_PLUGIN_ROOT_FALLBACK}/hooks/_lib/hook-stats.sh" 2>/dev/null &&
-      declare -F mumei_hook_stats_record >/dev/null 2>&1; then
-      mumei_hook_stats_record "$(basename "$0" .sh)" "error" "pre-anchor" "cwd-anchor-failed" 2>/dev/null || true
-    fi
-    exit 0
-  fi
-fi
-
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}"
 # shellcheck disable=SC1091
 source "${PLUGIN_ROOT}/hooks/_lib/log.sh"
@@ -49,6 +35,9 @@ if [[ "${MUMEI_BYPASS:-0}" == "1" ]]; then
   jq -n '{detectors_ran: false, high_count: 0, report_path: null, failed_detectors: [], bypassed: true}'
   exit 0
 fi
+
+# shellcheck source=_lib/anchor.sh disable=SC1091
+source "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}/hooks/_lib/anchor.sh"
 
 # 2.3 — Verify required binaries. Missing binaries produce a hard fail
 # with installation guidance, not a fall-through.
