@@ -1,0 +1,191 @@
+name: review-reusable
+
+# Harness-engineered reusable review workflow (REQ-24). Consuming repos invoke
+# this via `uses: hir4ta/mumei/.github/workflows/review-reusable.yml@<ref>`
+# and supply the CLAUDE_CODE_OAUTH_TOKEN secret. The workflow grounds the
+# Claude reviewer in deterministic signals (semgrep + osv-scanner), embeds the
+# canonical universal rubric fetched from mumei at the same ref as the
+# workflow YAML, and instructs the reviewer to walk the four perspectives
+# (correctness / security / operability / maintainability) with
+# bias-neutralization and an explicit honest-ceiling line. A structured audit
+# record is appended to the GitHub Actions job summary so every finding is
+# traceable to its run inputs (REQ-24.12).
+#
+# Static-analysis findings are passed as INPUT to the reviewer (grounding),
+# not used to pre-filter which issues the model is asked about — that
+# routing pattern backfires on frontier models (Non-goal, see decisions.md).
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: Claude model id to drive the review.
+        type: string
+        required: false
+        default: claude-opus-4-7
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: Max-subscription OAuth token (no per-call API billing).
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: review-reusable-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Same skip policy as mumei's own claude-review caller: fork PRs (untrusted
+    # head content could prompt-inject this privileged reviewer) and Dependabot
+    # (no repo secrets on pull_request, so the action would auth-fail every
+    # dependency-bump PR) are excluded at the job level.
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout consuming repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Fetch canonical review rubric
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          set -u
+          # workflow_ref is "owner/repo/.github/workflows/file.yml@ref".
+          # Pin the rubric fetch to the same ref so the rubric and the workflow
+          # YAML can never disagree across versions.
+          ref="${WORKFLOW_REF##*@}"
+          ref="${ref:-main}"
+          url="https://raw.githubusercontent.com/hir4ta/mumei/${ref}/.github/review-rubric.md"
+          if ! curl -fsSL "$url" -o /tmp/review-rubric.md; then
+            echo "::error::failed to fetch rubric from $url" >&2
+            exit 1
+          fi
+          awk '/<!-- BEGIN universal-review-rubric -->/{f=1;next} /<!-- END universal-review-rubric -->/{f=0} f' \
+            /tmp/review-rubric.md > /tmp/rubric-block.md
+          if [ ! -s /tmp/rubric-block.md ]; then
+            echo "::error::rubric block empty (markers missing in fetched file)" >&2
+            exit 1
+          fi
+
+      - name: Install grounding tools
+        run: |
+          set -u
+          python -m pip install --quiet "semgrep==1.111.0"
+          curl -fsSL -o /tmp/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v2.3.8/osv-scanner_linux_amd64"
+          chmod +x /tmp/osv-scanner
+          sudo mv /tmp/osv-scanner /usr/local/bin/
+
+      - name: Grounding scan (input, not gate)
+        id: grounding
+        run: |
+          set -u
+          mkdir -p /tmp/grounding
+          semgrep_v="$(semgrep --version 2>/dev/null | head -1 || echo unknown)"
+          # fail-open: findings are INPUT, non-zero exit must not block the review
+          semgrep --config=auto --json --quiet --error=0 \
+            --output=/tmp/grounding/semgrep.json . || true
+          semgrep_count="$(jq '(.results // []) | length' /tmp/grounding/semgrep.json 2>/dev/null || echo 0)"
+          osv_v="$(osv-scanner --version 2>/dev/null | head -1 || echo unknown)"
+          osv-scanner scan source --format=json --output=/tmp/grounding/osv.json . || true
+          osv_count="$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' /tmp/grounding/osv.json 2>/dev/null || echo 0)"
+          {
+            echo "semgrep ${semgrep_v}: ${semgrep_count} findings"
+            jq -r '(.results // [])[] | "- \(.check_id) @ \(.path):\(.start.line) — \(.extra.message // "" | tostring)"' \
+              /tmp/grounding/semgrep.json 2>/dev/null | head -50
+            echo ""
+            echo "osv-scanner ${osv_v}: ${osv_count} vulnerabilities"
+            jq -r '.results[]?.packages[]? | .package.name as $n | .vulnerabilities[]? | "- \($n) — \(.id) \(.summary // "")"' \
+              /tmp/grounding/osv.json 2>/dev/null | head -50
+          } > /tmp/grounding/summary.txt
+          {
+            echo "semgrep_v=${semgrep_v}"
+            echo "semgrep_count=${semgrep_count}"
+            echo "osv_v=${osv_v}"
+            echo "osv_count=${osv_count}"
+            # CI artifact presence is repo-specific; default false. Adopters
+            # who wire CI artifacts into the workflow can override later.
+            echo "ci_artifacts_present=false"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Assemble Claude prompt
+        env:
+          REPO_AGENTS: ${{ github.workspace }}/AGENTS.md
+        run: |
+          set -u
+          {
+            echo "REPO: ${{ github.repository }}"
+            echo "PR NUMBER: ${{ github.event.pull_request.number }}"
+            echo ""
+            echo "You are an automated reviewer for this pull request. Apply the"
+            echo "universal review rubric below. If an AGENTS.md is present in"
+            echo "this repository, also apply its project-specific guidance."
+            echo "Walk the four perspectives (correctness, security,"
+            echo "operability, maintainability) as separate passes. Cite"
+            echo "file:line evidence for every finding. Treat the grounding"
+            echo "signals below as input, not as a gate over what to consider."
+            echo "End the review with a one-line honest-ceiling statement of"
+            echo "what this review cannot guarantee."
+            echo ""
+            echo "## Universal review rubric"
+            cat /tmp/rubric-block.md
+            if [ -f "$REPO_AGENTS" ]; then
+              echo ""
+              echo "## Project-specific guidance (this repo's AGENTS.md)"
+              echo ""
+              cat "$REPO_AGENTS"
+            fi
+            echo ""
+            echo "## Grounding (deterministic signals — input, not gate)"
+            echo ""
+            cat /tmp/grounding/summary.txt
+          } > /tmp/prompt.txt
+          # Multi-line env via heredoc — claude-code-action prompt: reads from env.
+          {
+            echo "PROMPT<<MUMEI_PROMPT_EOF"
+            cat /tmp/prompt.txt
+            echo "MUMEI_PROMPT_EOF"
+          } >>"$GITHUB_ENV"
+
+      - name: Claude review
+        uses: anthropics/claude-code-action@4481e6d3c7bbb88db2a928ca3444c536f589c7c1 # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: ${{ env.PROMPT }}
+          claude_args: |
+            --model ${{ inputs.model }}
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      - name: Emit audit record to job summary
+        if: always()
+        env:
+          GROUNDING_SEMGREP_V: ${{ steps.grounding.outputs.semgrep_v }}
+          GROUNDING_SEMGREP_COUNT: ${{ steps.grounding.outputs.semgrep_count }}
+          GROUNDING_OSV_V: ${{ steps.grounding.outputs.osv_v }}
+          GROUNDING_OSV_COUNT: ${{ steps.grounding.outputs.osv_count }}
+          CI_ARTIFACTS_PRESENT: ${{ steps.grounding.outputs.ci_artifacts_present }}
+        run: |
+          set -u
+          ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          sha="${{ github.event.pull_request.head.sha }}"
+          {
+            echo "## Review audit record (REQ-24.12)"
+            echo ""
+            echo "- reviewed SHA: \`${sha}\`"
+            echo "- timestamp: ${ts}"
+            echo "- workflow_ref: ${{ github.workflow_ref }}"
+            echo "- grounding tools:"
+            echo "  - semgrep ${GROUNDING_SEMGREP_V}: ${GROUNDING_SEMGREP_COUNT} findings"
+            echo "  - osv-scanner ${GROUNDING_OSV_V}: ${GROUNDING_OSV_COUNT} vulnerabilities"
+            echo "- perspectives_run: correctness, security, operability, maintainability"
+            echo "- ci_artifacts_present: ${CI_ARTIFACTS_PRESENT}"
+          } >>"$GITHUB_STEP_SUMMARY"
