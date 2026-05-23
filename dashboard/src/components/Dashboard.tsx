@@ -73,7 +73,7 @@ export function Dashboard(): ReactElement {
     <div className="min-h-dvh w-full font-sans text-foreground">
       <ErrorBoundarySection name="meta">
         <Suspense fallback={<HeaderSkeleton />}>
-          <Header connected={live.connected} disconnected={live.disconnected} />
+          <Header disconnected={live.disconnected} />
         </Suspense>
       </ErrorBoundarySection>
 
@@ -333,7 +333,7 @@ function FeatureGrid({
       {totalSkips > 0 && (
         <div
           aria-live="polite"
-          className="rounded-xl border border-amber-700/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-500"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-500"
         >
           <span className="font-mono">[mumei]</span> aggregation surfaced {totalSkips} skip
           {totalSkips === 1 ? '' : 's'} during /api/features
@@ -493,7 +493,7 @@ function FeatureCard({
         className={cn(
           'mumei-glass cursor-pointer gap-0 rounded-3xl py-0 shadow-none transition-transform duration-200 hover:scale-[1.01]',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60',
-          selected && 'ring-2 ring-foreground/70',
+          selected && 'ring-1 ring-foreground/80 ring-offset-2 ring-offset-background',
         )}
       >
         <div className="flex h-[40px] items-center gap-2 px-4">

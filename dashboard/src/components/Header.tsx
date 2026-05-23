@@ -9,12 +9,7 @@ import { cn } from '@/lib/utils'
  * toggle on the right. Stays inside a max-width hero strip so the content
  * sits centred on wide screens like a marketing page rather than a dashboard.
  */
-export function Header({
-  disconnected,
-}: {
-  connected: boolean
-  disconnected: boolean
-}): ReactElement {
+export function Header({ disconnected }: { disconnected: boolean }): ReactElement {
   return (
     <header className="shrink-0">
       {disconnected && (

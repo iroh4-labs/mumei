@@ -259,7 +259,7 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
                     {t.done ? (
                       <CircleCheckIcon
                         aria-hidden="true"
-                        className="mt-0.5 size-4 shrink-0 text-stone-400"
+                        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                       />
                     ) : (
                       <CircleIcon
@@ -333,7 +333,7 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
                       variant="outline"
                       className={cn(
                         'border-transparent text-[10px] tracking-wider uppercase text-foreground',
-                        ac.confirmed ? 'bg-stone-600/70' : 'bg-amber-600/70',
+                        ac.confirmed ? 'bg-foreground/15' : 'bg-amber-500/40',
                       )}
                     >
                       {ac.confirmed ? 'CONFIRMED' : 'ASSUMPTION'}
@@ -370,7 +370,7 @@ function SectionLabel({ children }: { children: ReactNode }): ReactElement {
 function WaveStatusIcon({ status }: { status: 'done' | 'running' | 'pending' }): ReactElement {
   const baseClass = 'size-4 shrink-0'
   if (status === 'done') {
-    return <CircleCheckIcon aria-hidden="true" className={cn(baseClass, 'text-stone-400')} />
+    return <CircleCheckIcon aria-hidden="true" className={cn(baseClass, 'text-muted-foreground')} />
   }
   if (status === 'running') {
     return <CircleDotIcon aria-hidden="true" className={cn(baseClass, 'text-foreground')} />

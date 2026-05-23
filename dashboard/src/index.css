@@ -242,11 +242,11 @@ body {
   background: color-mix(in oklch, var(--color-foreground) 36%, transparent);
 }
 
-/* Focus ring — token-driven, visible in both themes. Default `outline:none`
-   plus class-driven `focus-visible:ring-*` on interactive primitives gives a
-   consistent ring on every focusable element. */
+/* Focus ring — token-driven, visible in both themes. We deliberately omit
+   `border-radius` so the outline follows the focused element's own corners
+   (pill, rounded-3xl card, etc.) instead of collapsing every shape to a
+   half-radius rectangle. */
 :focus-visible {
   outline: 2px solid color-mix(in oklch, var(--color-violet-500) 40%, transparent);
   outline-offset: 2px;
-  border-radius: 0.5rem;
 }

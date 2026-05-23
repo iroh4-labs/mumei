@@ -3,8 +3,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { Dashboard } from './components/Dashboard'
 
 /**
- * App root. Bento layout on top of a four-corner mesh gradient, with
- * Liquid Glass chips for titles and a side Sheet for feature detail.
+ * App root. Tabbed single-card view (Features / Tokens / Activity) on a
+ * four-corner mesh gradient; feature detail opens in a centred Dialog.
  * Design tokens (OKLCH palette, dark-mode binding, glass / blueprint
  * classes) live in src/index.css.
  */

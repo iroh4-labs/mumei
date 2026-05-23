@@ -1,5 +1,4 @@
 import { type ReactElement, Suspense } from 'react'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActivity } from '@/hooks/useActivity'
 import type { MumeiActivityEvent } from '@/types/activity-event'
@@ -32,15 +31,13 @@ function ActivityFeedContent(): ReactElement {
     )
   }
   return (
-    <ScrollArea className="h-full">
-      <ul aria-live="polite" className="divide-y divide-border">
-        {events.map((e) => (
-          <li key={activityKey(e)} className="px-3 py-2 font-mono text-[13px]">
-            <ActivityRow event={e} />
-          </li>
-        ))}
-      </ul>
-    </ScrollArea>
+    <ul aria-live="polite" className="divide-y divide-border">
+      {events.map((e) => (
+        <li key={activityKey(e)} className="px-3 py-2 font-mono text-[13px]">
+          <ActivityRow event={e} />
+        </li>
+      ))}
+    </ul>
   )
 }
 
