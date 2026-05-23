@@ -85,7 +85,10 @@ _mumei_assert_markers() {
 ref_file_path=""
 ref_carrier=""
 status=0
-tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/mumei-rubric-lint.XXXXXX")"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/mumei-rubric-lint.XXXXXX")" || {
+  echo "lint-review-rubric: failed to create temp dir" >&2
+  exit 1
+}
 trap 'rm -rf "$tmp_dir"' EXIT
 
 for f in "${files[@]}"; do

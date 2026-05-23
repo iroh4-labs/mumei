@@ -55,6 +55,12 @@ FIXTURE="tests/review-fixtures/fixture-01-mixed.py"
 ANSWER_KEY="tests/review-fixtures/answer-key.json"
 RUBRIC_PATH=".github/review-rubric.md"
 
+# Global tmp-file registry + EXIT trap so cleanup runs on SIGINT/SIGTERM too
+# (Gemini iter-6 medium: RETURN trap did not handle signals).
+_mumei_tmpfiles=()
+_mumei_register_tmp() { _mumei_tmpfiles+=("$1"); }
+trap '[ ${#_mumei_tmpfiles[@]} -gt 0 ] && rm -f "${_mumei_tmpfiles[@]}"' EXIT
+
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" || $# -eq 0 ]]; then
   _mumei_usage
   exit 0
@@ -121,13 +127,15 @@ _mumei_score() {
   # answer-key strings like "range(n+1)" match literally (Gemini HIGH +
   # Codex P2 iter-4). Line-ref check has digit boundaries on BOTH sides.
   local seeded_tsv
-  seeded_tsv="$(mktemp "${TMPDIR:-/tmp}/mumei-seeded.XXXXXX")"
-  # Cleanup at function return. The function calls no inner BASH functions
-  # before this trap (only subprocesses), so the trap RETURN gotcha
-  # ([[bash_return_trap_worktree_cleanup]]) does not apply.
-  # shellcheck disable=SC2064
-  trap "rm -f '$seeded_tsv'" RETURN
-  jq -r '.seeded[] | objects | [ (.id|tostring), (.line|tostring), (.match_keywords|join("|")) ] | @tsv' "$ANSWER_KEY" >"$seeded_tsv"
+  seeded_tsv="$(mktemp "${TMPDIR:-/tmp}/mumei-seeded.XXXXXX")" || {
+    echo "measure-review: failed to create temp file" >&2
+    return 1
+  }
+  _mumei_register_tmp "$seeded_tsv"
+  # Use ASCII FS (\034) as the keyword-list delimiter so a literal `|` in a
+  # keyword does not split the list (Gemini iter-6 medium). jq's `objects` +
+  # `tostring` keep field extraction type-safe.
+  jq -r '.seeded[] | objects | [ (.id|tostring), (.line|tostring), (.match_keywords|join("")) ] | @tsv' "$ANSWER_KEY" >"$seeded_tsv"
   local detected
   # BSD awk forbids newlines in -v values, so pass seeded TSV as the FIRST
   # file (FNR==NR pre-pass) and the reviewer output as the SECOND file.
@@ -139,7 +147,7 @@ _mumei_score() {
       bug_id[n_bugs]  = fld[1]
       bug_lo[n_bugs]  = fld[2] - tol
       bug_hi[n_bugs]  = fld[2] + tol
-      n_kw = split(fld[3], kw_parts, "|")
+      n_kw = split(fld[3], kw_parts, "\034")
       bug_n_kw[n_bugs] = n_kw
       for (i = 1; i <= n_kw; i++) {
         k = tolower(kw_parts[i])
@@ -159,7 +167,7 @@ _mumei_score() {
         }
         if (!has_kw) continue
         for (n = bug_lo[b]; n <= bug_hi[b]; n++) {
-          if (s ~ "([^0-9]|^)(:" n "|line[: ]+" n ")([^0-9]|$)") {
+          if (s ~ "([^0-9]|^)(:" n "|lines?[: ]+" n ")([^0-9]|$)") {
             hit[b] = 1
             break
           }
@@ -194,7 +202,7 @@ _mumei_score() {
     {
       s = tolower($0)
       if ($0 ~ /^[[:space:]]*[-*][[:space:]]/) { c++; next }
-      has_lineref = (s ~ /([^0-9]|^)(:[0-9]+|line[: ]+[0-9]+)([^0-9]|$)/)
+      has_lineref = (s ~ /([^0-9]|^)(:[0-9]+|lines?[: ]+[0-9]+)([^0-9]|$)/)
       if (!has_lineref) next
       c++
     }

@@ -35,8 +35,13 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
-Replace `<TAG>` with a mumei release tag. Pin to a tag, not `@main`, so the
-rubric your PRs are reviewed against is reproducible.
+Replace `<TAG>` with a mumei release tag. For stronger supply-chain integrity
+prefer a full commit SHA over a tag (`uses: hir4ta/mumei/.github/workflows/review-reusable.yml@<40-char-sha>`)
+— tags are mutable in principle, and a moved or compromised tag would run
+different workflow code with your repo's `pull-requests: write` /
+`id-token: write` permissions and your Claude OAuth secret. Pinning by SHA
+eliminates that class of risk; pinning by tag is acceptable for low-stakes
+internal projects but explicitly weaker. Never use `@main`.
 
 That's the entire adoption. The workflow itself fetches the universal rubric
 at the same tag, runs the grounding scanners on your code, assembles the

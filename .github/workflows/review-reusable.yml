@@ -292,6 +292,21 @@ jobs:
             printf '%s\n' "$delim"
           } >>"$GITHUB_ENV"
 
+      # Defensive: verify the assembled PROMPT is populated before invoking the
+      # action. GitHub's docs do show env context reading $GITHUB_ENV writes
+      # from prior steps (see "Set the value / Use the value" example), but
+      # this guard turns any future regression (empty prompt) from a silent
+      # rubric-less review into a loud failure (Codex iter-6 P1 defence).
+      - name: Verify prompt populated
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          PROMPT_LEN: ${{ env.PROMPT && 'nonempty' || 'empty' }}
+        run: |
+          if [ "${PROMPT_LEN:-}" != "nonempty" ]; then
+            echo "::error::PROMPT env empty — prompt assembly did not propagate to env context" >&2
+            exit 1
+          fi
+
       - name: Claude review
         if: steps.gate.outputs.skip != 'true'
         id: claude
