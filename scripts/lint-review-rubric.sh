@@ -33,10 +33,28 @@ end='<!-- END universal-review-rubric -->'
 # the markdown carriers (Codex / Gemini iter-2 finding).
 _mumei_extract_block() {
   if [[ "$1" == *.yml ]]; then
+    # Detect the common leading-whitespace prefix from the first non-blank
+    # line and strip it from every line — robust to YAML block-scalar
+    # indentation changes (Gemini iter-4 medium: previous fixed 10-space
+    # sed would break on any restructure).
     awk -v b="$begin" -v e="$end" '
       index($0, b) { f = 1; next }
       index($0, e) { f = 0 }
-      f' "$1" | sed 's/^          //'
+      f { lines[++n] = $0 }
+      END {
+        for (i = 1; i <= n; i++) {
+          if (lines[i] ~ /[^ \t]/) {
+            match(lines[i], /^[ \t]*/)
+            prefix = substr(lines[i], 1, RLENGTH)
+            break
+          }
+        }
+        plen = length(prefix)
+        for (i = 1; i <= n; i++) {
+          if (substr(lines[i], 1, plen) == prefix) print substr(lines[i], plen + 1)
+          else print lines[i]
+        }
+      }' "$1"
   else
     awk -v b="$begin" -v e="$end" '
       index($0, b) { f = 1; next }

@@ -114,43 +114,66 @@ _mumei_score() {
   local seeded_count
   seeded_count="$(jq -r '.seeded | length' "$ANSWER_KEY")"
 
-  # Single jq call producing one TSV row per seeded bug (Gemini HIGH review
-  # finding: avoid per-bug jq spawns; use objects + tostring for type safety).
+  # Single awk pass over the output file scoring all seeded bugs at once
+  # (Gemini iter-4 medium: previous per-bug awk was O(N*M); now O(M) for the
+  # output scan, with bug count N as the per-line work). jq still runs once
+  # to materialise the TSV. Regex metacharacters in keywords are escaped so
+  # answer-key strings like "range(n+1)" match literally (Gemini HIGH +
+  # Codex P2 iter-4). Line-ref check has digit boundaries on BOTH sides.
+  local seeded_tsv
+  seeded_tsv="$(mktemp -t mumei-seeded.XXXXXX)"
+  # shellcheck disable=SC2064
+  trap "rm -f '$seeded_tsv'" RETURN
+  jq -r '.seeded[] | objects | [ (.id|tostring), (.line|tostring), (.match_keywords|join("|")) ] | @tsv' "$ANSWER_KEY" >"$seeded_tsv"
+  local detected
+  # BSD awk forbids newlines in -v values, so pass seeded TSV as the FIRST
+  # file (FNR==NR pre-pass) and the reviewer output as the SECOND file.
+  detected="$(awk -v tol="$tol" '
+    NR == FNR {
+      if ($0 == "") next
+      split($0, fld, "\t")
+      n_bugs++
+      bug_id[n_bugs]  = fld[1]
+      bug_lo[n_bugs]  = fld[2] - tol
+      bug_hi[n_bugs]  = fld[2] + tol
+      n_kw = split(fld[3], kw_parts, "|")
+      bug_n_kw[n_bugs] = n_kw
+      for (i = 1; i <= n_kw; i++) {
+        k = tolower(kw_parts[i])
+        gsub(/[]\\.+*?(){}|^$[]/, "\\\\&", k)
+        bug_kw_re[n_bugs, i] = "([^a-z0-9_]|^)" k "([^a-z0-9_]|$)"
+      }
+      hit[n_bugs] = 0
+      next
+    }
+    {
+      s = tolower($0)
+      for (b = 1; b <= n_bugs; b++) {
+        if (hit[b]) continue
+        has_kw = 0
+        for (i = 1; i <= bug_n_kw[b]; i++) {
+          if (s ~ bug_kw_re[b, i]) { has_kw = 1; break }
+        }
+        if (!has_kw) continue
+        for (n = bug_lo[b]; n <= bug_hi[b]; n++) {
+          if (s ~ "([^0-9]|^)(:" n "|line[: ]+" n ")([^0-9]|$)") {
+            hit[b] = 1
+            break
+          }
+        }
+      }
+    }
+    END {
+      for (b = 1; b <= n_bugs; b++) if (hit[b]) print bug_id[b]
+    }
+  ' "$seeded_tsv" "$output_file")"
   local tp=0
   local detected_ids=""
-  while IFS=$'\t' read -r id seeded_line keywords; do
-    [[ -z "${id:-}" ]] && continue
-    local lo=$((seeded_line - tol))
-    local hi=$((seeded_line + tol))
-    # Per-line same-line AND match with digit-boundary check (Gemini HIGH):
-    # require BOTH a line-number reference within tolerance AND a keyword hit
-    # on the SAME line; the boundary check ensures ":14" does not match ":140".
-    local hit
-    hit="$(awk -v lo="$lo" -v hi="$hi" -v kw="$keywords" '
-      BEGIN {
-        # Word-boundary keyword regex on BOTH sides — bare-word keyword (e.g.
-        # "pass") must not match a substring like "bypass" (Gemini iter-3 fix).
-        n_kw = split(kw, kw_parts, "|")
-        for (i = 1; i <= n_kw; i++) kw_re[i] = "([^a-z0-9_]|^)" tolower(kw_parts[i]) "([^a-z0-9_]|$)"
-      }
-      {
-        s = tolower($0)
-        has_kw = 0
-        for (i = 1; i <= n_kw; i++) {
-          if (s ~ kw_re[i]) { has_kw = 1; break }
-        }
-        if (!has_kw) next
-        # Digit-boundary on BOTH sides — `:14` must not match `:114` either
-        # at the LEADING boundary (was previously only trailing-checked).
-        for (n = lo; n <= hi; n++) {
-          if (s ~ "([^0-9]|^)(:" n "|line[: ]+" n ")([^0-9]|$)") { print "1"; exit }
-        }
-      }' "$output_file")"
-    if [[ "$hit" == "1" ]]; then
-      tp=$((tp + 1))
-      detected_ids="${detected_ids} ${id}"
-    fi
-  done < <(jq -r '.seeded[] | objects | [ (.id | tostring), (.line | tostring), (.match_keywords | join("|")) ] | @tsv' "$ANSWER_KEY")
+  while IFS= read -r id; do
+    [[ -z "$id" ]] && continue
+    tp=$((tp + 1))
+    detected_ids="${detected_ids} ${id}"
+  done <<<"$detected"
 
   # FP-candidate set (Codex P2): any line that LOOKS like a finding — either a
   # bullet-style line OR a line that carries a `:NN` / `line NN` / `line: NN`
