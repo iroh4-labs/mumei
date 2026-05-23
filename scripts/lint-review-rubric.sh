@@ -42,6 +42,10 @@ _mumei_extract_block() {
       index($0, e) { f = 0 }
       f { lines[++n] = $0 }
       END {
+        # Explicit init: if every block line is blank (marker assertion makes
+        # this unreachable in practice but guards against future regressions),
+        # prefix stays empty and the strip becomes a no-op (Gemini iter-7).
+        prefix = ""
         for (i = 1; i <= n; i++) {
           if (lines[i] ~ /[^ \t]/) {
             match(lines[i], /^[ \t]*/)

@@ -43,9 +43,11 @@ different workflow code with your repo's `pull-requests: write` /
 eliminates that class of risk; pinning by tag is acceptable for low-stakes
 internal projects but explicitly weaker. Never use `@main`.
 
-That's the entire adoption. The workflow itself fetches the universal rubric
-at the same tag, runs the grounding scanners on your code, assembles the
-multi-perspective prompt, invokes Claude, and posts inline comments.
+That's the entire adoption. The workflow itself **inlines** the universal
+rubric (no runtime network fetch — the rubric YAML carrier moves with the
+workflow at the pinned ref), runs the grounding scanners on your code,
+assembles the multi-perspective prompt, invokes Claude, and posts inline
+comments.
 
 ## Optional — share the rubric with Codex and Gemini
 
@@ -68,10 +70,13 @@ model differences, not divergent criteria).
 
 ## Operational notes
 
-- **Fork PRs and Dependabot PRs are skipped** at the job level. Fork PRs
-  could prompt-inject the privileged reviewer; Dependabot does not receive
-  repo secrets on `pull_request`, so the action would fail authentication on
-  every dependency-bump PR.
+- **Fork PRs and Dependabot PRs are skipped** by the first step of the job
+  (the "Gate" step sets `skip=true` and subsequent steps' `if:` conditions
+  evaluate accordingly). Fork PRs could prompt-inject the privileged reviewer;
+  Dependabot does not receive repo secrets on `pull_request`, so the action
+  would fail authentication on every dependency-bump PR. The gate step DOES
+  run (logging a `::notice::` line) so a skipped run is visible in the audit
+  record, unlike a job-level skip which would silently report success.
 - **Workflow validation failure on PRs that edit `review.yml` itself**: the
   Claude Code Action's OIDC token exchange requires the workflow file
   content to match the version on the default branch. A PR that modifies
