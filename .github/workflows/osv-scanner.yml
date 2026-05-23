@@ -22,6 +22,20 @@ permissions: read-all
 jobs:
   scan:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      # Point osv-scanner at the repo-level osv-scanner.toml so its
+      # `IgnoredVulns` block (CVE entries with documented exploit-path
+      # assessment + a finite `ignoreUntil`) is honoured. Setting
+      # `scan-args` here replaces the reusable workflow's default
+      # (`-r ./`), so re-include `-r` explicitly to preserve recursive
+      # scanning across nested manifests (dashboard/package.json,
+      # .github/requirements/**/requirements.txt, etc.) — without `-r`
+      # the scan would only look at the repo root and miss every
+      # nested ecosystem manifest.
+      scan-args: |-
+        --config=osv-scanner.toml
+        -r
+        ./
     permissions:
       contents: read
       security-events: write
