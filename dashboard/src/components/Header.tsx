@@ -38,15 +38,15 @@ export function Header({
 
 function BrandMark(): ReactElement {
   return (
-    <div className="mumei-glass flex shrink-0 items-center gap-2 rounded-full py-1.5 pr-4 pl-1.5">
+    <div className="flex shrink-0 items-center gap-2">
       <img
         src="/mumei-mascot.png"
         alt=""
         aria-hidden="true"
-        className="size-9 shrink-0 rounded-full"
+        className="size-9 shrink-0"
         style={{ imageRendering: 'pixelated' }}
       />
-      <span className="font-mono text-[18px] font-semibold tracking-tight text-zinc-100">
+      <span className="font-mono text-[18px] font-semibold tracking-tight text-foreground">
         mumei
       </span>
     </div>
@@ -57,11 +57,9 @@ function ProjectLabel(): ReactElement | null {
   const meta = useMeta().data
   if (!meta.projectLabel) return null
   return (
-    <div className="mumei-glass hidden items-center rounded-full px-4 py-1.5 sm:flex">
-      <span className="max-w-[28ch] truncate font-mono text-[14px] text-zinc-200">
-        {meta.projectLabel}
-      </span>
-    </div>
+    <span className="hidden max-w-[40ch] truncate font-mono text-[14px] text-muted-foreground sm:inline">
+      {meta.projectLabel}
+    </span>
   )
 }
 

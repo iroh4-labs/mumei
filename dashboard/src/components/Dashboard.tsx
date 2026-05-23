@@ -21,7 +21,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEventStream } from '@/hooks/useEventStream'
 import { useFeatures } from '@/hooks/useFeatures'
-import { useMeta, useMetaStats } from '@/hooks/useMeta'
+import { useMetaStats } from '@/hooks/useMeta'
 import { useTrendTokens } from '@/hooks/useTrendTokens'
 import { formatTokens, lastActivityDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -218,14 +218,10 @@ function SectionTitle({ children }: { children: ReactNode }): ReactElement {
 }
 
 function Hero(): ReactElement {
-  const meta = useMeta().data
   const stats = useMetaStats().data
   return (
     <section aria-label="overview" className="pt-10">
-      <p className="font-mono text-[12px] tracking-wider uppercase text-muted-foreground">
-        {meta.projectLabel}
-      </p>
-      <h1 className="mt-2 text-[2.25rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-[3rem]">
+      <h1 className="text-[2.25rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-[3rem]">
         {stats.activeCount === 0
           ? 'No features in flight.'
           : stats.activeCount === 1
@@ -244,8 +240,7 @@ function Hero(): ReactElement {
 function HeroSkeleton(): ReactElement {
   return (
     <section className="pt-10">
-      <Skeleton className="h-3 w-32" />
-      <Skeleton className="mt-3 h-12 w-[60%]" />
+      <Skeleton className="h-12 w-[60%]" />
       <Skeleton className="mt-3 h-4 w-[40%]" />
     </section>
   )
