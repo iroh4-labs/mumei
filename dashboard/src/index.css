@@ -240,93 +240,11 @@ body {
   background: color-mix(in oklch, var(--color-foreground) 36%, transparent);
 }
 
-/* Rotating shimmer ring for new-event cards.
-   Kept from the prior palette; W3 will reassess whether the new card style
-   needs it (likely deleted in favour of a static glass highlight). */
-.mumei-shimmer {
-  border-radius: 1.5rem;
-  padding: 1.5px;
-  pointer-events: none;
-  overflow: hidden;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.mumei-shimmer::before {
-  content: "";
-  position: absolute;
-  inset: -100%;
-  background: conic-gradient(
-    from 0deg,
-    color-mix(in oklch, var(--color-violet-500) 0%, transparent) 0deg,
-    color-mix(in oklch, var(--color-violet-500) 0%, transparent) 220deg,
-    color-mix(in oklch, var(--color-violet-500) 25%, transparent) 250deg,
-    color-mix(in oklch, var(--color-violet-500) 95%, transparent) 295deg,
-    color-mix(in oklch, var(--color-violet-500) 35%, transparent) 325deg,
-    color-mix(in oklch, var(--color-violet-500) 0%, transparent) 355deg
-  );
-  animation: mumei-spin 2.4s linear infinite;
-}
-
-.mumei-shimmer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 1.5rem;
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-violet-500) 18%, transparent) inset;
-}
-
-@keyframes mumei-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mumei-shimmer::before {
-    animation: none;
-  }
-}
-
-/* Text-level shimmer for the active Wave row (DetailPanel). */
-.mumei-text-shimmer {
-  background-image: linear-gradient(
-    90deg,
-    var(--color-zinc-100) 0%,
-    var(--color-zinc-100) 38%,
-    var(--color-amber-500) 50%,
-    var(--color-zinc-100) 62%,
-    var(--color-zinc-100) 100%
-  );
-  background-size: 220% 100%;
-  background-position: 100% 0;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: mumei-text-shimmer 4s linear infinite;
-}
-
-@keyframes mumei-text-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mumei-text-shimmer {
-    animation: none;
-  }
-}
-
+/* Focus ring — token-driven, visible in both themes. Default `outline:none`
+   plus class-driven `focus-visible:ring-*` on interactive primitives gives a
+   consistent ring on every focusable element. */
 :focus-visible {
-  outline: none;
+  outline: 2px solid color-mix(in oklch, var(--color-violet-500) 40%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
 }

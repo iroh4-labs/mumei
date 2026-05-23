@@ -165,14 +165,17 @@ function TasksTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEleme
               >
                 <WaveStatusIcon status={status} />
                 {status === 'running' ? (
-                  <span className="mumei-text-shimmer min-w-0 flex-1 truncate" title={w.goal}>
+                  <span
+                    className="min-w-0 flex-1 truncate font-semibold text-amber-500"
+                    title={w.goal}
+                  >
                     Wave {w.wave}
                     {w.goal && <>: {truncate60(w.goal)}</>}
                   </span>
                 ) : (
                   <>
-                    <span className="shrink-0 text-zinc-300">Wave {w.wave}</span>
-                    <span className="min-w-0 flex-1 truncate text-zinc-400" title={w.goal}>
+                    <span className="shrink-0 text-foreground">Wave {w.wave}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground" title={w.goal}>
                       {truncate60(w.goal)}
                     </span>
                   </>
