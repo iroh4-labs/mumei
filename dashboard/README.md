@@ -108,7 +108,7 @@ dashboard/
 | Path                           | Purpose                                                                            |
 | ------------------------------ | ---------------------------------------------------------------------------------- |
 | `GET /api/meta`                | Project label (home-relative path)                                                 |
-| `GET /api/meta/stats`          | Header / Hero counters: active count, month tokens, cache hit rate, hooks/sec, 24h events |
+| `GET /api/meta/stats`          | Hero counters (active, month tokens, cache hit, hooks/sec, 24h)                    |
 | `GET /api/features`            | FeatureSummary[] from `.mumei/specs/` + `.mumei/plans/`                            |
 | `GET /api/trends/tokens`       | Daily token totals, `?days=N` window (default 14)                                  |
 | `GET /api/trends/reviews`      | Daily verdict counts (PASS/NEEDS_IMPROVEMENT/MAJOR_ISSUES), `?days=N` window       |
