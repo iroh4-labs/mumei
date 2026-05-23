@@ -121,7 +121,10 @@ _mumei_score() {
   # answer-key strings like "range(n+1)" match literally (Gemini HIGH +
   # Codex P2 iter-4). Line-ref check has digit boundaries on BOTH sides.
   local seeded_tsv
-  seeded_tsv="$(mktemp -t mumei-seeded.XXXXXX)"
+  seeded_tsv="$(mktemp "${TMPDIR:-/tmp}/mumei-seeded.XXXXXX")"
+  # Cleanup at function return. The function calls no inner BASH functions
+  # before this trap (only subprocesses), so the trap RETURN gotcha
+  # ([[bash_return_trap_worktree_cleanup]]) does not apply.
   # shellcheck disable=SC2064
   trap "rm -f '$seeded_tsv'" RETURN
   jq -r '.seeded[] | objects | [ (.id|tostring), (.line|tostring), (.match_keywords|join("|")) ] | @tsv' "$ANSWER_KEY" >"$seeded_tsv"
@@ -181,29 +184,34 @@ _mumei_score() {
   # but cites lines must still have those counted, otherwise verbose harness
   # output is penalised vs terse baseline (matches the README methodology).
   local total_findings
-  # Word-boundary FP candidate detection (Gemini iter-3 fix): also count
-  # numbered-list items ("1. ..."), and apply the same digit-boundary on line
-  # references so ":14" inside ":1400" / "1400ms" does not falsely inflate FPs.
+  # FP candidate detection (Codex iter-5 fix): a numbered-list item only
+  # counts as a finding when it ALSO has a line reference on the same line.
+  # Plain section headers like "1. Correctness" inside a multi-pass review
+  # must NOT be counted as findings — otherwise the harness'\'' own
+  # structured output is penalised. Bullets count regardless (they are the
+  # canonical finding form); raw `:NN` / `line NN` lines also count.
   total_findings="$(awk '
     {
       s = tolower($0)
-      if ($0 ~ /^[[:space:]]*([-*]|[0-9]+\.)[[:space:]]/) { c++; next }
-      if (s ~ /([^0-9]|^)(:[0-9]+|line[: ]+[0-9]+)([^0-9]|$)/) { c++ }
+      if ($0 ~ /^[[:space:]]*[-*][[:space:]]/) { c++; next }
+      has_lineref = (s ~ /([^0-9]|^)(:[0-9]+|line[: ]+[0-9]+)([^0-9]|$)/)
+      if (!has_lineref) next
+      c++
     }
     END { print c+0 }
   ' "$output_file")"
-  # tp can exceed total_findings if the same finding spans multiple bullets;
-  # clamp so fp >= 0.
-  if [[ "$tp" -gt "$total_findings" ]]; then
-    total_findings="$tp"
-  fi
-  local fp=$((total_findings - tp))
-  [[ "$fp" -lt 0 ]] && fp=0
 
-  local precision="0"
-  if [[ $((tp + fp)) -gt 0 ]]; then
-    precision="$(awk -v t="$tp" -v f="$fp" 'BEGIN{ printf "%.2f", t/(t+f) }')"
+  # Precision metric (Codex iter-5 fix): bound by max(tp, total_findings)
+  # rather than clamping `total_findings := tp`. The previous clamp force-set
+  # fp=0 when a single line matched multiple bugs, fabricating perfect
+  # precision; tp / max(tp, total_findings) reports 1.00 in that case only
+  # when total_findings <= tp, which is honest.
+  local denom precision="0"
+  denom=$((tp > total_findings ? tp : total_findings))
+  if [[ "$denom" -gt 0 ]]; then
+    precision="$(awk -v t="$tp" -v d="$denom" 'BEGIN{ printf "%.2f", t/d }')"
   fi
+  local fp=$((denom - tp))
   local recall
   recall="$(awk -v t="$tp" -v s="$seeded_count" 'BEGIN{ if (s==0) print "0"; else printf "%.2f", t/s }')"
 

@@ -79,9 +79,15 @@ _mumei_assert_markers() {
   return 0
 }
 
-ref=""
-ref_file=""
+# Write each carrier's block to a file and compare with `cmp -s`. Using
+# command substitution (Codex iter-5 finding) would silently strip trailing
+# newlines and let a drift in trailing blank lines slip past the parity check.
+ref_file_path=""
+ref_carrier=""
 status=0
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/mumei-rubric-lint.XXXXXX")"
+trap 'rm -rf "$tmp_dir"' EXIT
+
 for f in "${files[@]}"; do
   if [[ ! -f "$f" ]]; then
     echo "lint-review-rubric: missing carrier $f" >&2
@@ -92,18 +98,19 @@ for f in "${files[@]}"; do
     status=1
     continue
   fi
-  block="$(_mumei_extract_block "$f")"
-  if [[ -z "$block" ]]; then
+  block_path="${tmp_dir}/$(printf '%s' "$f" | tr '/' '_').block"
+  _mumei_extract_block "$f" >"$block_path"
+  if [[ ! -s "$block_path" ]]; then
     echo "lint-review-rubric: extracted block is empty in $f" >&2
     status=1
     continue
   fi
-  if [[ -z "$ref" ]]; then
-    ref="$block"
-    ref_file="$f"
-  elif [[ "$block" != "$ref" ]]; then
-    echo "lint-review-rubric: block in $f differs from $ref_file" >&2
-    diff <(printf '%s\n' "$ref") <(printf '%s\n' "$block") >&2 || true
+  if [[ -z "$ref_file_path" ]]; then
+    ref_file_path="$block_path"
+    ref_carrier="$f"
+  elif ! cmp -s "$ref_file_path" "$block_path"; then
+    echo "lint-review-rubric: block in $f differs from $ref_carrier" >&2
+    diff "$ref_file_path" "$block_path" >&2 || true
     status=1
   fi
 done

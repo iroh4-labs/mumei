@@ -148,48 +148,75 @@ jobs:
 
       - name: Install grounding tools
         if: steps.gate.outputs.skip != 'true'
+        id: install
         env:
           OSV_VERSION: "v2.3.8"
           OSV_SHA256: "bc98e15319ed0d515e3f9235287ba53cdc5535d576d24fd573978ecfe9ab92dc"
+        # Fail-open on transient install issues (pip/curl) so a network hiccup
+        # degrades to a missing-scanner audit signal rather than aborting the
+        # whole review (Codex iter-5: grounding is input, not gate). SHA-256
+        # MISMATCH stays hard-fail — that signals supply-chain tampering, not
+        # a transient outage.
         run: |
           set -u
-          python -m pip install --quiet "semgrep==1.111.0"
-          curl -fsSL -o /tmp/osv-scanner \
-            "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
-          echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c - || {
-            echo "::error::osv-scanner ${OSV_VERSION} SHA-256 mismatch (release may have been retagged)" >&2
-            exit 1
-          }
-          chmod +x /tmp/osv-scanner
-          sudo mv /tmp/osv-scanner /usr/local/bin/
+          semgrep_install_status=ok
+          python -m pip install --quiet "semgrep==1.111.0" || semgrep_install_status="install failed"
+          osv_install_status=ok
+          if curl -fsSL -o /tmp/osv-scanner "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"; then
+            echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c - || {
+              echo "::error::osv-scanner ${OSV_VERSION} SHA-256 mismatch (release may have been retagged) — aborting (supply chain integrity)" >&2
+              exit 1
+            }
+            chmod +x /tmp/osv-scanner
+            sudo mv /tmp/osv-scanner /usr/local/bin/
+          else
+            osv_install_status="install failed"
+          fi
+          {
+            echo "semgrep_install_status=${semgrep_install_status}"
+            echo "osv_install_status=${osv_install_status}"
+          } >>"$GITHUB_OUTPUT"
 
       - name: Grounding scan (input, not gate)
         if: steps.gate.outputs.skip != 'true'
         id: grounding
+        env:
+          SEMGREP_INSTALL_STATUS: ${{ steps.install.outputs.semgrep_install_status }}
+          OSV_INSTALL_STATUS: ${{ steps.install.outputs.osv_install_status }}
         # Capture per-scanner exit code separately so the audit and prompt can
         # distinguish 'scanner ran clean (0 findings)' from 'scanner crashed'
         # (adversarial A-F-006). Fail-open semantics for findings remain.
         run: |
           set -u
           mkdir -p /tmp/grounding
-          semgrep_v="$(semgrep --version 2>/dev/null | head -1 || echo unknown)"
-          semgrep_rc=0
-          semgrep --config=auto --json --quiet --error=0 \
-            --output=/tmp/grounding/semgrep.json . || semgrep_rc=$?
-          semgrep_count="$(jq '(.results // []) | length' /tmp/grounding/semgrep.json 2>/dev/null || echo 0)"
-          semgrep_status="ok"
-          [ "$semgrep_rc" != "0" ] && semgrep_status="crashed (rc=$semgrep_rc)"
-          osv_v="$(osv-scanner --version 2>/dev/null | head -1 || echo unknown)"
-          osv_rc=0
-          osv-scanner scan source --format=json --output=/tmp/grounding/osv.json . || osv_rc=$?
-          osv_count="$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' /tmp/grounding/osv.json 2>/dev/null || echo 0)"
-          osv_status="ok"
-          # osv-scanner exits 1 when vulns are found (not a crash) and 128 for
-          # "No packages found" — also a valid outcome on repos without
-          # lockfiles/SBOMs (Codex iter-2 finding). Only treat rc == 127
-          # (binary missing) or rc >= 129 (signal terminations) as crashed.
-          if [ "$osv_rc" = "127" ] || [ "$osv_rc" -ge 129 ]; then
-            osv_status="crashed (rc=$osv_rc)"
+          if [ "${SEMGREP_INSTALL_STATUS:-ok}" != "ok" ]; then
+            semgrep_v="unknown"; semgrep_count=0; semgrep_status="install failed"
+            printf '[]' >/tmp/grounding/semgrep.json
+          else
+            semgrep_v="$(semgrep --version 2>/dev/null | head -1 || echo unknown)"
+            semgrep_rc=0
+            semgrep --config=auto --json --quiet --error=0 \
+              --output=/tmp/grounding/semgrep.json . || semgrep_rc=$?
+            semgrep_count="$(jq '(.results // []) | length' /tmp/grounding/semgrep.json 2>/dev/null || echo 0)"
+            semgrep_status="ok"
+            [ "$semgrep_rc" != "0" ] && semgrep_status="crashed (rc=$semgrep_rc)"
+          fi
+          if [ "${OSV_INSTALL_STATUS:-ok}" != "ok" ]; then
+            osv_v="unknown"; osv_count=0; osv_status="install failed"
+            printf '{}' >/tmp/grounding/osv.json
+          else
+            osv_v="$(osv-scanner --version 2>/dev/null | head -1 || echo unknown)"
+            osv_rc=0
+            osv-scanner scan source --format=json --output=/tmp/grounding/osv.json . || osv_rc=$?
+            osv_count="$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' /tmp/grounding/osv.json 2>/dev/null || echo 0)"
+            osv_status="ok"
+            # osv-scanner exits 1 when vulns are found (not a crash) and 128 for
+            # "No packages found" — also a valid outcome on repos without
+            # lockfiles/SBOMs (Codex iter-2 finding). Only treat rc == 127
+            # (binary missing) or rc >= 129 (signal terminations) as crashed.
+            if [ "$osv_rc" = "127" ] || [ "$osv_rc" -ge 129 ]; then
+              osv_status="crashed (rc=$osv_rc)"
+            fi
           fi
           {
             if [ "$semgrep_status" = "ok" ]; then
