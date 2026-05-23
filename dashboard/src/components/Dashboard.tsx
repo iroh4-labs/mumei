@@ -4,20 +4,29 @@ import {
   Component,
   type ErrorInfo,
   type ReactElement,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   Suspense,
   useState,
 } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useEventStream } from '@/hooks/useEventStream'
@@ -44,7 +53,9 @@ const SECTION_INVALIDATIONS: Record<string, ReadonlyArray<readonly (string | num
   detail: [],
 }
 
-type TabId = 'features' | 'graph' | 'activity'
+type TabId = 'features' | 'tokens' | 'activity'
+
+const ARCHIVED_PAGE_SIZE = 12
 
 /**
  * Tabbed single-view dashboard. Header on top, hero heading, then a single
@@ -74,14 +85,23 @@ export function Dashboard(): ReactElement {
         </ErrorBoundarySection>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="mt-8 gap-5">
-          <TabsList variant="line" className="mumei-glass rounded-full">
-            <TabsTrigger value="features" className="rounded-full px-5">
+          <TabsList className="mumei-glass h-11 gap-1 rounded-full p-1">
+            <TabsTrigger
+              value="features"
+              className="rounded-full px-5 data-[state=active]:bg-foreground/10 data-[state=active]:shadow-none"
+            >
               Features
             </TabsTrigger>
-            <TabsTrigger value="graph" className="rounded-full px-5">
-              Graph
+            <TabsTrigger
+              value="tokens"
+              className="rounded-full px-5 data-[state=active]:bg-foreground/10 data-[state=active]:shadow-none"
+            >
+              Tokens
             </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-full px-5">
+            <TabsTrigger
+              value="activity"
+              className="rounded-full px-5 data-[state=active]:bg-foreground/10 data-[state=active]:shadow-none"
+            >
               Activity
             </TabsTrigger>
           </TabsList>
@@ -111,11 +131,11 @@ export function Dashboard(): ReactElement {
             </div>
           </TabsContent>
 
-          <TabsContent value="graph">
+          <TabsContent value="tokens">
             <div className="mumei-card p-7">
               <ErrorBoundarySection name="trends">
-                <Suspense fallback={<GraphSkeleton />}>
-                  <GraphPanel />
+                <Suspense fallback={<TokensSkeleton />}>
+                  <TokensPanel />
                 </Suspense>
               </ErrorBoundarySection>
             </div>
@@ -131,19 +151,19 @@ export function Dashboard(): ReactElement {
         </Tabs>
       </main>
 
-      <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent side="right">
-          <SheetHeader>
-            <SheetTitle>{selected ?? ''}</SheetTitle>
-            <SheetDescription>Feature detail · waves · reviews</SheetDescription>
-          </SheetHeader>
+      <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent className="mumei-card flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden border-0 p-0">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle className="text-foreground">{selected ?? ''}</DialogTitle>
+            <DialogDescription>Feature detail · waves · reviews</DialogDescription>
+          </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ErrorBoundarySection name="detail">
               <DetailPanel slug={selected} />
             </ErrorBoundarySection>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -249,7 +269,7 @@ function HeroSkeleton(): ReactElement {
   )
 }
 
-function GraphPanel(): ReactElement {
+function TokensPanel(): ReactElement {
   const tokens = useTrendTokens(14).data
   const totalTokens = tokens.reduce((acc, p) => acc + p.v, 0)
   return (
@@ -267,7 +287,7 @@ function GraphPanel(): ReactElement {
   )
 }
 
-function GraphSkeleton(): ReactElement {
+function TokensSkeleton(): ReactElement {
   return (
     <div className="flex flex-col gap-4">
       <Skeleton className="h-3 w-40" />
@@ -289,6 +309,7 @@ function FeatureGrid({
 }): ReactElement {
   const { data: features, warnings } = useFeatures()
   const [showArchived, setShowArchived] = useState(false)
+  const [archivedPage, setArchivedPage] = useState(1)
   if (features.length === 0) {
     return <EmptyState />
   }
@@ -299,6 +320,12 @@ function FeatureGrid({
   }
   const active = features.filter((f) => !f.archived && matches(f))
   const archived = features.filter((f) => f.archived && matches(f))
+  const archivedPageCount = Math.max(1, Math.ceil(archived.length / ARCHIVED_PAGE_SIZE))
+  const archivedPageClamped = Math.min(archivedPage, archivedPageCount)
+  const archivedSlice = archived.slice(
+    (archivedPageClamped - 1) * ARCHIVED_PAGE_SIZE,
+    archivedPageClamped * ARCHIVED_PAGE_SIZE,
+  )
   const totalSkips =
     warnings.skippedArchiveStates + warnings.skippedReviews + warnings.skippedCostLogLines
   return (
@@ -341,30 +368,82 @@ function FeatureGrid({
             onClick={() => setShowArchived((s) => !s)}
             aria-expanded={showArchived}
             aria-controls="archived-grid"
-            className="mumei-glass w-full rounded-full border-0 font-mono text-[14px] text-foreground hover:bg-zinc-900/10"
+            className="mumei-glass w-full rounded-full border-0 font-mono text-[14px] text-foreground hover:bg-foreground/5"
           >
             {showArchived ? <ChevronDownIcon /> : <ChevronRightIcon />}
             <span>archived ({archived.length})</span>
           </Button>
           {showArchived && (
-            <div
-              id="archived-grid"
-              className="mt-2.5 grid auto-rows-fr grid-cols-1 gap-2.5 opacity-70 sm:grid-cols-2 xl:grid-cols-3"
-            >
-              {archived.map((f) => (
-                <FeatureCard
-                  key={f.slug}
-                  f={f}
-                  selected={selected === f.slug}
-                  pulse={false}
-                  onSelect={onSelect}
+            <div id="archived-grid" className="mt-2.5 space-y-3">
+              <div className="grid auto-rows-fr grid-cols-1 gap-2.5 opacity-70 sm:grid-cols-2 xl:grid-cols-3">
+                {archivedSlice.map((f) => (
+                  <FeatureCard
+                    key={f.slug}
+                    f={f}
+                    selected={selected === f.slug}
+                    pulse={false}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </div>
+              {archivedPageCount > 1 && (
+                <ArchivedPagination
+                  page={archivedPageClamped}
+                  pageCount={archivedPageCount}
+                  onChange={setArchivedPage}
                 />
-              ))}
+              )}
             </div>
           )}
         </div>
       )}
     </div>
+  )
+}
+
+function ArchivedPagination({
+  page,
+  pageCount,
+  onChange,
+}: {
+  page: number
+  pageCount: number
+  onChange: (n: number) => void
+}): ReactElement {
+  const go = (n: number) => (e: ReactMouseEvent) => {
+    e.preventDefault()
+    if (n >= 1 && n <= pageCount) onChange(n)
+  }
+  return (
+    <Pagination>
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            href="#"
+            onClick={go(page - 1)}
+            aria-disabled={page === 1}
+            tabIndex={page === 1 ? -1 : undefined}
+            className={cn(page === 1 && 'pointer-events-none opacity-50')}
+          />
+        </PaginationItem>
+        {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
+          <PaginationItem key={p}>
+            <PaginationLink href="#" isActive={p === page} onClick={go(p)}>
+              {p}
+            </PaginationLink>
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext
+            href="#"
+            onClick={go(page + 1)}
+            aria-disabled={page === pageCount}
+            tabIndex={page === pageCount ? -1 : undefined}
+            className={cn(page === pageCount && 'pointer-events-none opacity-50')}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
   )
 }
 
@@ -397,7 +476,7 @@ function FeatureCard({
         ? 'bg-emerald-500/80'
         : f.totalWaves > 0
           ? 'bg-violet-500/80'
-          : 'bg-zinc-700/40'
+          : 'bg-foreground/10'
   return (
     <PulseRing active={pulse}>
       <Card
@@ -422,7 +501,7 @@ function FeatureCard({
           <span className="flex-1 truncate font-mono text-[15px] text-foreground">{f.slug}</span>
         </div>
         <div className="flex h-[22px] items-center px-4">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-800/30">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
             <div
               className={cn('h-full rounded-full', barColorClass)}
               style={{ width: `${progressPct}%` }}

@@ -57,7 +57,7 @@ export function DetailPanel({ slug }: DetailPanelProps): ReactElement {
 
 function DetailEmpty(): ReactElement {
   return (
-    <div className="h-full flex items-center justify-center px-6 text-zinc-500">
+    <div className="h-full flex items-center justify-center px-6 text-muted-foreground">
       <p className="font-mono text-sm">Select a feature to see its detail.</p>
     </div>
   )
@@ -78,21 +78,21 @@ function DetailContent({ slug }: { slug: string }): ReactElement {
   const detail = useDetail(slug).data
   return (
     <Tabs defaultValue="tasks" className="h-full flex flex-col gap-0">
-      <header className="border-b border-zinc-800 px-4 py-3 flex items-center gap-3">
+      <header className="border-b border-border px-4 py-3 flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="font-mono text-[17px] text-zinc-100 truncate">{detail.slug}</div>
-          <div className="font-mono text-[14px] text-zinc-500">
+          <div className="font-mono text-[17px] text-foreground truncate">{detail.slug}</div>
+          <div className="font-mono text-[14px] text-muted-foreground">
             {detail.planVehicle ? 'plan vehicle' : 'spec vehicle'}
           </div>
         </div>
       </header>
-      <div className="border-b border-zinc-800 px-2 py-1.5 overflow-x-auto bg-zinc-900/50">
+      <div className="border-b border-border px-2 py-1.5 overflow-x-auto bg-foreground/5">
         <TabsList className="bg-transparent">
           {TABS.map((t) => (
             <TabsTrigger
               key={t.id}
               value={t.id}
-              className="font-mono text-xs cursor-pointer border border-transparent data-[state=active]:bg-zinc-800/60 data-[state=active]:text-zinc-100 data-[state=active]:border-zinc-700"
+              className="font-mono text-xs cursor-pointer border border-transparent data-[state=active]:bg-foreground/10 data-[state=active]:text-foreground data-[state=active]:border-border"
             >
               {t.label}
             </TabsTrigger>
@@ -150,8 +150,8 @@ function TasksTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEleme
             <li
               key={w.wave}
               className={cn(
-                'relative rounded border border-zinc-800/80',
-                status === 'running' && 'border-zinc-700/80',
+                'relative rounded border border-border',
+                status === 'running' && 'border-border',
                 status === 'pending' && 'opacity-70',
               )}
             >
@@ -161,7 +161,7 @@ function TasksTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEleme
                 aria-current={status === 'running' ? 'step' : undefined}
                 aria-haspopup="dialog"
                 aria-label={`Wave ${w.wave} details`}
-                className="relative z-10 flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[14px] cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 rounded"
+                className="relative z-10 flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[14px] cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
               >
                 <WaveStatusIcon status={status} />
                 {status === 'running' ? (
@@ -181,7 +181,7 @@ function TasksTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEleme
                   </>
                 )}
                 {totalTasks > 0 && (
-                  <span className="ml-auto shrink-0 tabular-nums text-zinc-500">
+                  <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
                     {doneTasks}/{totalTasks}
                   </span>
                 )}
@@ -191,7 +191,7 @@ function TasksTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEleme
         })}
       </ul>
       <Dialog open={activeWave !== null} onOpenChange={(o) => !o && setOpenWave(null)}>
-        <DialogContent className="max-w-5xl border-zinc-700 bg-zinc-950 text-zinc-200 sm:max-w-5xl">
+        <DialogContent className="max-w-5xl border-border bg-card text-foreground sm:max-w-5xl">
           {activeWave && <WaveDialogBody wave={activeWave} acs={detail.acs} />}
         </DialogContent>
       </Dialog>
@@ -211,13 +211,13 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
   const relatedAcs = acs.filter((a) => reqIds.has(a.id))
   return (
     <>
-      <DialogHeader className="border-b border-zinc-800 pb-3">
-        <DialogTitle className="flex items-center gap-2 font-mono text-[15px] text-zinc-100">
+      <DialogHeader className="border-b border-border pb-3">
+        <DialogTitle className="flex items-center gap-2 font-mono text-[15px] text-foreground">
           <span>Wave {wave.wave}</span>
           {total > 0 && (
             <Badge
               variant="outline"
-              className="border-zinc-700 bg-zinc-900/60 font-normal text-zinc-400 tabular-nums"
+              className="border-border bg-foreground/5 font-normal text-muted-foreground tabular-nums"
             >
               {done}/{total}
             </Badge>
@@ -228,21 +228,22 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
       <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1">
         <section>
           <SectionLabel>Goal</SectionLabel>
-          <div className="rounded border border-zinc-800/60 bg-zinc-900/40 p-3">
-            <Markdown className="text-zinc-200">{wave.goal}</Markdown>
+          <div className="rounded border border-border bg-foreground/5 p-3">
+            <Markdown className="text-foreground">{wave.goal}</Markdown>
           </div>
         </section>
         {wave.verify && (
           <section>
             <SectionLabel>Verify</SectionLabel>
-            <div className="rounded border border-zinc-800/60 bg-zinc-900/40 p-3">
-              <Markdown className="text-zinc-200">{wave.verify}</Markdown>
+            <div className="rounded border border-border bg-foreground/5 p-3">
+              <Markdown className="text-foreground">{wave.verify}</Markdown>
             </div>
           </section>
         )}
         <section>
           <SectionLabel>
-            Tasks{total > 0 && <span className="ml-2 normal-case text-zinc-600">({total})</span>}
+            Tasks
+            {total > 0 && <span className="ml-2 normal-case text-muted-foreground">({total})</span>}
           </SectionLabel>
           {wave.tasks.length > 0 ? (
             <ul className="space-y-2">
@@ -251,9 +252,7 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
                   key={t.id}
                   className={cn(
                     'rounded border p-3',
-                    t.done
-                      ? 'border-zinc-800/60 bg-zinc-900/30'
-                      : 'border-zinc-700/70 bg-zinc-900/50',
+                    t.done ? 'border-border bg-foreground/5' : 'border-border bg-foreground/5',
                   )}
                 >
                   <div className="flex items-start gap-2">
@@ -265,28 +264,30 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
                     ) : (
                       <CircleIcon
                         aria-hidden="true"
-                        className="mt-0.5 size-4 shrink-0 text-zinc-500"
+                        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                       />
                     )}
-                    <span className="mt-0.5 shrink-0 font-mono text-[12px] text-zinc-500 tabular-nums">
+                    <span className="mt-0.5 shrink-0 font-mono text-[12px] text-muted-foreground tabular-nums">
                       {t.id}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <Markdown className={cn(t.done ? 'text-zinc-400' : 'text-zinc-100')}>
+                      <Markdown
+                        className={cn(t.done ? 'text-muted-foreground' : 'text-foreground')}
+                      >
                         {t.description}
                       </Markdown>
                     </div>
                   </div>
                   {(t.files.length > 0 || t.depends.length > 0 || t.reqs.length > 0) && (
-                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-t border-zinc-800/60 pt-2 font-mono text-[12px]">
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-t border-border pt-2 font-mono text-[12px]">
                       {t.files.length > 0 && (
                         <>
-                          <dt className="text-zinc-500">Files</dt>
-                          <dd className="break-all text-zinc-300">
+                          <dt className="text-muted-foreground">Files</dt>
+                          <dd className="break-all text-foreground">
                             {t.files.map((f) => (
                               <code
                                 key={f}
-                                className="mr-1 inline-block rounded bg-zinc-800/70 px-1 text-zinc-200"
+                                className="mr-1 inline-block rounded bg-foreground/10 px-1 text-foreground"
                               >
                                 {f}
                               </code>
@@ -296,14 +297,14 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
                       )}
                       {t.depends.length > 0 && (
                         <>
-                          <dt className="text-zinc-500">Depends</dt>
-                          <dd className="text-zinc-300 tabular-nums">{t.depends.join(', ')}</dd>
+                          <dt className="text-muted-foreground">Depends</dt>
+                          <dd className="text-foreground tabular-nums">{t.depends.join(', ')}</dd>
                         </>
                       )}
                       {t.reqs.length > 0 && (
                         <>
-                          <dt className="text-zinc-500">Requirements</dt>
-                          <dd className="text-zinc-300">{t.reqs.join(', ')}</dd>
+                          <dt className="text-muted-foreground">Requirements</dt>
+                          <dd className="text-foreground">{t.reqs.join(', ')}</dd>
                         </>
                       )}
                     </dl>
@@ -312,7 +313,7 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
               ))}
             </ul>
           ) : (
-            <p className="rounded border border-dashed border-zinc-800 p-3 text-center font-mono text-[13px] text-zinc-500">
+            <p className="rounded border border-dashed border-border p-3 text-center font-mono text-[13px] text-muted-foreground">
               No tasks recorded in this Wave.
             </p>
           )}
@@ -321,17 +322,17 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
           <section>
             <SectionLabel>
               Related ACs
-              <span className="ml-2 normal-case text-zinc-600">({relatedAcs.length})</span>
+              <span className="ml-2 normal-case text-muted-foreground">({relatedAcs.length})</span>
             </SectionLabel>
             <ul className="space-y-2">
               {relatedAcs.map((ac) => (
-                <li key={ac.id} className="rounded border border-zinc-800/60 bg-zinc-900/30 p-3">
+                <li key={ac.id} className="rounded border border-border bg-foreground/5 p-3">
                   <div className="flex items-center gap-2 font-mono text-[13px]">
-                    <span className="text-zinc-200">{ac.id}</span>
+                    <span className="text-foreground">{ac.id}</span>
                     <Badge
                       variant="outline"
                       className={cn(
-                        'border-transparent text-[10px] tracking-wider uppercase text-zinc-50',
+                        'border-transparent text-[10px] tracking-wider uppercase text-foreground',
                         ac.confirmed ? 'bg-stone-600/70' : 'bg-amber-600/70',
                       )}
                     >
@@ -339,10 +340,10 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
                     </Badge>
                   </div>
                   <div className="mt-1">
-                    <Markdown className="text-zinc-300">{ac.body}</Markdown>
+                    <Markdown className="text-foreground">{ac.body}</Markdown>
                   </div>
                   {(ac.examples ?? []).length > 0 && (
-                    <ul className="mt-1.5 ml-4 list-disc space-y-0.5 font-mono text-[12px] text-zinc-400">
+                    <ul className="mt-1.5 ml-4 list-disc space-y-0.5 font-mono text-[12px] text-muted-foreground">
                       {(ac.examples ?? []).map((e) => (
                         <li key={`${ac.id}::${e}`}>{e}</li>
                       ))}
@@ -360,7 +361,7 @@ function WaveDialogBody({ wave, acs }: { wave: WaveEntry; acs: AcEntry[] }): Rea
 
 function SectionLabel({ children }: { children: ReactNode }): ReactElement {
   return (
-    <h3 className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500">
+    <h3 className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
       {children}
     </h3>
   )
@@ -372,16 +373,16 @@ function WaveStatusIcon({ status }: { status: 'done' | 'running' | 'pending' }):
     return <CircleCheckIcon aria-hidden="true" className={cn(baseClass, 'text-stone-400')} />
   }
   if (status === 'running') {
-    return <CircleDotIcon aria-hidden="true" className={cn(baseClass, 'text-zinc-100')} />
+    return <CircleDotIcon aria-hidden="true" className={cn(baseClass, 'text-foreground')} />
   }
-  return <CircleIcon aria-hidden="true" className={cn(baseClass, 'text-zinc-500')} />
+  return <CircleIcon aria-hidden="true" className={cn(baseClass, 'text-muted-foreground')} />
 }
 
 function DocumentsTab({ slug }: { slug: string }): ReactElement {
   const [doc, setDoc] = useState<DocId>('requirements')
   return (
     <div className="space-y-3">
-      <nav className="flex flex-wrap gap-1 border-b border-zinc-800 pb-2" aria-label="Documents">
+      <nav className="flex flex-wrap gap-1 border-b border-border pb-2" aria-label="Documents">
         {DOC_TABS.map((d) => {
           const active = d.id === doc
           return (
@@ -390,10 +391,10 @@ function DocumentsTab({ slug }: { slug: string }): ReactElement {
               type="button"
               onClick={() => setDoc(d.id)}
               className={cn(
-                'rounded border px-2 py-1 font-mono text-xs cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500',
+                'rounded border px-2 py-1 font-mono text-xs cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                 active
-                  ? 'border-zinc-700 bg-zinc-800/60 text-zinc-100'
-                  : 'border-transparent text-zinc-400 hover:bg-zinc-900/50',
+                  ? 'border-border bg-foreground/10 text-foreground'
+                  : 'border-transparent text-muted-foreground hover:bg-foreground/5',
               )}
               aria-pressed={active}
             >
@@ -414,13 +415,13 @@ function DocumentView({ slug, doc }: { slug: string; doc: DocId }): ReactElement
   if (body === null) {
     return (
       <Placeholder>
-        No <code className="rounded bg-zinc-800/80 px-1 text-zinc-200">{doc}</code> document.
+        No <code className="rounded bg-foreground/10 px-1 text-foreground">{doc}</code> document.
       </Placeholder>
     )
   }
   return (
-    <div className="rounded border border-zinc-800/60 bg-zinc-900/40 p-4">
-      <Markdown className="text-zinc-200">{body}</Markdown>
+    <div className="rounded border border-border bg-foreground/5 p-4">
+      <Markdown className="text-foreground">{body}</Markdown>
     </div>
   )
 }
@@ -432,18 +433,18 @@ function ReviewsTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEle
   return (
     <ul className="space-y-3">
       {detail.reviews.map((r) => (
-        <li key={`${r.ts}::${r.iteration}`} className="rounded border border-zinc-800/80 p-3">
+        <li key={`${r.ts}::${r.iteration}`} className="rounded border border-border p-3">
           <div className="flex items-center gap-2 font-mono text-[14px]">
             <VerdictBadge verdict={r.verdict} iter={r.iteration} />
-            <span className="text-zinc-500">· {r.ts.slice(0, 16)}</span>
-            {r.wave !== undefined && <span className="text-zinc-500">· wave {r.wave}</span>}
+            <span className="text-muted-foreground">· {r.ts.slice(0, 16)}</span>
+            {r.wave !== undefined && <span className="text-muted-foreground">· wave {r.wave}</span>}
           </div>
           {(r.findings ?? []).length > 0 && (
             <ul className="mt-2 space-y-1 text-[13px]">
               {(r.findings ?? []).map((f) => (
                 <li
                   key={`${r.ts}::${f.id ?? ''}::${f.severity}::${f.message.slice(0, 16)}`}
-                  className="font-mono text-zinc-300"
+                  className="font-mono text-foreground"
                 >
                   <Badge
                     variant="outline"
@@ -453,7 +454,7 @@ function ReviewsTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEle
                         ? 'border-rose-500/40 text-rose-300'
                         : f.severity === 'MEDIUM'
                           ? 'border-amber-500/40 text-amber-300'
-                          : 'border-zinc-700 text-zinc-400')
+                          : 'border-border text-muted-foreground')
                     }
                   >
                     {f.severity}
@@ -470,5 +471,7 @@ function ReviewsTab({ detail }: { detail: MumeiFeatureDetailPayload }): ReactEle
 }
 
 function Placeholder({ children }: { children: ReactNode }): ReactElement {
-  return <div className="text-zinc-500 font-mono text-[14px] py-8 text-center">{children}</div>
+  return (
+    <div className="text-muted-foreground font-mono text-[14px] py-8 text-center">{children}</div>
+  )
 }

@@ -4,8 +4,8 @@ Local realtime dashboard for [mumei](../README.md). Watches `.mumei/` in
 your project and renders a browser UI showing feature phases, Wave
 progress, review verdicts, token cost, and hook activity.
 
-The UI is a single bento layout on a four-corner mesh gradient with Liquid
-Glass title chips, a side Sheet for feature detail, and a header light /
+The UI is a single tabbed view on a four-corner mesh gradient with Liquid
+Glass pill tabs, a centred Dialog for feature detail, and a header light /
 dark toggle.
 
 ## Run from your project
@@ -64,12 +64,12 @@ dashboard/
 │   │   ├── useEventStream.ts # SSE subscription
 │   │   └── useTheme.ts       # light / dark toggle (localStorage + html.dark)
 │   ├── components/
-│   │   ├── Header.tsx        # brand pill + project label + theme toggle
-│   │   ├── Dashboard.tsx     # bento grid + Sheet wiring
-│   │   ├── DetailPanel.tsx   # rendered inside the right-side Sheet
+│   │   ├── Header.tsx        # brand mark + project label + theme toggle
+│   │   ├── Dashboard.tsx     # tabs (Features / Tokens / Activity) + Dialog wiring
+│   │   ├── DetailPanel.tsx   # rendered inside the centred Dialog
 │   │   ├── primitives.tsx    # Phase / Verdict / Vehicle glass chips
 │   │   ├── charts.tsx        # token sparkline (Recharts)
-│   │   └── ui/               # shadcn primitives (sheet, card, dialog, …)
+│   │   └── ui/               # shadcn primitives (tabs, pagination, dialog, …)
 │   ├── lib/utils.ts          # cn() classname merger
 │   ├── types/                # generated from ../schemas/ (do NOT edit by hand)
 │   └── index.css             # Tailwind v4 @theme tokens (OKLCH) + glass / blueprint utilities
@@ -122,20 +122,26 @@ dashboard/
 
 ## Layout
 
-- **Header**: brand pill + project label + theme toggle, centred in a
-  1400 px hero strip.
-- **Hero**: large active-feature heading plus a project label microcopy.
-  No KPI strip — the first view stays sparse on purpose.
-- **Bento grid (3 cols)**: focused feature (2×2) · activity feed (1×2) ·
-  features list (3×1). Each cell is a translucent `.mumei-card`
-  (`rounded-3xl`, `backdrop-filter: blur(22px)`); section titles are
-  plain monospaced labels, not chips.
-- **Sheet**: feature detail (tasks · documents · reviews tabs) slides in
-  from the right when a feature is selected; close clears the selection.
+- **Header**: brand mark + project label + theme toggle. Plain text, no
+  glass frames around the wordmark or project path.
+- **Hero**: large active-feature heading and one line of microcopy. No
+  KPI strip — the first view stays sparse on purpose.
+- **Tabs (Liquid Glass pill, `rounded-full`)**: Features · Tokens · Activity.
+  Active state is a soft `bg-foreground/10` fill, not a hard pill shadow.
+- **Features tab**: active feature grid plus an "archived (N)" collapsible.
+  Archived results are paginated 12 per page using shadcn `Pagination`
+  (Previous / numbered links / Next, all `rounded-full`).
+- **Tokens tab**: 14-day token area chart (Recharts) with a running total.
+- **Activity tab**: ActivityFeed full-bleed.
+- **Dialog**: feature detail (tasks · documents · reviews tabs) opens in
+  a centred Dialog (`max-w-5xl`, `85vh` height). Esc / overlay click
+  clears the selection.
 - **Theme**: light / dark via the header toggle, persisted to
   `localStorage` (`mumei-theme`). An inline script in `index.html` applies
   the theme before React mounts so the gradient never flashes the wrong
-  palette.
+  palette. Detail content uses semantic tokens (`text-foreground`,
+  `text-muted-foreground`, `border-border`, `bg-card`) so contrast holds
+  in both palettes.
 - **Background**: four-corner radial mesh gradient anchored to the
   viewport, with a 24 px blueprint dot overlay available as
   `.mumei-blueprint` for cards that want extra texture.
