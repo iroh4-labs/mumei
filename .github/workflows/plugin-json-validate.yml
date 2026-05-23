@@ -18,6 +18,13 @@ on:
     # manifest.
     paths:
       - ".claude-plugin/plugin.json"
+      # Re-trigger when the hash-locked validate dep set changes so a
+      # Dependabot bump PR (.github/requirements/validate/{requirements.in,
+      # requirements.txt}) self-tests the new lock against the live
+      # manifest before it lands. Without this, a yanked hash or
+      # incompatible transitive would only surface on the next manifest
+      # PR or the weekly cron.
+      - ".github/requirements/validate/**"
       - ".github/workflows/plugin-json-validate.yml"
       - "schemas/plugin.schema.json"
   schedule:

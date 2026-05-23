@@ -192,6 +192,16 @@ jobs:
           ref: ${{ inputs.tag }}
           persist-credentials: false
 
+      # `needs: preflight` only orders the jobs — it does not carry the
+      # preflight runner's `actions/setup-python` over. validate-manifest
+      # runs on a fresh ubuntu-latest runner, so re-pin Python here so
+      # the hash-locked install on line 213 resolves on the same
+      # interpreter pip-compile used for the lock (3.14).
+      - name: Set up Python 3.14
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14"
+
       - name: Strict schema validation (vendored schema)
         # The release path validates against schemas/plugin.schema.json — a
         # vendored copy of https://json.schemastore.org/claude-code-plugin-manifest.json
@@ -209,8 +219,9 @@ jobs:
           # so a yanked or tampered tarball is rejected at install. Same
           # lock backs plugin-json-validate.yml; bump via Dependabot pip
           # ecosystem (drift is intentional, gated by both workflows).
-          # Python is already pinned to 3.14 by the earlier setup-python
-          # step in this job.
+          # Python is pinned to 3.14 by the setup-python step above so
+          # the install resolves on the same interpreter pip-compile
+          # used for the lock.
           python3 -m pip install --quiet --require-hashes -r .github/requirements/validate/requirements.txt
           python3 - <<'PY'
           import json, sys

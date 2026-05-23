@@ -83,13 +83,17 @@ updates:
     open-pull-requests-limit: 5
     # review-pipeline semgrep is frozen at 1.111.0 for grounding signal
     # stability (.github/requirements/semgrep-review/requirements.in).
-    # Block auto-bumps so Dependabot does not fight the policy; a manual
-    # bump is required when the freeze is consciously lifted. This
-    # ignore intentionally scopes only to this entry, not the release
-    # pin, which should track current stable.
+    # Block every auto-bump (major / minor / patch) so Dependabot does
+    # not fight the freeze; a 1.111.x → 1.111.y patch bump still shifts
+    # the AI reviewer's grounding fingerprint, so policy is "all bumps
+    # are manual". This ignore intentionally scopes only to this entry,
+    # not the release pin, which should track current stable.
     ignore:
       - dependency-name: "semgrep"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
 
   - package-ecosystem: "pip"
     directory: "/.github/requirements/validate"
