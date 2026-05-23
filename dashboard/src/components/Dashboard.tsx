@@ -71,29 +71,6 @@ export function Dashboard(): ReactElement {
         </ErrorBoundarySection>
 
         <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3 lg:auto-rows-[minmax(200px,1fr)]">
-          <section
-            aria-label="focused feature"
-            className="mumei-card flex flex-col p-7 lg:col-span-2 lg:row-span-2"
-          >
-            <ErrorBoundarySection name="detail">
-              <Suspense fallback={<FocusedFeatureSkeleton />}>
-                <FocusedFeature selected={selected} pulses={live.pulses} />
-              </Suspense>
-            </ErrorBoundarySection>
-          </section>
-
-          <section
-            aria-label="activity"
-            className="mumei-card flex flex-col overflow-hidden p-5 lg:row-span-2"
-          >
-            <SectionTitle>Activity</SectionTitle>
-            <div className="-mx-1 mt-3 min-h-0 flex-1 overflow-y-auto">
-              <ErrorBoundarySection name="activity">
-                <ActivityFeed />
-              </ErrorBoundarySection>
-            </div>
-          </section>
-
           <section aria-label="features" className="mumei-card p-5 lg:col-span-3">
             <div className="mb-4 flex items-center gap-3">
               <SectionTitle>Features</SectionTitle>
@@ -116,6 +93,29 @@ export function Dashboard(): ReactElement {
                 />
               </Suspense>
             </ErrorBoundarySection>
+          </section>
+
+          <section
+            aria-label="focused feature"
+            className="mumei-card flex flex-col p-7 lg:col-span-2 lg:row-span-2"
+          >
+            <ErrorBoundarySection name="detail">
+              <Suspense fallback={<FocusedFeatureSkeleton />}>
+                <FocusedFeature selected={selected} pulses={live.pulses} />
+              </Suspense>
+            </ErrorBoundarySection>
+          </section>
+
+          <section
+            aria-label="activity"
+            className="mumei-card flex flex-col overflow-hidden p-5 lg:row-span-2"
+          >
+            <SectionTitle>Activity</SectionTitle>
+            <div className="-mx-1 mt-3 min-h-0 flex-1 overflow-y-auto">
+              <ErrorBoundarySection name="activity">
+                <ActivityFeed />
+              </ErrorBoundarySection>
+            </div>
           </section>
         </div>
       </main>
