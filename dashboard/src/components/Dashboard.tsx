@@ -11,19 +11,23 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEventStream } from '@/hooks/useEventStream'
 import { useFeatures } from '@/hooks/useFeatures'
-import { useTrendHooks } from '@/hooks/useTrendHooks'
-import { useTrendReviews } from '@/hooks/useTrendReviews'
+import { useMeta, useMetaStats } from '@/hooks/useMeta'
 import { useTrendTokens } from '@/hooks/useTrendTokens'
 import { formatTokens, lastActivityDate } from '@/lib/format'
-import { hookIdLabel } from '@/lib/hook-id-labels'
 import { cn } from '@/lib/utils'
 import type { MumeiFeatureSummary } from '@/types/feature-summary'
 import { ActivityFeed } from './ActivityFeed'
-import { HBar, LegendDot, LineChart, StackedBar } from './charts'
+import { LineChart } from './charts'
 import { DetailPanel } from './DetailPanel'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
@@ -33,19 +37,18 @@ import { PhaseBadge, PulseRing, VerdictBadge } from './primitives'
 const SECTION_INVALIDATIONS: Record<string, ReadonlyArray<readonly (string | number)[]>> = {
   features: [['features']],
   meta: [['meta'], ['meta', 'stats']],
-  trends: [
-    ['trend', 'tokens', 14],
-    ['trend', 'reviews', 14],
-    ['trend', 'hooks', 10, 24],
-  ],
+  hero: [['meta'], ['meta', 'stats']],
+  trends: [['trend', 'tokens', 14]],
   activity: [['activity', 50]],
   detail: [],
 }
 
 /**
- * Top-level dashboard. Wired entirely to backend hooks; mock data has
- * been replaced with EmptyState fallback for fresh projects per
- * REQ-15.3 / REQ-15.18.
+ * Bento dashboard. A wide hero strip introduces the project and exposes the
+ * top-line counters; three cards below carry the focused feature, the live
+ * activity feed, and the feature list. The full DetailPanel opens in a
+ * right-side Sheet when a feature is selected — the first view stays sparse
+ * on purpose.
  */
 export function Dashboard(): ReactElement {
   const [selected, setSelected] = useState<string | null>(null)
@@ -53,21 +56,56 @@ export function Dashboard(): ReactElement {
   const live = useEventStream('/api/events')
 
   return (
-    <div className="w-full h-dvh min-h-[640px] bg-zinc-950 paper-bg relative text-zinc-200 flex flex-col font-sans overflow-hidden">
+    <div className="min-h-dvh w-full font-sans text-foreground">
       <ErrorBoundarySection name="meta">
         <Suspense fallback={<TopBarSkeleton />}>
           <Header connected={live.connected} disconnected={live.disconnected} />
         </Suspense>
       </ErrorBoundarySection>
 
-      <div className="flex-1 min-h-0 flex gap-3 p-3 overflow-hidden">
-        {/* Spec list (left) — 40% */}
-        <section
-          aria-label="features"
-          className="flex flex-col basis-[40%] min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 overflow-hidden"
-        >
-          <FilterStrip slug={slugFilter} onSlugChange={setSlugFilter} />
-          <div className="flex-1 min-h-0 overflow-y-auto">
+      <main className="mx-auto w-full max-w-[1400px] px-5 pb-16 sm:px-8">
+        <ErrorBoundarySection name="hero">
+          <Suspense fallback={<HeroSkeleton />}>
+            <Hero />
+          </Suspense>
+        </ErrorBoundarySection>
+
+        <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3 lg:auto-rows-[minmax(200px,1fr)]">
+          <section
+            aria-label="focused feature"
+            className="mumei-card flex flex-col p-7 lg:col-span-2 lg:row-span-2"
+          >
+            <ErrorBoundarySection name="detail">
+              <Suspense fallback={<FocusedFeatureSkeleton />}>
+                <FocusedFeature selected={selected} pulses={live.pulses} />
+              </Suspense>
+            </ErrorBoundarySection>
+          </section>
+
+          <section
+            aria-label="activity"
+            className="mumei-card flex flex-col overflow-hidden p-5 lg:row-span-2"
+          >
+            <GlassChipTitle>Activity</GlassChipTitle>
+            <div className="-mx-1 mt-3 min-h-0 flex-1 overflow-y-auto">
+              <ErrorBoundarySection name="activity">
+                <ActivityFeed />
+              </ErrorBoundarySection>
+            </div>
+          </section>
+
+          <section aria-label="features" className="mumei-card p-5 lg:col-span-3">
+            <div className="mb-4 flex items-center gap-3">
+              <GlassChipTitle>Features</GlassChipTitle>
+              <div className="flex-1" />
+              <Input
+                value={slugFilter}
+                onChange={(e) => setSlugFilter(e.target.value)}
+                placeholder="filter slug…"
+                aria-label="filter slug"
+                className="mumei-glass w-32 rounded-full border-0 font-mono placeholder:text-muted-foreground/70 sm:w-44"
+              />
+            </div>
             <ErrorBoundarySection name="features">
               <Suspense fallback={<FeatureGridSkeleton />}>
                 <FeatureGrid
@@ -78,42 +116,23 @@ export function Dashboard(): ReactElement {
                 />
               </Suspense>
             </ErrorBoundarySection>
-          </div>
-        </section>
+          </section>
+        </div>
+      </main>
 
-        {/* Spec detail (middle) — 30% */}
-        <section
-          aria-label="feature detail"
-          className="hidden md:flex flex-col basis-[30%] min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 overflow-hidden"
-        >
-          <ErrorBoundarySection name="detail">
-            <DetailPanel slug={selected} />
-          </ErrorBoundarySection>
-        </section>
-
-        {/* Activity (right) — 30% */}
-        <section
-          aria-label="activity"
-          className="hidden lg:flex flex-col basis-[30%] min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 overflow-hidden"
-        >
-          <div className="px-3 py-2 font-mono text-[14px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
-            Activity
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <ErrorBoundarySection name="activity">
-              <ActivityFeed />
+      <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent side="right">
+          <SheetHeader>
+            <SheetTitle>{selected ?? ''}</SheetTitle>
+            <SheetDescription>Feature detail · waves · reviews</SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ErrorBoundarySection name="detail">
+              <DetailPanel slug={selected} />
             </ErrorBoundarySection>
           </div>
-        </section>
-      </div>
-
-      <div className="shrink-0 px-3 pb-3">
-        <ErrorBoundarySection name="trends">
-          <Suspense fallback={<TrendBarSkeleton />}>
-            <TrendBar />
-          </Suspense>
-        </ErrorBoundarySection>
-      </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -184,29 +203,192 @@ function ErrorBoundarySection({
 
 function TopBarSkeleton(): ReactElement {
   return (
-    <header className="h-[72px] shrink-0 flex items-center px-5 sm:px-8">
+    <header className="flex h-[72px] shrink-0 items-center px-5 sm:px-8">
       <Skeleton className="h-9 w-32 rounded-full" />
     </header>
   )
 }
 
-function FilterStrip({
-  slug,
-  onSlugChange,
-}: {
-  slug: string
-  onSlugChange: (s: string) => void
-}): ReactElement {
+function GlassChipTitle({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div className="px-3 pt-3 border-zinc-800 flex items-center gap-3">
-      <div className="flex-1 min-w-0" />
-      <Input
-        value={slug}
-        onChange={(e) => onSlugChange(e.target.value)}
-        placeholder="filter slug…"
-        aria-label="filter slug"
-        className="font-mono w-32 sm:w-44 rounded-md border-zinc-700 bg-zinc-950/60 text-zinc-200 placeholder:text-zinc-500"
-      />
+    <span className="mumei-glass inline-flex shrink-0 items-center rounded-full px-3 py-1 font-mono text-[12px] tracking-wider uppercase text-foreground">
+      {children}
+    </span>
+  )
+}
+
+function Hero(): ReactElement {
+  const meta = useMeta().data
+  const stats = useMetaStats().data
+  return (
+    <section aria-label="overview" className="pt-10">
+      <p className="font-mono text-[12px] tracking-wider uppercase text-muted-foreground">
+        {meta.projectLabel}
+      </p>
+      <h1 className="mt-2 text-[2.25rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-[3rem]">
+        {stats.activeCount === 0
+          ? 'No features in flight.'
+          : stats.activeCount === 1
+            ? '1 feature in flight.'
+            : `${stats.activeCount} features in flight.`}
+      </h1>
+      <p className="mt-2 max-w-xl text-base text-muted-foreground">
+        {stats.activeCount === 0
+          ? 'Run /mumei:plan in your project to start one.'
+          : `${stats.eventCount24h} event${stats.eventCount24h === 1 ? '' : 's'} in the last 24 hours.`}
+      </p>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <KpiChip label="active" value={stats.activeCount} />
+        <KpiChip label="tokens · month" value={formatTokens(stats.monthTokens)} />
+        <KpiChip label="cache hit" value={`${Math.round(stats.cacheHitRate * 100)}%`} />
+        <KpiChip label="hooks · /sec" value={stats.hooksPerSec.toFixed(2)} />
+      </div>
+    </section>
+  )
+}
+
+function HeroSkeleton(): ReactElement {
+  return (
+    <section className="pt-10">
+      <Skeleton className="h-3 w-32" />
+      <Skeleton className="mt-3 h-12 w-[60%]" />
+      <Skeleton className="mt-3 h-4 w-[40%]" />
+      <div className="mt-6 flex gap-3">
+        {Array.from({ length: 4 }, (_, i) => i).map((i) => (
+          <Skeleton key={i} className="h-14 w-28 rounded-2xl" />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function KpiChip({ label, value }: { label: string; value: number | string }): ReactElement {
+  return (
+    <div className="mumei-glass min-w-[120px] rounded-2xl px-4 py-2.5">
+      <div className="font-mono text-[11px] tracking-wider uppercase text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-0.5 font-mono text-[20px] tabular-nums text-foreground">{value}</div>
+    </div>
+  )
+}
+
+function FocusedFeature({
+  selected,
+  pulses,
+}: {
+  selected: string | null
+  pulses: Set<string>
+}): ReactElement {
+  const tokens = useTrendTokens(14).data
+  const totalTokens = tokens.reduce((acc, p) => acc + p.v, 0)
+  const { data: features } = useFeatures()
+  const focus = selected ? (features.find((f) => f.slug === selected) ?? null) : null
+
+  return (
+    <div className="flex h-full min-h-[360px] flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <GlassChipTitle>Now</GlassChipTitle>
+        {focus && (
+          <span className="font-mono text-[12px] text-muted-foreground">
+            click any feature to switch focus · esc to close
+          </span>
+        )}
+      </div>
+
+      {focus === null ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center">
+          <p className="max-w-md text-[1.75rem] font-semibold leading-tight tracking-tight text-foreground">
+            Pick a feature to focus on.
+          </p>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Click any feature card below — phase, waves, and review history open here.
+          </p>
+        </div>
+      ) : (
+        <FocusedFeatureCard
+          f={focus}
+          pulsing={pulses.has(focus.slug) || focus.pulse === 'active'}
+        />
+      )}
+
+      <div className="mt-auto">
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="font-mono text-[11px] tracking-wider uppercase text-muted-foreground">
+            Tokens / day · last 14
+          </span>
+          <span className="font-mono text-[13px] tabular-nums text-foreground">
+            {formatTokens(totalTokens)}
+          </span>
+        </div>
+        <LineChart data={tokens} h={120} />
+      </div>
+    </div>
+  )
+}
+
+function FocusedFeatureCard({
+  f,
+  pulsing,
+}: {
+  f: MumeiFeatureSummary
+  pulsing: boolean
+}): ReactElement {
+  const progressPct = f.totalWaves > 0 ? Math.round((f.waveProgress / f.totalWaves) * 100) : 0
+  const barColorClass =
+    f.phase === 'review'
+      ? 'bg-amber-500/80'
+      : f.phase === 'done'
+        ? 'bg-emerald-500/80'
+        : f.totalWaves > 0
+          ? 'bg-violet-500/80'
+          : 'bg-zinc-700/40'
+  return (
+    <div className="flex flex-1 flex-col justify-center gap-4 py-2">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[14px] text-muted-foreground tabular-nums">{f.id}</span>
+        {pulsing && (
+          <span className="size-2 rounded-full bg-violet-500" role="status" aria-label="live" />
+        )}
+      </div>
+      <div className="font-mono text-[2rem] font-semibold leading-tight tracking-tight text-foreground break-all">
+        {f.slug}
+      </div>
+      <div className="flex items-center gap-3">
+        <PhaseBadge phase={f.phase} />
+        {f.lastVerdict && <VerdictBadge verdict={f.lastVerdict} iter={f.lastIter} />}
+        <span className="ml-auto font-mono text-[14px] text-muted-foreground tabular-nums">
+          {lastActivityDate(f.lastActivityMin)}
+        </span>
+      </div>
+      <div>
+        <div className="mb-1.5 flex items-center justify-between font-mono text-[12px] text-muted-foreground">
+          <span>
+            wave {f.waveProgress} / {f.totalWaves}
+          </span>
+          <span className="tabular-nums">{progressPct}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-zinc-800/40">
+          <div
+            className={cn('h-full rounded-full transition-[width] duration-500', barColorClass)}
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FocusedFeatureSkeleton(): ReactElement {
+  return (
+    <div className="flex h-full min-h-[360px] flex-col gap-5">
+      <Skeleton className="h-7 w-16 rounded-full" />
+      <div className="flex flex-1 flex-col gap-3">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-10 w-3/5" />
+        <Skeleton className="h-4 w-1/3" />
+      </div>
+      <Skeleton className="h-[120px] w-full rounded-xl" />
     </div>
   )
 }
@@ -237,11 +419,11 @@ function FeatureGrid({
   const totalSkips =
     warnings.skippedArchiveStates + warnings.skippedReviews + warnings.skippedCostLogLines
   return (
-    <div className="p-3 space-y-3">
+    <div className="space-y-3">
       {totalSkips > 0 && (
         <div
           aria-live="polite"
-          className="rounded-md border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200"
+          className="rounded-xl border border-amber-700/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-500"
         >
           <span className="font-mono">[mumei]</span> aggregation surfaced {totalSkips} skip
           {totalSkips === 1 ? '' : 's'} during /api/features
@@ -256,7 +438,7 @@ function FeatureGrid({
         </div>
       )}
       {active.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 auto-rows-fr">
+        <div className="grid auto-rows-fr grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {active.map((f) => (
             <FeatureCard
               key={f.slug}
@@ -276,7 +458,7 @@ function FeatureGrid({
             onClick={() => setShowArchived((s) => !s)}
             aria-expanded={showArchived}
             aria-controls="archived-grid"
-            className="w-full font-mono text-[16px] rounded-md border-zinc-700 bg-zinc-950/60 text-zinc-200 hover:bg-zinc-900 hover:text-zinc-100 hover:border-zinc-600"
+            className="mumei-glass w-full rounded-full border-0 font-mono text-[14px] text-foreground hover:bg-zinc-900/10"
           >
             {showArchived ? <ChevronDownIcon /> : <ChevronRightIcon />}
             <span>archived ({archived.length})</span>
@@ -284,7 +466,7 @@ function FeatureGrid({
           {showArchived && (
             <div
               id="archived-grid"
-              className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 auto-rows-fr opacity-70"
+              className="mt-2.5 grid auto-rows-fr grid-cols-1 gap-2.5 opacity-70 sm:grid-cols-2 xl:grid-cols-3"
             >
               {archived.map((f) => (
                 <FeatureCard
@@ -305,9 +487,9 @@ function FeatureGrid({
 
 function FeatureGridSkeleton(): ReactElement {
   return (
-    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 auto-rows-fr">
+    <div className="grid auto-rows-fr grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }, (_, i) => i).map((i) => (
-        <Skeleton key={i} className="h-[170px] rounded-2xl" />
+        <Skeleton key={i} className="h-[150px] rounded-2xl" />
       ))}
     </div>
   )
@@ -325,10 +507,6 @@ function FeatureCard({
   onSelect: (slug: string) => void
 }): ReactElement {
   const progressPct = f.totalWaves > 0 ? Math.round((f.waveProgress / f.totalWaves) * 100) : 0
-  // Phase-aware bar color is the single visual cue; the textual phase label
-  // below is the canonical source of truth — no duplicate overlay text or
-  // right-side label, no separate archive-hint row, no token/cache footer
-  // (those live in the trend panels).
   const barColorClass =
     f.phase === 'review'
       ? 'bg-amber-500/80'
@@ -350,150 +528,36 @@ function FeatureCard({
             onSelect(f.slug)
           }
         }}
-        style={
-          selected
-            ? {
-                borderColor: 'var(--mumei-text)',
-                borderWidth: '2px',
-                borderStyle: 'solid',
-              }
-            : undefined
-        }
         className={cn(
-          'gap-0 py-0 rounded-2xl bg-zinc-900/70 hover:bg-zinc-900 transition-colors cursor-pointer shadow-none',
+          'mumei-glass cursor-pointer gap-0 rounded-3xl py-0 shadow-none transition-transform duration-200 hover:scale-[1.01]',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60',
-          selected ? '' : 'border border-zinc-800 hover:border-zinc-700',
+          selected && 'ring-2 ring-foreground/70',
         )}
       >
-        <div className="px-3 h-[42px] flex items-center gap-2">
-          <span className="font-mono text-[17px] text-zinc-500 tabular-nums">{f.id}</span>
-          <span className="font-mono text-[17px] text-zinc-100 truncate flex-1">{f.slug}</span>
+        <div className="flex h-[40px] items-center gap-2 px-4">
+          <span className="font-mono text-[15px] text-muted-foreground tabular-nums">{f.id}</span>
+          <span className="flex-1 truncate font-mono text-[15px] text-foreground">{f.slug}</span>
         </div>
-        <div className="px-3 h-[24px] flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+        <div className="flex h-[22px] items-center px-4">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-800/30">
             <div
               className={cn('h-full rounded-full', barColorClass)}
               style={{ width: `${progressPct}%` }}
             />
           </div>
         </div>
-        <div className="px-3 h-[40px] flex items-center gap-2">
+        <div className="flex h-[44px] items-center gap-2 px-4">
           {f.lastVerdict ? (
             <VerdictBadge verdict={f.lastVerdict} iter={f.lastIter} />
           ) : (
-            <span className="font-mono text-[16px] text-zinc-600">— no review yet</span>
+            <span className="font-mono text-[13px] text-muted-foreground">— no review yet</span>
           )}
           <PhaseBadge phase={f.phase} />
-          <span className="ml-auto font-mono text-[15px] text-zinc-600 tabular-nums">
+          <span className="ml-auto font-mono text-[13px] text-muted-foreground tabular-nums">
             {lastActivityDate(f.lastActivityMin)}
           </span>
         </div>
       </Card>
     </PulseRing>
-  )
-}
-
-function TrendBar(): ReactElement {
-  const tokens = useTrendTokens(14).data
-  const reviews = useTrendReviews(14).data
-  const hooks = useTrendHooks(10, 24).data
-  const totalTokens = tokens.reduce((acc, p) => acc + p.v, 0)
-  const hooksRows = hooks.map((h) => ({
-    id: hookIdLabel(h.hook_id),
-    n: h.count,
-    decision:
-      h.decision === 'deny' || h.decision === 'block'
-        ? ('deny' as const)
-        : h.decision === 'allow'
-          ? ('pass' as const)
-          : ('warn' as const),
-  }))
-  return (
-    <footer className="h-64 lg:h-[320px] flex gap-3 overflow-x-auto snap-x snap-mandatory lg:snap-none">
-      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]">
-        <div className="flex items-center justify-between mb-1">
-          <div className="font-mono text-[16px] uppercase tracking-wider text-zinc-500">
-            Tokens / day
-          </div>
-          <div className="font-mono text-[16px] text-zinc-300 tabular-nums">
-            {formatTokens(totalTokens)}
-          </div>
-        </div>
-        <LineChart data={tokens} h={240} />
-      </section>
-      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]">
-        <div className="flex items-center justify-between mb-1">
-          <div className="font-mono text-[16px] uppercase tracking-wider text-zinc-500">
-            Review outcomes
-          </div>
-          <div className="flex gap-2 font-mono text-[16px]">
-            <LegendWithTooltip color="#6e8e64" label="PASS" tip="PASS — review verdict cleared" />
-            <LegendWithTooltip
-              color="#a88347"
-              label="NI"
-              tip="NEEDS_IMPROVEMENT — review surfaced fixable issues"
-            />
-            <LegendWithTooltip
-              color="#b86a55"
-              label="MI"
-              tip="MAJOR_ISSUES — review blocked, requires re-iteration"
-            />
-          </div>
-        </div>
-        <StackedBar data={reviews} h={240} />
-      </section>
-      <section className="snap-start shrink-0 w-full sm:w-1/2 lg:flex-1 lg:w-auto lg:min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]">
-        <div className="flex items-center justify-between mb-1">
-          <div className="font-mono text-[16px] uppercase tracking-wider text-zinc-500">
-            Hooks · top 10
-          </div>
-          <div className="font-mono text-[16px] text-zinc-500">{hooks.length} / 24h</div>
-        </div>
-        <HBar data={hooksRows} h={240} />
-      </section>
-    </footer>
-  )
-}
-
-function LegendWithTooltip({
-  color,
-  label,
-  tip,
-}: {
-  color: string
-  label: string
-  tip: string
-}): ReactElement {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="cursor-help focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-600 rounded"
-          aria-label={tip}
-        >
-          <LegendDot color={color} label={label} />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs">
-        {tip}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-function TrendBarSkeleton(): ReactElement {
-  return (
-    <footer className="h-64 lg:h-[320px] flex gap-3">
-      {Array.from({ length: 3 }, (_, i) => i).map((i) => (
-        <section
-          key={i}
-          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 min-w-[280px]"
-        >
-          <Skeleton className="h-4 w-32 mb-2" />
-          <Skeleton className="h-[240px] w-full" />
-        </section>
-      ))}
-    </footer>
   )
 }
