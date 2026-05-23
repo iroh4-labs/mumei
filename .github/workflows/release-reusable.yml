@@ -56,7 +56,7 @@ jobs:
 
       - name: semgrep
         run: |
-          python3 -m pip install --quiet semgrep
+          python3 -m pip install --quiet 'semgrep==1.163.0'
           semgrep --error --config=p/owasp-top-ten --config=p/security-audit --severity=ERROR .
 
       - name: gitleaks
