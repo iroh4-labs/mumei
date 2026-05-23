@@ -4,7 +4,7 @@
     {
       "$id": "https://mumei.dev/schemas/meta.schema.json",
       "title": "mumei dashboard meta",
-      "description": "Backend identity used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.",
+      "description": "Backend identity used by the Header. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.",
       "additionalProperties": false,
       "type": "object",
       "required": [
@@ -20,7 +20,7 @@
     {
       "$id": "https://mumei.dev/schemas/meta-stats.schema.json",
       "title": "mumei dashboard meta stats",
-      "description": "Aggregate counters used by the TopBar. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.",
+      "description": "Aggregate counters used by the Header. Producer: dashboard/server/meta.ts. Consumer: dashboard/src/hooks/useMeta.ts.",
       "additionalProperties": false,
       "type": "object",
       "required": [
