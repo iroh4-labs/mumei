@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generate retro.md for a finished mumei feature. Called by the
-# /mumei:retro skill. Reads requirements / design / tasks / spec-reviews
+# /mumei:reflect skill. Reads requirements / design / tasks / spec-reviews
 # / reviews / cost-log from the feature directory and emits a markdown
 # retrospective summarising AC count, Wave count, review iter pattern,
 # token cost, cache hit rate, and hook firing breakdown.

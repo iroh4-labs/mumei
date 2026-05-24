@@ -28,22 +28,22 @@ toward its enforcement gates is called a **vehicle**. mumei ships two:
   large enough to benefit from explicit user stories, EARS acceptance
   criteria, and an architecture diagram.
 - **`plan`** — a thin wrapper around Claude Code's native plan mode +
-  `TaskCreate`. After `/mumei:plan` selects this vehicle, you press
+  `TaskCreate`. After `/mumei:proceed` selects this vehicle, you press
   `Shift+Tab` twice to enter plan mode, accept the plan, and let Claude
   execute the resulting task list. mumei captures the plan into
   `.mumei/plans/<slug>/plan.md`, tracks task completion via
   `TaskCreated` / `TaskCompleted` hooks, and once every task is complete
   (`pending_review=true`) gates session-end and `git push` until you run
-  `/mumei:review`.
+  `/mumei:examine`.
 
 Both vehicles share the same review pipeline (Stage 0 detector +
 security + adversarial + per-issue validator + memory-curator), the
-same `MUMEI_BYPASS=1` escape hatch, and the same `/mumei:archive`
+same `MUMEI_BYPASS=1` escape hatch, and the same `/mumei:retire`
 cleanup. Pick `plan` when the SDD workflow feels heavier than the work
 itself; pick `spec` when explicit traceability between requirements and
 code is worth the friction.
 
-When you start a new feature with `/mumei:plan`, the vehicle picker now
+When you start a new feature with `/mumei:proceed`, the vehicle picker now
 surfaces quantitative bounds (`> 3 files OR > 100 lines` for spec, the
 inverse for plan) in each option's description so calibration is
 explicit. If a brainstorm scratch was attached, an additional
@@ -127,18 +127,18 @@ mumei is judged by what it prevents, not by what it does.
 ### 1. Setup and (optionally) brainstorm
 
 ```text
-/mumei:init                       # one-time per project
-/mumei:brainstorm user-auth       # optional pre-spec Q&A → .mumei/scratch/user-auth.md
+/mumei:arrange                       # one-time per project
+/mumei:gather user-auth       # optional pre-spec Q&A → .mumei/scratch/user-auth.md
 ```
 
-`/mumei:init` creates `.mumei/` and proposes additions to `CLAUDE.md`
-with a diff preview. `/mumei:brainstorm` runs up to 3 rounds × 5
+`/mumei:arrange` creates `.mumei/` and proposes additions to `CLAUDE.md`
+with a diff preview. `/mumei:gather` runs up to 3 rounds × 5
 questions, captured for the next step.
 
 ### 2. Generate the spec
 
 ```text
-/mumei:plan user-auth
+/mumei:proceed user-auth
 ```
 
 Walks through clarification → requirements → design → tasks. Each draft
@@ -173,7 +173,7 @@ Stage 6.5:  memory-curator scores reviewer-emitted candidates (7-axis ≥15/21 �
 Stage 6.6:  structural integrity check (lint-hook-ids + lint-docs-drift)
 ```
 
-Verdict `PASS` → `phase: done`. Run `/mumei:archive <feature>` to move
+Verdict `PASS` → `phase: done`. Run `/mumei:retire <feature>` to move
 the feature under `.mumei/archive/<YYYY-MM>/`.
 
 ## Prerequisites
@@ -204,7 +204,7 @@ results are recorded to `verify-log.jsonl` as `commit-gate` and `worktree-clean`
 
 ## Golden paths
 
-`/mumei:init` creates `.mumei/config.json` with a `golden_paths` array — path
+`/mumei:arrange` creates `.mumei/config.json` with a `golden_paths` array — path
 globs for files that must stay immutable (snapshot fixtures, `conftest.py`,
 locked test data). Golden files pin the test of record so generated code cannot
 quietly redefine them: Edit/Write is blocked (G1), the obvious Bash write route
@@ -221,7 +221,7 @@ multi-level coverage. `.mumei/config.json` is tracked (team-shared) and
 hand-editable — update `golden_paths` directly to add or retire a golden file.
 Use `MUMEI_BYPASS=1` for a one-off override.
 
-## Project layout (after `/mumei:init`)
+## Project layout (after `/mumei:arrange`)
 
 ```text
 your-project/
@@ -229,11 +229,11 @@ your-project/
 ├── .gitignore        # `.claude/agent-memory-local/` appended
 └── .mumei/
     ├── .gitignore    # ignores per-developer state (`current`, `specs/*/state.json`)
-    ├── current       # active feature slug (empty until first /mumei:plan)
+    ├── current       # active feature slug (empty until first /mumei:proceed)
     ├── config.json   # project-wide config: golden_paths (tracked, hand-editable)
-    ├── specs/        # per /mumei:plan: requirements.md, design.md, tasks.md, state.json, spec-reviews/, reviews/
-    ├── archive/      # per /mumei:archive: moved under <YYYY-MM>/<feature>/
-    └── scratch/      # per /mumei:brainstorm; tracked intentionally so brainstorm history is shared
+    ├── specs/        # per /mumei:proceed: requirements.md, design.md, tasks.md, state.json, spec-reviews/, reviews/
+    ├── archive/      # per /mumei:retire: moved under <YYYY-MM>/<feature>/
+    └── scratch/      # per /mumei:gather; tracked intentionally so brainstorm history is shared
 ```
 
 ## Spec & tasks format
@@ -294,12 +294,12 @@ single escape hatch is `MUMEI_BYPASS=1`.
 
 | Symptom                                                                     | Resolution                                                                                                                                                 |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Edit` denied with `"phase=plan"` reason (P1/P2/P3)                         | run `/mumei:plan <feature>` and resolve any `[NEEDS CLARIFICATION]` markers; phase advances when all 3 spec reviewers PASS and you approve                 |
+| `Edit` denied with `"phase=plan"` reason (P1/P2/P3)                         | run `/mumei:proceed <feature>` and resolve any `[NEEDS CLARIFICATION]` markers; phase advances when all 3 spec reviewers PASS and you approve                 |
 | `Edit` denied with `"out of scope"` / `"depends on task"` / `"uncommitted"` | adjust `_Files:_` / complete the dependency / commit the previous Wave first (I1 / I2 / W1)                                                                |
 | `git commit` denied with `"Wave has incomplete tasks"` or `"Tests failing"` | mark remaining `[ ]` tasks `[x]` (only after their `_Files:_` actually changed), or fix the failing test runner output (W2 / I3)                           |
 | `[x]` mark blocked with `"Phantom completion"` (I4)                         | implement the listed `_Files:_` first, or revert the `[x]`                                                                                                 |
-| `git push` denied with `"verdict: MAJOR_ISSUES"` (R2)                       | re-run `/mumei:plan` (or `/mumei:review` for plan vehicle) to address findings, then re-review                                                             |
-| Stop hook blocks session end (`R1` review pending / `R3` archive pending)   | run `/mumei:plan` to start review, or `/mumei:archive <feature>` once verdict is PASS                                                                      |
+| `git push` denied with `"verdict: MAJOR_ISSUES"` (R2)                       | re-run `/mumei:proceed` (or `/mumei:examine` for plan vehicle) to address findings, then re-review                                                             |
+| Stop hook blocks session end (`R1` review pending / `R3` archive pending)   | run `/mumei:proceed` to start review, or `/mumei:retire <feature>` once verdict is PASS                                                                      |
 | `Edit` denied on `.claude/agent-memory/<r>/MEMORY.md` (M1)                  | reviewer memory is curator-gated — emit candidates via your review JSON instead; the orchestrator persists qualifying candidates atomically                |
 | `pre-review-detector.sh` exits 2 with "missing required detector binaries"  | install `semgrep` + `osv-scanner` (see [Prerequisites](#prerequisites))                                                                                    |
 | Need to bypass a Hook for a one-off                                         | `MUMEI_BYPASS=1 <command>` for that single shell invocation. Do not export persistently. See [docs/document-corruption.md](./document-corruption.md).      |

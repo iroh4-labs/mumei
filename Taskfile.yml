@@ -244,8 +244,8 @@ tasks:
         echo "all required tools present"
 
   # ---------------------------------------------------------------
-  # Branch helper — guard against running /mumei:plan on default branch.
-  # CLAUDE.md rule: must branch before invoking /mumei:plan.
+  # Branch helper — guard against running /mumei:proceed on default branch.
+  # CLAUDE.md rule: must branch before invoking /mumei:proceed.
   # ---------------------------------------------------------------
   branch:guard:
     desc: "Refuse if currently on default branch (use before starting feature work)"

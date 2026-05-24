@@ -1,6 +1,6 @@
 ---
-name: archive
-description: Moves a completed feature directory to .mumei/archive/<YYYY-MM>/<feature>/ once the feature reaches phase=done. Auto-detects the active vehicle by checking .mumei/specs/<feature>/ first, then .mumei/plans/<feature>/. Triggers when the user explicitly archives a feature or when /mumei:plan or /mumei:review finishes with verdict=PASS and the user confirms.
+name: retire
+description: Moves a completed feature directory to .mumei/archive/<YYYY-MM>/<feature>/ once the feature reaches phase=done. Auto-detects the active vehicle by checking .mumei/specs/<feature>/ first, then .mumei/plans/<feature>/. Triggers when the user explicitly archives a feature or when /mumei:proceed or /mumei:examine finishes with verdict=PASS and the user confirms.
 disable-model-invocation: true
 allowed-tools: [Read, Write, Bash, Glob]
 argument-hint: <feature>
@@ -20,7 +20,7 @@ Move a completed feature out of the active workspace into the archive directory.
 
 ## When to use
 
-- The user explicitly invokes `/mumei:archive <feature>`.
+- The user explicitly invokes `/mumei:retire <feature>`.
 - A feature has `phase: done` and the user is ready to clean up the active workspace.
 
 ## Pre-flight checks
@@ -41,7 +41,7 @@ feature="$1"
 
 # auto-detect vehicle by directory existence. spec vehicle
 # (.mumei/specs/) takes precedence when both happen to exist; the slug
-# collision picker in /mumei:plan is supposed to prevent that situation
+# collision picker in /mumei:proceed is supposed to prevent that situation
 # in the first place.
 source_dir=""
 state_path=""

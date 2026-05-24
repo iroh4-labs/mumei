@@ -1,6 +1,6 @@
 ---
-name: retro
-description: Generate a retrospective markdown for an archived (or about-to-be-archived) mumei feature. Reads requirements / design / tasks / spec-reviews / reviews / cost-log and emits retro.md with AC count, Wave count, review iter counts, fix-spiral detection, token cost, cache hit rate, and hook firing breakdown. Triggered by the user invoking /mumei:retro <feature> after /mumei:archive (or before, if explicitly requested). Read-only with respect to feature content; writes only the retro.md output file.
+name: reflect
+description: Generate a retrospective markdown for an archived (or about-to-be-archived) mumei feature. Reads requirements / design / tasks / spec-reviews / reviews / cost-log and emits retro.md with AC count, Wave count, review iter counts, fix-spiral detection, token cost, cache hit rate, and hook firing breakdown. Triggered by the user invoking /mumei:reflect <feature> after /mumei:retire (or before, if explicitly requested). Read-only with respect to feature content; writes only the retro.md output file.
 allowed-tools: [Read, Bash, Glob, Write]
 disable-model-invocation: true
 argument-hint: <feature>
@@ -12,7 +12,7 @@ Produce a single markdown document summarising a finished mumei feature so the t
 
 ## When to use
 
-- The user invokes `/mumei:retro <feature>` after `/mumei:archive`.
+- The user invokes `/mumei:reflect <feature>` after `/mumei:retire`.
 - The user invokes it on a `phase: done` feature before archival (rare; lets them edit the retro before archive moves the docs).
 
 This skill is `disable-model-invocation: true` — only fires on explicit user request. Never auto-trigger.
@@ -31,7 +31,7 @@ Refuse with a clear message if none match.
 
 ```bash
 feature="$1"
-[[ -n "$feature" ]] || { echo "usage: /mumei:retro <feature>" >&2; exit 1; }
+[[ -n "$feature" ]] || { echo "usage: /mumei:reflect <feature>" >&2; exit 1; }
 
 # Resolve feature dir.
 feature_dir=""
@@ -61,7 +61,7 @@ fi
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/generate-retro.sh" "$feature_dir"
 ```
 
-The generator script writes `retro.md` into `feature_dir`. Tell the user the path, then suggest committing it (when the feature lives under archive) or letting `/mumei:archive` carry it along (when it's still under specs/plans).
+The generator script writes `retro.md` into `feature_dir`. Tell the user the path, then suggest committing it (when the feature lives under archive) or letting `/mumei:retire` carry it along (when it's still under specs/plans).
 
 The cost section in `retro.md` reflects whatever ended up in `cost-log.jsonl` after the backfill attempt: forward-recorded entries (from the SubagentStop hook), backfilled entries (from session logs), or — when neither path produced data — `(no data)` with a stderr warning that historical cost is unavailable.
 
@@ -100,5 +100,5 @@ The cost section in `retro.md` reflects whatever ended up in `cost-log.jsonl` af
 
 - Don't fail when partial data is missing — emit the section with `(no data)` and move on. A feature aborted mid-Phase 1 still benefits from a retro.
 - Don't auto-commit the retro.md. Let the user edit lessons / suggestions, then commit themselves.
-- Don't re-trigger /mumei:archive from here. retro is read-only with respect to the feature lifecycle.
+- Don't re-trigger /mumei:retire from here. retro is read-only with respect to the feature lifecycle.
 - Don't overwrite an existing retro.md without confirmation. If `feature_dir/retro.md` exists, suggest a timestamped sibling instead.
