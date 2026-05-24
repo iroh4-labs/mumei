@@ -181,7 +181,7 @@ Tell the user:
 
 ## Don'ts
 
-- Don't ask more than 5 questions per round. If you need more, finish the round and ask the user "continue brainstorming or proceed to plan?".
+- Don't ask more than 5 questions per round. If you need more, finish the round and ask the user "continue brainstorming or run /mumei:proceed?".
 - Don't ask trivial questions (variable names, file paths, etc.). Stay at the design level.
 - Don't repeat the same axis in different wording. Track what is covered.
 - Don't silently fill in assumptions — mark them `[ASSUMPTION]` and surface them in the output.

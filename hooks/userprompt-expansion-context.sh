@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# UserPromptExpansion: inject archive-target feature summary
+# UserPromptExpansion: inject retire-target feature summary
 # into `additionalContext` when /mumei:retire is invoked.
 #
 # Reads the latest review JSON for the target feature and surfaces
