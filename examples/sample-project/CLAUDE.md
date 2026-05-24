@@ -11,7 +11,7 @@ development and physical-enforcement of phase transitions.
 
 ### Workflow
 
-1. `/mumei:gather <topic>` — structured brainstorm before specing
+1. `/mumei:gather <topic>` — structured gathering before specing
 2. `/mumei:proceed <feature>` — generate requirements / design / tasks (each
    auto-reviewed by an independent spec-reviewer agent; single user approval
    gate at the end)

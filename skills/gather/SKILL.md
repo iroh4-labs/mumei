@@ -1,6 +1,6 @@
 ---
 name: gather
-description: This skill should be used BEFORE any feature design. It runs structured brainstorming with the user — asking 5 high-leverage questions per round, up to 3 rounds, to extract Goal / Scope / Constraints / Edges / Done. Output is saved to .mumei/scratch/<topic>.md and used as input for /mumei:proceed. Triggers include "I want to add X", "we need a feature for Y", "let's brainstorm Z", or any vague feature request.
+description: This skill should be used BEFORE any feature design. It runs structured gathering with the user — asking 5 high-leverage questions per round, up to 3 rounds, to extract Goal / Scope / Constraints / Edges / Done. Output is saved to .mumei/scratch/<topic>.md and used as input for /mumei:proceed. Triggers include "I want to add X", "we need a feature for Y", "let's brainstorm Z", or any vague feature request.
 allowed-tools: [Read, Write, Edit, Glob, Grep, AskUserQuestion]
 ---
 
@@ -13,7 +13,7 @@ Principle: Questions must be high-leverage. Cap at 5 per round x 3 rounds. No si
 
 # Gather
 
-Run a structured brainstorming session with the user before they invoke `/mumei:proceed`. The output is a scratch file at `.mumei/scratch/<topic>.md` that captures the user's intent in a form `/mumei:proceed` can consume cleanly.
+Run a structured gathering session with the user before they invoke `/mumei:proceed`. The output is a scratch file at `.mumei/scratch/<topic>.md` that captures the user's intent in a form `/mumei:proceed` can consume cleanly.
 
 ## When to use
 
@@ -57,7 +57,7 @@ mumei's scratch parser recognizes exactly two AC line prefixes; anything else is
 
 Use one of these forms:
 
-- **Brainstorm form**: `- [Event] WHEN ...` / `- [Unwanted] IF ...` / `- [State] WHILE ...` / `- [Optional] WHERE ...`
+- **Gather form**: `- [Event] WHEN ...` / `- [Unwanted] IF ...` / `- [State] WHILE ...` / `- [Optional] WHERE ...`
 - **Mature spec form**: `- REQ-N.M WHEN ...` (only when hand-authoring a scratch that imports into an existing spec; `M` is the AC index within that REQ)
 
 Do NOT use `AC-N.M`. It is silently dropped by the parser AND violates `feature-detail.schema.json` (AC `id` pattern is `^REQ-[0-9]+\.[0-9]+(\.[0-9]+)?$`). Both effects make the scratch invisible to downstream tooling.
@@ -95,7 +95,7 @@ Stop and write the scratch file when ANY of these is true:
 
 ## Language conventions
 
-The brainstorm output follows the same language policy as `/mumei:proceed`:
+The gather output follows the same language policy as `/mumei:proceed`:
 
 - **Section headings stay in English** (`## Goal (JTBD)`, `## Scope`, `## User Stories (draft)`, `## Acceptance Criteria (EARS, draft)`, `## Rejected Alternatives`, `## Open Questions`, `## Confidence Distribution`, `## Interview Record`).
 - **Body content follows the user's conversation language.** Japanese conversation → Japanese prose. English conversation → English prose. Match the user's most recent substantive message when in doubt.
@@ -177,7 +177,7 @@ Each AC carries an inline `Examples:` block of zero, one, or two natural-languag
 
 Tell the user:
 
-> Brainstorm saved to `.mumei/scratch/<slug>.md`. Run `/mumei:proceed <feature-name>` to start spec creation. The proceed skill will read this scratch file as input.
+> Gather saved to `.mumei/scratch/<slug>.md`. Run `/mumei:proceed <feature-name>` to start spec creation. The proceed skill will read this scratch file as input.
 
 ## Don'ts
 

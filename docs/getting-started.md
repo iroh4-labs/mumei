@@ -46,7 +46,7 @@ code is worth the friction.
 When you start a new feature with `/mumei:proceed`, the vehicle picker now
 surfaces quantitative bounds (`> 3 files OR > 100 lines` for spec, the
 inverse for plan) in each option's description so calibration is
-explicit. If a brainstorm scratch was attached, an additional
+explicit. If a gather scratch was attached, an additional
 confirmation step appears first — mumei reads the scratch's AC count
 and Goal section, recommends a vehicle, and asks whether to proceed
 with the recommendation or fall through to the standard picker. Final
@@ -233,7 +233,7 @@ your-project/
     ├── config.json   # project-wide config: golden_paths (tracked, hand-editable)
     ├── specs/        # per /mumei:proceed: requirements.md, design.md, tasks.md, state.json, spec-reviews/, reviews/
     ├── archive/      # per /mumei:retire: moved under <YYYY-MM>/<feature>/
-    └── scratch/      # per /mumei:gather; tracked intentionally so brainstorm history is shared
+    └── scratch/      # per /mumei:gather; tracked intentionally so gather history is shared
 ```
 
 ## Spec & tasks format

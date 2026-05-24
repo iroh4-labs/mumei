@@ -72,7 +72,7 @@ add_gitignore_line() {
 add_gitignore_line ".claude/agent-memory-local/"
 ```
 
-Note: `.mumei/scratch/` is **NOT** added to the project-root `.gitignore` — it is intentionally tracked so brainstorm history (the source of design decisions) is shared with teammates.
+Note: `.mumei/scratch/` is **NOT** added to the project-root `.gitignore` — it is intentionally tracked so gather history (the source of design decisions) is shared with teammates.
 
 ### Step 3 — Propose CLAUDE.md additions
 
@@ -85,7 +85,7 @@ This project uses [mumei](https://github.com/.../mumei) for spec-driven developm
 
 ### Workflow
 
-1. `/mumei:gather <topic>` — structured brainstorm before specing
+1. `/mumei:gather <topic>` — structured gathering before specing
 2. `/mumei:proceed <feature>` — generate requirements / design / tasks (each auto-reviewed by an independent spec-reviewer agent; single user approval gate at the end)
 3. Implement Wave by Wave; commit after each Wave completes
 4. `/mumei:proceed` re-invocation triggers the 4-stage review when all tasks are `[x]`
@@ -180,7 +180,7 @@ later, at review time.
 
 ### Step 8 — Suggest first feature
 
-> Setup complete. To create your first feature, run `/mumei:gather <topic>` for an interactive brainstorm, or `/mumei:proceed <feature-slug>` if you already know what you want.
+> Setup complete. To create your first feature, run `/mumei:gather <topic>` for an interactive gathering, or `/mumei:proceed <feature-slug>` if you already know what you want.
 
 ## Idempotency
 

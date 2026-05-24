@@ -93,7 +93,7 @@ if [[ -e "${target_dir}/${feature}" ]]; then
   exit 1
 fi
 
-# Capture the brainstorm scratch path BEFORE moving the source dir.
+# Capture the gather scratch path BEFORE moving the source dir.
 # mumei_state_read_any reads from the live state.json; once moved, the
 # lookup would silently no-op the scratch block. spec vehicle stores the
 # bare slug in state.json; plan vehicle uses the bare slug as the dir
@@ -111,7 +111,7 @@ git mv "$source_dir" "${target_dir}/${feature}" 2>/dev/null \
   || mv "$source_dir" "${target_dir}/${feature}" \
   || { echo "source dir move failed: ${source_dir}" >&2; exit 1; }
 
-# Move the brainstorm scratch file alongside the spec / plan, if
+# Move the gather scratch file alongside the spec / plan, if
 # present. Vehicle-independent: plan vehicle uses the same scratch
 # co-move behaviour as spec vehicle.
 if [[ -n "$slug" && -f "$scratch_src" ]]; then

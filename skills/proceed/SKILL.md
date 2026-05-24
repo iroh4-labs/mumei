@@ -14,7 +14,7 @@ Principle: 3 spec drafts are produced non-stop, each gated by an independent spe
 
 # Proceed — mumei orchestrator
 
-You orchestrate the full lifecycle of a feature in mumei: brainstorm input → clarification → requirements → design → tasks → single user approval gate → implement (Wave by Wave) → 4-stage review → done.
+You orchestrate the full lifecycle of a feature in mumei: gather input → clarification → requirements → design → tasks → single user approval gate → implement (Wave by Wave) → 4-stage review → done.
 
 This skill is the heart of mumei. Every other skill (gather, arrange, retire) plays a supporting role.
 
@@ -269,7 +269,7 @@ If the user passed only a slug, the orchestrator picks the next REQ-N. If the us
 
 After init, the rest of Phase 1 proceeds.
 
-### Phase 1.1 — Clarification (brainstorm-like)
+### Phase 1.1 — Clarification (gather-like)
 
 Goal: drive the orchestrator's understanding to a level where it can write `requirements.md` without silent assumptions.
 
@@ -277,7 +277,7 @@ Approach:
 
 1. **If `.mumei/scratch/<feature>.md` exists** (the user ran `/mumei:gather` first), read it and treat its `[CONFIRMED]` items as settled. Ask **only about residual gaps** — things that are `[ASSUMPTION]` / `[NEEDS CLARIFICATION]` / missing dimensions, plus anything the orchestrator notices is underspecified.
 
-2. **If no scratch exists**, drive clarification from zero. Cover the same axes brainstorm covers (Goal / Scope / Constraints / Edges / Done).
+2. **If no scratch exists**, drive clarification from zero. Cover the same axes gather covers (Goal / Scope / Constraints / Edges / Done).
 
 3. Use `AskUserQuestion` (multiple-choice where possible, 1-4 questions per call). Cap is **3 rounds × 5 questions = 15 questions max**. Track count.
 
@@ -361,8 +361,8 @@ This applies whether the user came via `/mumei:gather` (scratch attached, ACs im
 
 When a scratch is attached and an AC is imported from it, follow this deterministic rule for the AC's `Examples:` block:
 
-- If the scratch AC carries a non-empty `Examples:` block, **preserve it exactly** as drafted in brainstorm; do not re-draft.
-- If the scratch AC carries an empty `Examples:` block (header present, zero items), **preserve the empty block as-is**. The user explicitly chose to leave it blank in brainstorm; honour that choice. The downstream `requirements-reviewer` will surface findings if the AC is high-risk.
+- If the scratch AC carries a non-empty `Examples:` block, **preserve it exactly** as drafted in gather; do not re-draft.
+- If the scratch AC carries an empty `Examples:` block (header present, zero items), **preserve the empty block as-is**. The user explicitly chose to leave it blank in gather; honour that choice. The downstream `requirements-reviewer` will surface findings if the AC is high-risk.
 - If the scratch AC has no `Examples:` line at all (line missing entirely), **draft 0–2 Examples now** under the same rules as a direct-path AC.
 
 This rule prevents silent overwrites of user-authored Examples and keeps the upstream/downstream contract observable.
