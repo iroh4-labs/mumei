@@ -21,7 +21,7 @@ Run a structured brainstorming session with the user before they invoke `/mumei:
 - The user asks for help thinking through a problem before specing it.
 - The user invokes `/mumei:gather` directly.
 
-Do NOT use this skill if `/mumei:proceed` is already running — `plan` does its own clarification.
+Do NOT use this skill if `/mumei:proceed` is already running — `proceed` does its own clarification.
 
 ## Method
 
@@ -177,7 +177,7 @@ Each AC carries an inline `Examples:` block of zero, one, or two natural-languag
 
 Tell the user:
 
-> Brainstorm saved to `.mumei/scratch/<slug>.md`. Run `/mumei:proceed <feature-name>` to start spec creation. The plan skill will read this scratch file as input.
+> Brainstorm saved to `.mumei/scratch/<slug>.md`. Run `/mumei:proceed <feature-name>` to start spec creation. The proceed skill will read this scratch file as input.
 
 ## Don'ts
 

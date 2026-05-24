@@ -28,7 +28,7 @@ Anthropic engineering posts that describe document corruption and adjacent failu
    - **mumei takeaway**: reviewers cap `message` at ≤280 chars and `suggestion` at one concrete fix sentence. The "let me say something nice" temptation is suppressed by structure rather than discipline.
 
 3. [Harness design for long-running apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) (2026-03-24) — Argues that side-effecting operations should be lifted out of the agent loop and gated behind **explicit user consent**.
-   - **mumei takeaway**: the archive and init skills carry `disable-model-invocation: true`. They never auto-fire. The only entry point is the user typing `/mumei:retire` or `/mumei:arrange`.
+   - **mumei takeaway**: the retire and arrange skills carry `disable-model-invocation: true`. They never auto-fire. The only entry point is the user typing `/mumei:retire` or `/mumei:arrange`.
 
 4. [Equipping agents with Agent Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) (2025-10-16) — Establishes the design principles around `disable-model-invocation`, progressive disclosure, and minimum permissions for skills.
    - **mumei takeaway**: every skill restricts `allowed-tools`. The state skill ships with `user-invocable: false` to hide it from the `/` menu. Least-privilege is adopted at the artifact level.

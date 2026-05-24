@@ -6,7 +6,7 @@
 # verdict / Wave count / commit count so Claude can present an informative
 # archive summary.
 #
-# Falls silent when the feature does not exist (the archive skill itself
+# Falls silent when the feature does not exist (the retire skill itself
 # refuses missing features). Never blocks.
 #
 # Env knobs:

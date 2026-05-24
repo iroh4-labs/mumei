@@ -501,5 +501,5 @@ esac
 - Do not run this skill against a spec-vehicle feature. Use `/mumei:proceed` instead.
 - Do not skip the `pending_review` gate. Premature `/mumei:examine` aborts with a hint message and does not consume detector / reviewer budget.
 - Do not edit source files inside this skill. Findings are surfaced to the user; fixes happen in the next session turn (or by the user manually) before the next `/mumei:examine` invocation.
-- Do not auto-archive on PASS. The archive skill (`/mumei:retire`) is `disable-model-invocation: true` and only the user can trigger it.
+- Do not auto-archive on PASS. The retire skill (`/mumei:retire`) is `disable-model-invocation: true` and only the user can trigger it.
 - Do not mutate `.mumei/current` here. Only `/mumei:retire` is allowed to clear it.

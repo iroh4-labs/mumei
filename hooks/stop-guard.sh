@@ -111,13 +111,13 @@ PHASE="$(mumei_state_phase "$FEATURE")"
 # --- R3: phase=done while .mumei/current still points at the feature -> block and prompt archive ---
 # After the orchestrator (/mumei:proceed) advances phase=done with verdict=PASS,
 # this prevents the session from ending without telling the user to run
-# /mumei:retire. The archive skill is disable-model-invocation: true so Claude
+# /mumei:retire. The retire skill is disable-model-invocation: true so Claude
 # cannot run it itself; we enforce it via this Hook.
 if [[ "$PHASE" == "done" ]]; then
   CURRENT="$(mumei_current_feature 2>/dev/null || true)"
   if [[ "$CURRENT" == "$FEATURE" ]]; then
     REASON="Feature ${FEATURE} reached phase=done but is still active in .mumei/current. Run /mumei:retire ${FEATURE} to move the spec, or clear .mumei/current."
-    CONTEXT="The archive skill (/mumei:retire) is user-invocable only; the orchestrator cannot run it. Either invoke /mumei:retire to move the spec to .mumei/archive/<YYYY-MM>/, or clear .mumei/current to dismiss this gate."
+    CONTEXT="The retire skill (/mumei:retire) is user-invocable only; the orchestrator cannot run it. Either invoke /mumei:retire to move the spec to .mumei/archive/<YYYY-MM>/, or clear .mumei/current to dismiss this gate."
     jq -n --arg r "$REASON" --arg c "$CONTEXT" '{
       decision: "block",
       reason: $r,
