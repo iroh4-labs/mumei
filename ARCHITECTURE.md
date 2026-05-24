@@ -29,11 +29,12 @@ mumei/
 │   ├── memory-curator.md
 │   └── property-author.md
 ├── skills/                 # user-invocable orchestration
-│   ├── plan/               # /mumei:proceed — the orchestrator
-│   ├── brainstorm/         # /mumei:gather — pre-spec Q&A
-│   ├── init/               # /mumei:arrange — one-time per-project setup
-│   ├── review/             # /mumei:examine — plan-vehicle review pipeline
-│   └── archive/            # /mumei:retire — move done features to archive/
+│   ├── proceed/            # /mumei:proceed — the orchestrator
+│   ├── gather/             # /mumei:gather — pre-spec Q&A
+│   ├── arrange/            # /mumei:arrange — one-time per-project setup
+│   ├── examine/            # /mumei:examine — plan-vehicle review pipeline
+│   ├── retire/             # /mumei:retire — move done features to archive/
+│   └── reflect/            # /mumei:reflect — feature retrospective
 ├── hooks/                  # Hook handlers + shared bash library
 │   ├── hooks.json          # event registration: PreToolUse / PostToolUse / Stop / TaskCreated / TaskCompleted / UserPromptSubmit + PreCompact / PostCompact / SessionStart / SessionEnd / FileChanged / CwdChanged / InstructionsLoaded / UserPromptExpansion / ConfigChange / PostToolUseFailure / SubagentStart / SubagentStop
 │   ├── _lib/               # shared bash modules

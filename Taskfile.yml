@@ -196,7 +196,7 @@ tasks:
   retro:
     desc: "Generate retro from .mumei/archive/<YYYY-MM>/"
     cmds:
-      - bash scripts/generate-retro.sh {{.CLI_ARGS}}
+      - bash scripts/generate-reflect.sh {{.CLI_ARGS}}
 
   # ---------------------------------------------------------------
   # Doctor — verify required tools are installed. Fast smoke test for
