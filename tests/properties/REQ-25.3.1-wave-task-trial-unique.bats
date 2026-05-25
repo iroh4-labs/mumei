@@ -19,7 +19,7 @@ bats_require_minimum_version 1.5.0
 load '../test_helper'
 
 setup() {
-  MUMEI_TEST_TMPDIR="$(mktemp -d -t mumei-property-rel.XXXXXX)"
+  MUMEI_TEST_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/mumei-property-rel.XXXXXX")"
   export MUMEI_TEST_TMPDIR
   cd "$MUMEI_TEST_TMPDIR" || return 1
   # shellcheck disable=SC1091

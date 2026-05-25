@@ -8,7 +8,7 @@ bats_require_minimum_version 1.5.0
 load '../test_helper'
 
 setup() {
-  MUMEI_TEST_TMPDIR="$(mktemp -d -t mumei-skill-assure.XXXXXX)"
+  MUMEI_TEST_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/mumei-skill-assure.XXXXXX")"
   export MUMEI_TEST_TMPDIR
   cd "$MUMEI_TEST_TMPDIR" || return 1
 }

@@ -65,7 +65,13 @@ if [[ "$EVENT" == "TaskCompleted" ]]; then
           2>/dev/null | tail -n1)"
       if [[ -n "$_rel_exit" && "$_rel_exit" =~ ^-?[0-9]+$ ]]; then
         [[ "$_rel_exit" -eq 0 ]] && _rel_pass="true" || _rel_pass="false"
-        mumei_reliability_append "$SLUG" "$_rel_wave" "$_rel_task_id" "$_rel_pass" || true
+        # Subshell-isolate the call so reliability.sh's internal trap
+        # manipulation (EXIT/INT/TERM) cannot disturb this script's own
+        # cleanup trap installed later for the plan-vehicle lock
+        # (Gemini HIGH on post-task-event.sh:68 — even though the trap
+        # is installed AFTER this point today, the subshell keeps the
+        # boundary explicit for any future caller).
+        (mumei_reliability_append "$SLUG" "$_rel_wave" "$_rel_task_id" "$_rel_pass") || true
       fi
     fi
   fi
