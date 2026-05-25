@@ -45,7 +45,11 @@ if [[ "$EVENT" == "TaskCompleted" ]]; then
     _rel_task_id="$(printf '%s' "$INPUT" | jq -r '.task_id // empty')"
     if [[ -n "$_rel_task_id" ]]; then
       _rel_wave=""
-      if ! mumei_state_is_plan_vehicle "$SLUG" 2>/dev/null; then
+      # Use mumei_state_active_vehicle (spec precedence) so that a
+      # dual-state repo records the spec-vehicle current_wave instead
+      # of falling through to plan-empty (Codex C5 fix).
+      _rel_vehicle="$(mumei_state_active_vehicle "$SLUG" 2>/dev/null || echo "")"
+      if [[ "$_rel_vehicle" == "spec" ]]; then
         _rel_wave="$(mumei_state_read_any "$SLUG" '.current_wave' 2>/dev/null || echo "")"
       fi
       _rel_log_dir="$(mumei_reliability_log_dir "$SLUG")"

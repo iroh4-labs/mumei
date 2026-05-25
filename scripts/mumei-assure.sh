@@ -11,6 +11,19 @@
 
 set -u
 
+# Anchor cwd to the project root so .mumei/specs/<feature>/ and
+# .mumei/plans/<feature>/ resolve correctly when invoked from a
+# subdirectory (Codex C3 / C4 fix — `/mumei:assure` previously
+# returned "feature not found" from any nested working dir). Prefer
+# Claude Code's CLAUDE_PROJECT_DIR env, then fall back to git
+# toplevel, then leave cwd alone.
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" && -d "$CLAUDE_PROJECT_DIR" ]]; then
+  cd "$CLAUDE_PROJECT_DIR" || true
+elif _root="$(git rev-parse --show-toplevel 2>/dev/null)" && [[ -n "$_root" ]]; then
+  cd "$_root" || true
+fi
+unset _root
+
 # shellcheck source=../hooks/_lib/reliability.sh disable=SC1091
 source "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}/hooks/_lib/reliability.sh"
 
