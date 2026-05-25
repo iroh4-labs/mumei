@@ -56,30 +56,48 @@ _init_spec_feature() {
 
 # ─── REQ-25.3.1 — reliability append fires on TaskCompleted ──
 
-@test "TaskCompleted appends a reliability-log row for plan vehicle" {
+@test "TaskCompleted appends a reliability-log row for plan vehicle (verify-log pass)" {
   _init_plan_feature "fix-login"
+  # Real verify-log shape: {ts, feature, vehicle, source, command, exit_code}.
+  printf '%s\n' '{"ts":"2026-05-25T00:00:00Z","feature":"fix-login","vehicle":"plan","source":"commit-gate","command":"npm test","exit_code":0}' \
+    >.mumei/plans/fix-login/verify-log.jsonl
   run _invoke_hook '{"hook_event_name":"TaskCompleted","task_id":"1"}'
   [[ "$status" -eq 0 ]]
   local logfile=".mumei/plans/fix-login/reliability-log.jsonl"
   [[ -f "$logfile" ]]
-  local task_id wave
+  local task_id wave pass
   task_id="$(jq -r '.task_id' "$logfile")"
   wave="$(jq -r '.wave' "$logfile")"
+  pass="$(jq -r '.pass' "$logfile")"
   [[ "$task_id" == "1" ]]
   [[ "$wave" == "" ]]
+  [[ "$pass" == "true" ]]
 }
 
-@test "TaskCompleted appends a reliability-log row for spec vehicle with wave" {
+@test "TaskCompleted appends a reliability-log row for spec vehicle with wave (verify-log pass)" {
   _init_spec_feature "REQ-99-foo"
+  printf '%s\n' '{"ts":"2026-05-25T00:00:00Z","feature":"REQ-99-foo","vehicle":"spec","source":"commit-gate","command":"bats","exit_code":0}' \
+    >.mumei/specs/REQ-99-foo/verify-log.jsonl
   run _invoke_hook '{"hook_event_name":"TaskCompleted","task_id":"2.1"}'
   [[ "$status" -eq 0 ]]
   local logfile=".mumei/specs/REQ-99-foo/reliability-log.jsonl"
   [[ -f "$logfile" ]]
-  local task_id wave
+  local task_id wave pass
   task_id="$(jq -r '.task_id' "$logfile")"
   wave="$(jq -r '.wave' "$logfile")"
+  pass="$(jq -r '.pass' "$logfile")"
   [[ "$task_id" == "2.1" ]]
   [[ "$wave" == "2" ]]
+  [[ "$pass" == "true" ]]
+}
+
+@test "TaskCompleted SKIPS reliability append when verify-log is empty (adversarial F-001 fix)" {
+  _init_plan_feature "fix-login"
+  # No verify-log row exists → reliability append must skip rather than
+  # fabricating pass=true (the iter-1 silent default).
+  run _invoke_hook '{"hook_event_name":"TaskCompleted","task_id":"1"}'
+  [[ "$status" -eq 0 ]]
+  [[ ! -f ".mumei/plans/fix-login/reliability-log.jsonl" ]]
 }
 
 # ─── REQ-25.3.2 — silent skip when .mumei/current missing ──
@@ -101,6 +119,9 @@ _init_spec_feature() {
   jq '.task_created_count = 1' .mumei/plans/fix-login/state.json \
     >.mumei/plans/fix-login/state.json.tmp
   mv .mumei/plans/fix-login/state.json.tmp .mumei/plans/fix-login/state.json
+  # Seed verify-log (real schema: exit_code-based pass derivation).
+  printf '%s\n' '{"ts":"2026-05-25T00:00:00Z","feature":"fix-login","vehicle":"plan","source":"commit-gate","command":"npm test","exit_code":0}' \
+    >.mumei/plans/fix-login/verify-log.jsonl
 
   _invoke_hook '{"hook_event_name":"TaskCompleted","task_id":"1"}'
   local completed pending
@@ -139,18 +160,37 @@ _init_spec_feature() {
   [[ "$created" == "1" ]]
 }
 
-# ─── REQ-25.3.1 — pass derived from verify-log.jsonl when present ──
+# ─── REQ-25.3.1 — pass derived from verify-log.jsonl exit_code (post-iter-1 fix) ──
 
-@test "TaskCompleted reads pass=false from verify-log.jsonl's latest matching row" {
+@test "TaskCompleted reads pass=false from verify-log.jsonl's latest row exit_code != 0" {
   _init_plan_feature "fix-login"
-  # Seed verify-log with a fail row for task_id "1".
-  printf '%s\n' '{"task_id":"1","pass":false,"ts":"2026-05-25T00:00:00Z"}' \
+  # Real verify-log schema: pass derived from the latest row's exit_code.
+  printf '%s\n' '{"ts":"2026-05-25T00:00:00Z","feature":"fix-login","vehicle":"plan","source":"commit-gate","command":"npm test","exit_code":1}' \
     >.mumei/plans/fix-login/verify-log.jsonl
   _invoke_hook '{"hook_event_name":"TaskCompleted","task_id":"1"}'
   local pass
   pass="$(jq -r '.pass' .mumei/plans/fix-login/reliability-log.jsonl)"
   [[ "$pass" == "false" ]] || {
     echo "expected false, got $pass"
+    return 1
+  }
+}
+
+@test "TaskCompleted end-to-end via real mumei_verify_log_append (adversarial F-001 regression)" {
+  # End-to-end: feed verify-log through the real writer, not a synthetic
+  # row. Catches schema drift between writer/reader (the original bug).
+  _init_plan_feature "fix-login"
+  # shellcheck disable=SC1091
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/verify-log.sh"
+  # Write a real verify-log row with exit_code=0 via the canonical writer.
+  mumei_verify_log_append "fix-login" "commit-gate" "npm test" "0"
+  [[ -f ".mumei/plans/fix-login/verify-log.jsonl" ]]
+  _invoke_hook '{"hook_event_name":"TaskCompleted","task_id":"1"}'
+  [[ -f ".mumei/plans/fix-login/reliability-log.jsonl" ]]
+  local pass
+  pass="$(jq -r '.pass' .mumei/plans/fix-login/reliability-log.jsonl)"
+  [[ "$pass" == "true" ]] || {
+    echo "expected true (exit_code=0), got $pass"
     return 1
   }
 }

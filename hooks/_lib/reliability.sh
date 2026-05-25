@@ -32,7 +32,9 @@ mumei_reliability_log_dir() {
 # Args: feature, wave, task_id, pass ("true"/"false"), [log_dir]
 # Contract: purely additive. Any failure (jq parse, IO, missing tools)
 # emits a stderr warning and returns 0 so the caller (post-task-event.sh)
-# never gets blocked.
+# never gets blocked. Concurrent invocations are serialized via a mkdir
+# lock so the wave_task_trial_unique invariant survives parallel hook
+# fires (REQ-25.3.1).
 mumei_reliability_append() {
   local feature="${1:-}" wave="${2:-}" task_id="${3:-}" pass="${4:-}" log_dir="${5:-}"
 
@@ -55,6 +57,28 @@ mumei_reliability_append() {
     fi
   fi
 
+  # Acquire reliability-specific mkdir lock to serialize the
+  # read-trial_n / write-row critical section. Up to ~5s with 200ms
+  # back-off matches the existing post-task-event.sh counter lock cadence.
+  local rel_lock="${log_dir}/.rel-lock"
+  local _rel_acquired=0
+  local _rel_i
+  for _rel_i in {1..25}; do
+    if mkdir "$rel_lock" 2>/dev/null; then
+      _rel_acquired=1
+      break
+    fi
+    sleep 0.2
+  done
+  if [[ "$_rel_acquired" -eq 0 ]]; then
+    printf '[mumei reliability] append failed: cannot acquire lock %s within 5s\n' "$rel_lock" >&2
+    return 0
+  fi
+  # Cleanup on every exit path below — even SIGKILL would leak the dir,
+  # but other signals release it. Subshell-style trap not used because
+  # this function is sourced into the caller's shell.
+  _mumei_reliability_unlock() { rmdir "$rel_lock" 2>/dev/null || true; }
+
   local trial_n
   if [[ -f "$logfile" ]]; then
     trial_n="$(jq -s --arg w "$wave" --arg t "$task_id" \
@@ -65,12 +89,14 @@ mumei_reliability_append() {
   fi
   if [[ -z "$trial_n" || ! "$trial_n" =~ ^[0-9]+$ ]]; then
     printf '[mumei reliability] append failed: cannot derive trial_n for (%s, %s)\n' "$wave" "$task_id" >&2
+    _mumei_reliability_unlock
     return 0
   fi
 
   local ts
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" || {
     printf '[mumei reliability] append failed: date unavailable\n' >&2
+    _mumei_reliability_unlock
     return 0
   }
 
@@ -85,13 +111,16 @@ mumei_reliability_append() {
     '{feature: $feature, wave: $wave, task_id: $task_id, trial_n: $trial_n, pass: $pass, ts: $ts}' \
     2>/dev/null)" || {
     printf '[mumei reliability] append failed: jq error building row\n' >&2
+    _mumei_reliability_unlock
     return 0
   }
 
   if ! printf '%s\n' "$line" >>"$logfile" 2>/dev/null; then
     printf '[mumei reliability] append failed: cannot write to %s\n' "$logfile" >&2
+    _mumei_reliability_unlock
     return 0
   fi
+  _mumei_reliability_unlock
   return 0
 }
 

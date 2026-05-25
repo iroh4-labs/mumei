@@ -48,10 +48,16 @@ if [[ "$EVENT" == "TaskCompleted" ]]; then
         _rel_wave="$(mumei_state_read_any "$SLUG" '.current_wave' 2>/dev/null || echo "")"
       fi
       _rel_log_dir="$(mumei_reliability_log_dir "$SLUG")"
-      _rel_pass="$(jq -r --arg t "$_rel_task_id" 'select(.task_id == $t) | .pass' \
+      # REQ-25.3.1 (post-iter-1 fix): verify-log rows lack task_id, so
+      # derive pass from the latest row's exit_code (feature-level
+      # granularity). Skip append entirely when no row exists rather
+      # than fabricating pass=true (adversarial F-001).
+      _rel_exit="$(jq -r 'select(.exit_code != null) | .exit_code' \
         "${_rel_log_dir}/verify-log.jsonl" 2>/dev/null | tail -n1)"
-      [[ -z "$_rel_pass" ]] && _rel_pass="true"
-      mumei_reliability_append "$SLUG" "$_rel_wave" "$_rel_task_id" "$_rel_pass" || true
+      if [[ -n "$_rel_exit" && "$_rel_exit" =~ ^-?[0-9]+$ ]]; then
+        [[ "$_rel_exit" -eq 0 ]] && _rel_pass="true" || _rel_pass="false"
+        mumei_reliability_append "$SLUG" "$_rel_wave" "$_rel_task_id" "$_rel_pass" || true
+      fi
     fi
   fi
 fi
