@@ -61,10 +61,16 @@ if [[ "$EVENT" == "TaskCompleted" ]]; then
       # reuse a stale row (Codex C3 / D fix). Bound the scan with tail
       # to avoid O(verify-log size) per TaskCompleted (F-010).
       _rel_now_epoch="$(date -u +%s 2>/dev/null || echo 0)"
+      # Use -R raw input + fromjson? | objects to stream-parse line-by
+      # -line: a single corrupt verify-log row can no longer abort the
+      # whole jq pipeline and silently flip pass derivation to "skip".
+      # Parens around fromdateiso8601 keep precedence explicit
+      # (Gemini portability follow-up).
       _rel_exit="$(tail -n 100 "${_rel_log_dir}/verify-log.jsonl" 2>/dev/null |
-        jq -r --argjson now "$_rel_now_epoch" \
-          'select(.exit_code != null and (.source == "commit-gate" or .source == "agent-run"))
-           | select($now == 0 or ((.ts | fromdateiso8601? // 0) > ($now - 600)))
+        jq -rR --argjson now "$_rel_now_epoch" \
+          'fromjson? | objects
+           | select(.exit_code != null and (.source == "commit-gate" or .source == "agent-run"))
+           | select($now == 0 or (((.ts | fromdateiso8601?) // 0) > ($now - 600)))
            | .exit_code' \
           2>/dev/null | tail -n1)"
       if [[ -n "$_rel_exit" && "$_rel_exit" =~ ^-?[0-9]+$ ]]; then
