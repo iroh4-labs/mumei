@@ -144,13 +144,13 @@ repos:
         entry: bash scripts/lint-frontmatter.sh
         language: system
         pass_filenames: false
-        files: ^(agents/.*\.md|skills/.*\.md)$
+        files: ^(agents/[^/]*\.md|skills/.*/SKILL\.md|scripts/lint-frontmatter\.sh)$
       - id: lint-plan-vehicle-hooks
         name: lint-plan-vehicle-hooks (registration)
         entry: bash scripts/lint-plan-vehicle-hooks.sh
         language: system
         pass_filenames: false
-        files: ^(hooks/hooks\.json|hooks/.*\.sh|skills/examine/SKILL\.md|scripts/lint-plan-vehicle-hooks\.sh)$
+        files: ^(hooks/hooks\.json|hooks/(pre-exitplan-guard|post-task-event)\.sh|skills/examine/SKILL\.md|scripts/lint-plan-vehicle-hooks\.sh)$
       - id: jq-empty-manifests
         name: jq empty (plugin.json + hooks.json)
         entry: bash -c 'jq empty .claude-plugin/plugin.json && jq empty hooks/hooks.json'
