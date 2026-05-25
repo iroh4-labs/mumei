@@ -15,8 +15,11 @@ code_review:
   #
   # Mapping to the universal rubric's Severity scale (see
   # .gemini/styleguide.md → "Severity & confidence"):
-  #   Blocker → CRITICAL, Major → HIGH, Minor → LOW, Nit → LOW.
-  # Threshold HIGH therefore surfaces Major and above; Minor / Nit are dropped.
+  #   Blocker → CRITICAL, Major → HIGH, Minor → MEDIUM, Nit → LOW.
+  # Threshold HIGH therefore surfaces Major and Blocker only; Minor and Nit are
+  # dropped. Override: findings on the rubric's "Common AI-introduced defects"
+  # checklist are promoted to Major upstream of Gemini (per the rubric's
+  # Severity & confidence → Override rule), so they survive this filter.
   #
   # Adoption note: external repos copying this config should derive their own
   # threshold from their own Severity & confidence rubric using the same

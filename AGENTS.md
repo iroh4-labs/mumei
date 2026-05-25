@@ -167,13 +167,17 @@ AI-generated code typically fails by referencing things that look real but
 don't exist. Verify, don't trust.
 
 - **Symbol existence** — resolve in order: (a) the codebase, (b) a dependency
-  declared in the project's lockfile (package.json / requirements.txt /
-  Cargo.toml / go.mod / etc) **at the pinned version**, (c) a verifiable public
-  API at the pinned version. If (b) and (c) disagree, the lockfile pin wins —
-  flag the diff with a "lockfile vs upstream-docs mismatch" note. Any reference
-  that resolves through none of these is a finding.
+  declared in the project's manifest (package.json / requirements.txt /
+  Cargo.toml / go.mod / pyproject.toml / etc) and **pinned by its lockfile**
+  (package-lock.json / pnpm-lock.yaml / yarn.lock / Cargo.lock / go.sum /
+  poetry.lock / uv.lock / etc) at that exact version, (c) a verifiable public
+  API at the pinned version. The manifest alone (which often declares ranges)
+  is not sufficient — the resolved version comes from the lockfile. If (b) and
+  (c) disagree, the lockfile pin wins — flag the diff with a "lockfile vs
+  upstream-docs mismatch" note. Any reference that resolves through none of
+  these is a finding.
 - **API shape** — signatures, argument order, return types, and option keys
-  match the library version pinned in the lockfile, not a memorized variant
+  match the library version resolved by the lockfile, not a memorized variant
   from another version. If unsure, label "needs version-specific verification".
 - **Phantom identifiers** — every referenced env var, config key, secret name,
   file path, route, and command flag is defined or registered somewhere in the
@@ -210,9 +214,10 @@ Treat these as a checklist — AI-generated code regularly ships each of them.
 - **Pagination / boundaries** — 0-index vs 1-index drift between caller and
   callee; inclusive vs exclusive endpoints; off-by-one in limit / offset math.
 - **Serialization edges** — date / time round-trip (timezone loss, epoch unit
-  confusion); 64-bit integer precision loss (JS `BigInt`, JSON Number);
-  `null` vs `undefined` / `None` vs missing key; NaN / Infinity rendered as
-  invalid JSON; Map / Set / sparse arrays silently dropped.
+  confusion); 64-bit integer precision loss when stored as JSON Number (in JS,
+  use `BigInt` to avoid it); `null` vs `undefined` / `None` vs missing key;
+  NaN / Infinity rendered as invalid JSON; Map / Set / sparse arrays silently
+  dropped.
 - **Async cleanup race** — resource release not awaited before the holding
   scope exits (`dispose` / `close` / `unsubscribe` in JS, Go `context`
   cancellation not propagated, Rust `Drop` ordering for shared owners);
@@ -266,14 +271,17 @@ Two independent axes — every finding declares both.
   | Minor                 | advisory    | omit     | omit     |
   | Nit                   | omit        | omit     | omit     |
 
-  Override: a finding that would otherwise be omitted (Minor × Medium/Low,
-  Nit × any) stays in the report if it lands on the AI-introduced-defects
-  checklist above.
+  Override: when a finding that would otherwise be omitted (Minor × Medium/Low,
+  Nit × any) lands on the AI-introduced-defects checklist above, **promote it
+  to Major** so tools with single-threshold filtering still surface it.
 
 - Tool-specific enums: some review tools have their own severity scale (e.g.
   Gemini Code Assist's `LOW` / `MEDIUM` / `HIGH` / `CRITICAL`). When a tool
-  requires picking one, map: Nit → LOW, Minor → LOW, Major → HIGH,
-  Blocker → CRITICAL.
+  requires picking one, map: Nit → LOW, Minor → MEDIUM, Major → HIGH,
+  Blocker → CRITICAL. Tools that filter by a single threshold (e.g. Gemini's
+  `comment_severity_threshold: HIGH`) will then surface Major and Blocker only,
+  which is consistent with the Decision matrix (Minor × \* = advisory or omit;
+  Nit = omit) once the Override promotion above is applied.
 
 ### Honest ceiling
 
