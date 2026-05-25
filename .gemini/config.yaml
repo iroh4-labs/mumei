@@ -1,0 +1,27 @@
+# Gemini Code Assist configuration for this repository.
+# See: https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github
+#
+# The review rubric itself lives in .gemini/styleguide.md (kept in
+# byte-parity with .github/review-rubric.md, AGENTS.md, and
+# .github/workflows/review-reusable.yml via scripts/lint-review-rubric.sh).
+# This file controls the runtime behavior of the bot itself.
+
+code_review:
+  # Suppress Minor / Nit findings. The rubric already pushes the bot toward
+  # "fewer high-confidence findings over noise"; raising the floor to HIGH
+  # makes that policy enforced by Gemini directly rather than left to the
+  # model's discretion. Local pre-commit (markdownlint / shellcheck /
+  # prettier) covers the style-grade noise that would otherwise dominate.
+  #
+  # Mapping to the universal rubric's Severity scale (see
+  # .gemini/styleguide.md → "Severity & confidence"):
+  #   Blocker → CRITICAL, Major → HIGH, Minor → MEDIUM, Nit → LOW.
+  # Threshold HIGH therefore surfaces Major and Blocker only; Minor and Nit are
+  # dropped. Override: findings on the rubric's "Common AI-introduced defects"
+  # checklist are promoted to Major upstream of Gemini (per the rubric's
+  # Severity & confidence → Override rule), so they survive this filter.
+  #
+  # Adoption note: external repos copying this config should derive their own
+  # threshold from their own Severity & confidence rubric using the same
+  # mapping. Keep this aligned with the rubric's tool-specific-enum line.
+  comment_severity_threshold: HIGH
