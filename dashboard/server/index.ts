@@ -13,12 +13,14 @@ import { ActivityEventListSchema } from '../src/schemas/activity-event.ts'
 import { FeatureDetailSchema } from '../src/schemas/feature-detail.ts'
 import { FeaturesResponseSchema } from '../src/schemas/feature-summary.ts'
 import { MetaSchema, MetaStatsSchema } from '../src/schemas/meta.ts'
+import { ReliabilityResponseSchema } from '../src/schemas/reliability-log.ts'
 import { HooksTrendSchema, ReviewsTrendSchema, TokensTrendSchema } from '../src/schemas/trends.ts'
 import { buildActivity } from './activity.ts'
 import { buildFeatureDetail } from './detail.ts'
 import { listFeatures, StateValidationError } from './features.ts'
 import { MASCOT_ASCII } from './lib/mascot-ascii.ts'
 import { buildMeta, buildMetaStats } from './meta.ts'
+import { listReliability } from './reliability.ts'
 import { registerSse } from './sse.ts'
 import { trendHooks, trendReviews, trendTokens } from './trends.ts'
 
@@ -214,6 +216,22 @@ app.get(
       topN: topN ?? 10,
       windowH: windowH ?? 24,
     })
+  },
+)
+
+// ---------------------------------------------------------------------------
+// REST: /api/reliability — REQ-25 reliability tab payload (per-feature
+// pass^k aggregate + recent <window> trial rows for sparkline).
+// ---------------------------------------------------------------------------
+const ReliabilityQuery = Type.Object({
+  include_archive: Type.Optional(Type.Boolean({ default: false })),
+})
+app.get(
+  '/api/reliability',
+  { schema: { querystring: ReliabilityQuery, response: { 200: ReliabilityResponseSchema } } },
+  async (req) => {
+    const { include_archive } = req.query as { include_archive?: boolean }
+    return listReliability({ projectRoot: PROJECT_ROOT, includeArchive: include_archive === true })
   },
 )
 

@@ -33,7 +33,61 @@ if [[ -f .mumei/current ]]; then
 fi
 [[ -n "$SLUG" ]] || exit 0
 
-# Only act when this is a plan-vehicle feature.
+# REQ-25.3.1 — Reliability append (covers both vehicles; runs BEFORE the
+# plan-vehicle gate below). Purely additive: failures emit warnings but
+# never block the caller. Source the lib best-effort and gate on function
+# availability so plugin upgrades / downgrades that lack reliability.sh
+# degrade cleanly to the legacy behavior.
+if [[ "$EVENT" == "TaskCompleted" ]]; then
+  # shellcheck source=_lib/reliability.sh disable=SC1091
+  source "${PLUGIN_ROOT}/hooks/_lib/reliability.sh" 2>/dev/null || true
+  if declare -F mumei_reliability_append >/dev/null 2>&1; then
+    _rel_task_id="$(printf '%s' "$INPUT" | jq -r '.task_id // empty')"
+    if [[ -n "$_rel_task_id" ]]; then
+      _rel_wave=""
+      # Use mumei_state_active_vehicle (spec precedence) so that a
+      # dual-state repo records the spec-vehicle current_wave instead
+      # of falling through to plan-empty (Codex C5 fix).
+      _rel_vehicle="$(mumei_state_active_vehicle "$SLUG" 2>/dev/null || echo "")"
+      if [[ "$_rel_vehicle" == "spec" ]]; then
+        _rel_wave="$(mumei_state_read_any "$SLUG" '.current_wave' 2>/dev/null || echo "")"
+      fi
+      _rel_log_dir="$(mumei_reliability_log_dir "$SLUG")"
+      # Derive pass from the latest commit-gate / agent-run row's exit_code
+      # (test signals only; tool-gate / worktree-clean rows are excluded
+      # because they record gitleaks / lint / checkout exit codes, not
+      # test results — adversarial F-008). Bound to a 600 s freshness
+      # window so a TaskCompleted long after the last test run does not
+      # reuse a stale row (Codex C3 / D fix). Bound the scan with tail
+      # to avoid O(verify-log size) per TaskCompleted (F-010).
+      _rel_now_epoch="$(date -u +%s 2>/dev/null || echo 0)"
+      # Use -R raw input + fromjson? | objects to stream-parse line-by
+      # -line: a single corrupt verify-log row can no longer abort the
+      # whole jq pipeline and silently flip pass derivation to "skip".
+      # Parens around fromdateiso8601 keep precedence explicit
+      # (Gemini portability follow-up).
+      _rel_exit="$(tail -n 1000 "${_rel_log_dir}/verify-log.jsonl" 2>/dev/null |
+        jq -rR --argjson now "$_rel_now_epoch" \
+          'fromjson? | objects
+           | select(.exit_code != null and (.source == "commit-gate" or .source == "agent-run"))
+           | select($now == 0 or (((.ts | fromdateiso8601?) // 0) > ($now - 600)))
+           | .exit_code' \
+          2>/dev/null | tail -n1)"
+      if [[ -n "$_rel_exit" && "$_rel_exit" =~ ^-?[0-9]+$ ]]; then
+        [[ "$_rel_exit" -eq 0 ]] && _rel_pass="true" || _rel_pass="false"
+        # Subshell-isolate the call so reliability.sh's internal trap
+        # manipulation (EXIT/INT/TERM) cannot disturb this script's own
+        # cleanup trap installed later for the plan-vehicle lock
+        # (Gemini HIGH on post-task-event.sh:68 — even though the trap
+        # is installed AFTER this point today, the subshell keeps the
+        # boundary explicit for any future caller).
+        (mumei_reliability_append "$SLUG" "$_rel_wave" "$_rel_task_id" "$_rel_pass") || true
+      fi
+    fi
+  fi
+fi
+
+# Only act on counter / pending_review logic when this is a plan-vehicle feature.
 mumei_state_is_plan_vehicle "$SLUG" || exit 0
 
 # Counter mutation must be serialized — without a lock, two concurrent

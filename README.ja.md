@@ -73,6 +73,8 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 | `/mumei:examine`           | plan vehicle 用の review pipeline。`pending_review=true` の状態で Stage 0 detector + security-reviewer + adversarial-reviewer + per-issue validator を現在の diff に対して回します。                                                                |
 | `/mumei:retire <feature>`  | `done` になった feature を `.mumei/archive/<YYYY-MM>/<feature>/` に移動します。vehicle (specs/ または plans/) を自動判定し、`scratch/<feature>.md` も `scratch.md` として持ち越します。                                                             |
 | `/mumei:reflect <feature>` | archive 済 (または archive 直前) feature の `reflect.md` を生成。AC 数 / Wave 数 / review iter パターン / fix-spiral 検出 / token cost / cache hit rate / hook 発火上位を集計。read-only、user 起動のみ。                                           |
+| `/mumei:assure <feature>`  | reliability 詳細ビュー — 直近 10 trial の pass^3 と recent 10 行の trial table (`reliability-log.jsonl` から)。read-only、user 起動のみ。                                                                                                           |
+| `/mumei:present [feature]` | 1 行 reliability サマリ (`<feature> \| pass^3: <value-or-N/A> (n=<n>, window=10, k=3)`)。引数なしは `.mumei/current` を読む。read-only、user 起動のみ。                                                                                             |
 
 ## `mumei` がやらないこと
 

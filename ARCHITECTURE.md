@@ -53,6 +53,7 @@ mumei/
 │   │   ├── config.sh       # .mumei/config.json: golden-path glob + golden append + tool_gates map (pillar B)
 │   │   ├── gen-control.sh  # pillar E parsing: artifact path + Open Questions section
 │   │   ├── property.sh     # pillar B: _Invariant: structure validation + opt-in AC enum
+│   │   ├── reliability.sh  # append-only pass^k accumulator (TaskCompleted → reliability-log.jsonl) + window pass rate aggregator
 │   │   ├── reviewer-prompt.sh # immutable prefix + variable suffix builder for cache-friendly prompts
 │   │   ├── byte-exact.sh   # CRLF / tab advisory for byte-exact-prone file types
 │   │   ├── hook-stats.sh   # hook decision recorder (.mumei/.hook-stats.jsonl)
@@ -68,7 +69,7 @@ mumei/
 │   ├── stop-guard.sh       # R1 / R3 + detector defense line
 │   ├── pre-review-detector.sh  # Stage 0 of /mumei:proceed review pipeline
 │   ├── userprompt-context-hint.sh  # UserPromptSubmit context hint
-│   ├── post-task-event.sh  # TaskCreated / TaskCompleted handler (plan vehicle)
+│   ├── post-task-event.sh  # TaskCreated / TaskCompleted handler (plan vehicle counters; reliability append fires for both vehicles)
 │   ├── pre-exitplan-guard.sh  # ExitPlanMode plan-vehicle init (L-P1)
 │   ├── pre-compact-state-dump.sh  # PreCompact: inject .mumei/current state into additionalContext
 │   ├── session-start-status.sh  # SessionStart: surface active feature status

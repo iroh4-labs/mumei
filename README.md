@@ -75,6 +75,8 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 | `/mumei:examine`           | Plan-vehicle review pipeline. Runs Stage 0 detector + security-reviewer + adversarial-reviewer + per-issue validator against the current diff once `pending_review=true` (set when the last `TaskCompleted` matches `task_created_count`).                              |
 | `/mumei:retire <feature>`  | Moves a `done` feature to `.mumei/archive/<YYYY-MM>/<feature>/`. Auto-detects vehicle (specs/ or plans/) and carries `scratch/<feature>.md` along as `scratch.md`.                                                                                                      |
 | `/mumei:reflect <feature>` | Generates `reflect.md` summarising AC count, Wave count, review iter pattern, fix-spiral detection, token cost, cache hit rate, and hook firing breakdown for an archived (or about-to-be-archived) feature. Read-only; user invocation only.                           |
+| `/mumei:assure <feature>`  | Detailed reliability view — pass^3 over the most recent 10 trials plus a table of the last 10 trial rows from `reliability-log.jsonl`. Read-only; user invocation only.                                                                                                 |
+| `/mumei:present [feature]` | One-line reliability summary (`<feature> \| pass^3: <value-or-N/A> (n=<n>, window=10, k=3)`). No-arg form reads `.mumei/current`. Read-only; user invocation only.                                                                                                      |
 
 ## What `mumei` is NOT
 

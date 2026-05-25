@@ -100,6 +100,7 @@ const handlers = [
   http.get('/api/hook-stats', () =>
     HttpResponse.json({ records: 0, by_decision: [], by_hook_id: [], by_month: [] }),
   ),
+  http.get('/api/reliability', () => HttpResponse.json({ features: [] })),
 ]
 
 export const server = setupServer(...handlers)
