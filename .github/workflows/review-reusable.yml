@@ -269,10 +269,14 @@ jobs:
           promoted Minor × High becomes a Major × High and is classified by
           the Major × High rule, not by the original Minor.
 
+          The status bucket mirrors the Decision matrix's verdict column for
+          the highest-ranked reported finding: `omit` → PASS, `advisory` →
+          ADVISORY, `triage` → ACTION-REQUIRED, `block merge` → BLOCKER.
+
           - ![status-PASS](https://img.shields.io/badge/status-PASS-brightgreen) when no Major or higher finding is reported
-          - ![status-ADVISORY](https://img.shields.io/badge/status-ADVISORY-yellow) when only advisory-tier findings are reported (Major × Medium/Low), and no Major × High or Blocker is reported
-          - ![status-ACTION-REQUIRED](https://img.shields.io/badge/status-ACTION%20REQUIRED-orange) when at least one Major × High is reported and no Blocker is reported
-          - ![status-BLOCKER](https://img.shields.io/badge/status-BLOCKER-critical) when at least one Blocker is reported (Blocker × any confidence: High, Medium, or Low all map to this status)
+          - ![status-ADVISORY](https://img.shields.io/badge/status-ADVISORY-yellow) when the highest-ranked finding is advisory (Major × Medium/Low only) — no Major × High, no Blocker
+          - ![status-ACTION-REQUIRED](https://img.shields.io/badge/status-ACTION%20REQUIRED-orange) when the highest-ranked finding requires human triage (Major × High, or Blocker × Medium/Low) — no Blocker × High
+          - ![status-BLOCKER](https://img.shields.io/badge/status-BLOCKER-critical) when at least one Blocker × High is reported (block merge)
 
           Then for each finding, start the finding's heading line with exactly
           two badges (severity first, then confidence) emitted as raw markdown
