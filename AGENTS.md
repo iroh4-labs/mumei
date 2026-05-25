@@ -215,13 +215,14 @@ Treat these as a checklist — AI-generated code regularly ships each of them.
   callee; inclusive vs exclusive endpoints; off-by-one in limit / offset math.
 - **Serialization edges** — date / time round-trip (timezone loss, epoch unit
   confusion); 64-bit integer precision loss when stored as JSON Number (in JS,
-  use `BigInt` to avoid it); `null` vs `undefined` / `None` vs missing key;
-  NaN / Infinity rendered as invalid JSON; Map / Set / sparse arrays silently
-  dropped.
+  `BigInt` is not JSON-serializable — represent it as a string on the wire);
+  `null` vs `undefined` / `None` vs missing key; NaN / Infinity rendered as
+  invalid JSON; Map / Set / sparse arrays silently dropped.
 - **Async cleanup race** — resource release not awaited before the holding
-  scope exits (`dispose` / `close` / `unsubscribe` in JS, Go `context`
-  cancellation not propagated, Rust `Drop` ordering for shared owners);
-  finally-block release ordering.
+  scope exits (async `dispose` / `close` in JS, Go `context` cancellation not
+  propagated, Rust `Drop` ordering for shared owners); finally-block release
+  ordering. Sync teardown calls (e.g. RxJS `unsubscribe`) belong to ordering
+  hygiene, not async-cleanup races.
 - **Half-implementation** — `TODO`, `pass`, `throw new Error("not implemented")`,
   empty function bodies, stub returns that mirror the real shape but always
   return canned values.
