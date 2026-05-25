@@ -253,6 +253,30 @@ jobs:
           - Subjective style already consistent with the surrounding code.
           - Hypotheticals with no evidence in the change.
           <!-- END universal-review-rubric -->
+
+          ## Output format
+
+          Begin your review with exactly one status badge on its own line. Pick
+          the highest-severity bucket that applies (a Blocker × High supersedes
+          any Major × High, and so on):
+
+          - `![status-PASS](https://img.shields.io/badge/status-PASS-brightgreen)` when no Major or higher finding is reported
+          - `![status-ADVISORY](https://img.shields.io/badge/status-ADVISORY-yellow)` when only advisory-tier findings (Major × Medium/Low) are reported
+          - `![status-ACTION-REQUIRED](https://img.shields.io/badge/status-Action%20Required-orange)` when at least one Major × High is reported
+          - `![status-BLOCKER](https://img.shields.io/badge/status-BLOCKER-critical)` when at least one Blocker × High is reported
+
+          Then for each finding, start the finding's heading line with one
+          severity badge and one confidence badge, side by side, using exactly
+          these shields.io URLs:
+
+          - Severity: `![Blocker](https://img.shields.io/badge/severity-Blocker-critical)` / `![Major](https://img.shields.io/badge/severity-Major-important)` / `![Minor](https://img.shields.io/badge/severity-Minor-yellow)` / `![Nit](https://img.shields.io/badge/severity-Nit-lightgrey)`
+          - Confidence: `![High](https://img.shields.io/badge/confidence-High-informational)` / `![Medium](https://img.shields.io/badge/confidence-Medium-blue)` / `![Low](https://img.shields.io/badge/confidence-Low-lightgrey)`
+
+          After the two badges, cite `file:line` and write the finding body
+          (Rationale + Suggested fix). End the entire review with the Honest
+          ceiling line as the closing paragraph. Do not invent new badge URLs,
+          colors, or labels — use these exact strings so consumers (PR
+          authors, audit logs, dashboards) can parse the output reliably.
           MUMEI_RUBRIC_INLINE_EOF
           # The heredoc preserves leading indentation from the YAML block; strip it
           # so the rubric reads as a flat markdown block in the prompt. Bash 'EOF'
