@@ -106,9 +106,13 @@ repos:
         entry: bash -c 'trufflehog filesystem --no-update --fail --no-verification --results=verified .'
         language: system
 
-  # Hook ID + docs drift linters (REQ-11.1 / REQ-11.2). Run on every
-  # commit because they are fast (whole-repo grep / awk) and catch the
-  # W-02 / W-03 regression class deterministically before push.
+  # Hook ID + docs drift + review rubric parity linters.
+  # Each hook scopes itself to the file set it actually validates via
+  # `files:` (rather than `always_run: true`). When none of the watched
+  # files is staged, the hook skips — keeping per-commit cost down on
+  # PRs that touch unrelated areas. CI's `task lint` runs every check
+  # unconditionally as the safety net, so a local skip cannot let a
+  # drift through to merge.
   - repo: local
     hooks:
       - id: lint-hook-ids
@@ -116,19 +120,19 @@ repos:
         entry: bash scripts/lint-hook-ids.sh
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^(ARCHITECTURE\.md|README\.md|hooks/|scripts/|tests/|docs/mumei-decisions\.md)
       - id: lint-docs-drift
         name: lint-docs-drift (REQ-11.2)
         entry: bash scripts/lint-docs-drift.sh
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^(ARCHITECTURE\.md|README\.md|README\.ja\.md|agents/|skills/|hooks/|scripts/|docs/mumei-decisions\.md)
       - id: lint-review-rubric
         name: lint-review-rubric (REQ-24.4)
         entry: bash scripts/lint-review-rubric.sh
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^(\.github/review-rubric\.md|AGENTS\.md|\.gemini/styleguide\.md|\.github/workflows/review-reusable\.yml|scripts/lint-review-rubric\.sh)$
 
   # Run the project's own bats suite at pre-push time so test failures
   # land before reaching CI without paying the cost on every commit.
