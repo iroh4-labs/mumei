@@ -37,14 +37,75 @@ pass — finite attention per axis catches more than one monolithic sweep.
    crypto, sensitive-data exposure; vulnerable/outdated dependencies, supply-chain
    integrity. Treat any deterministic scanner finding supplied as input as ground truth.
 3. **Operability / reliability** — error handling at boundaries (failures
-   surfaced, not silently swallowed); concurrency (shared state, races, lock
-   ordering, idempotency); observability ("will we know when this breaks?" —
-   logs/metrics/alerts, no sensitive data in logs); backward compatibility
-   (additive changes, existing clients keep working); resource leaks / unbounded growth.
+   surfaced, not silently swallowed); observability ("will we know when this
+   breaks?" — logs/metrics/alerts, no sensitive data in logs); backward
+   compatibility (additive changes, existing clients keep working); resource
+   leaks / unbounded growth. (Concurrency / idempotency are covered separately
+   under Re-execution safety.)
 4. **Maintainability / design** — sound design and fit within the system, not
    over-engineered; complexity that is hard to follow or bug-prone; naming,
    comments that explain WHY, consistency with surrounding code; tests
    appropriate to the change; docs updated in the same change.
+
+### Hallucination check (AI-introduced)
+
+AI-generated code typically fails by referencing things that look real but
+don't exist. Verify, don't trust.
+
+- **Symbol existence** — resolve in order: (a) the codebase, (b) a dependency
+  declared in the project's lockfile (package.json / requirements.txt /
+  Cargo.toml / go.mod / etc) **at the pinned version**, (c) a verifiable public
+  API at the pinned version. If (b) and (c) disagree, the lockfile pin wins —
+  flag the diff with a "lockfile vs upstream-docs mismatch" note. Any reference
+  that resolves through none of these is a finding.
+- **API shape** — signatures, argument order, return types, and option keys
+  match the library version pinned in the lockfile, not a memorized variant
+  from another version. If unsure, label "needs version-specific verification".
+- **Phantom identifiers** — every referenced env var, config key, secret name,
+  file path, route, and command flag is defined or registered somewhere in the
+  diff or the existing codebase. Invented identifiers count as a finding.
+
+### Re-execution safety
+
+Apply this section only when the diff introduces or modifies code that performs
+side effects (writes, network calls, external state mutation). Skip for pure
+functions, type-only changes, and docs-only diffs.
+
+- **Double-fire** — what happens if this code path runs twice with the same
+  input? (duplicate side effects? double-charge? duplicate row? double-publish?)
+  Cite the mechanism that prevents it (idempotency key, dedupe table,
+  conditional write, exactly-once queue) or flag its absence.
+- **Mid-way interruption** — what happens if execution is killed mid-way and
+  retried? (partial state? lock leak? orphan resource? half-written file?)
+  Cite the recovery path (transaction, atomic rename, lease expiry) or flag.
+- **Parallel invocation** — what happens if two replicas / hooks / requests
+  fire simultaneously on the same key? (lost update? read-modify-write race?
+  deadlock? unbounded queue growth?) Cite the synchronization (CAS, lock,
+  optimistic concurrency) or flag.
+
+### Common AI-introduced defects
+
+Treat these as a checklist — AI-generated code regularly ships each of them.
+
+- **Timezone** — local-time leakage when UTC is required (`new Date()` /
+  `datetime.now()` / Go `time.Now()` / Rust `chrono::Local` / Java
+  `LocalDateTime` without `ZoneId`); ISO 8601 strings without timezone;
+  mixed naive / aware comparisons.
+- **Encoding** — UTF-8 BOM in text I/O; surrogate-pair splits when slicing;
+  mojibake from default-encoding file reads.
+- **Pagination / boundaries** — 0-index vs 1-index drift between caller and
+  callee; inclusive vs exclusive endpoints; off-by-one in limit / offset math.
+- **Serialization edges** — date / time round-trip (timezone loss, epoch unit
+  confusion); 64-bit integer precision loss (JS `BigInt`, JSON Number);
+  `null` vs `undefined` / `None` vs missing key; NaN / Infinity rendered as
+  invalid JSON; Map / Set / sparse arrays silently dropped.
+- **Async cleanup race** — resource release not awaited before the holding
+  scope exits (`dispose` / `close` / `unsubscribe` in JS, Go `context`
+  cancellation not propagated, Rust `Drop` ordering for shared owners);
+  finally-block release ordering.
+- **Half-implementation** — `TODO`, `pass`, `throw new Error("not implemented")`,
+  empty function bodies, stub returns that mirror the real shape but always
+  return canned values.
 
 ### Grounding
 
@@ -66,8 +127,39 @@ signals as evidence; do not let them gate which issues you consider.
 - No speculation. If you cannot point to evidence, do not raise it.
 - Defer concerns only observable at runtime / end-to-end rather than asserting
   them as defects; label them "needs runtime verification".
-- Severity: HIGH = exploitable / data loss / breaks a contract; MEDIUM = real
-  but bounded; LOW = style / nit. Prefer fewer high-confidence findings over noise.
+
+### Severity & confidence
+
+Two independent axes — every finding declares both.
+
+- **Severity** (impact if the finding is true):
+  - **Blocker** — exploitable, data loss, contract break, or corruption of the
+    project's built / published output.
+  - **Major** — real defect with bounded impact (broken edge case, recoverable
+    regression, missing required handling).
+  - **Minor** — code smell, weak abstraction, missing WHY-comment where warranted.
+  - **Nit** — style / wording polish (prefer to omit; let formatters handle).
+- **Confidence** (how certain the finding is, given the cited evidence):
+  - **High** — evidence on the cited file:line directly demonstrates the defect.
+  - **Medium** — strong inference from surrounding code; a single unknown could refute.
+  - **Low** — pattern-level concern needing runtime verification.
+- Decision matrix:
+
+  | Severity \ Confidence | High        | Medium   | Low      |
+  | --------------------- | ----------- | -------- | -------- |
+  | Blocker               | block merge | triage   | triage   |
+  | Major                 | triage      | advisory | advisory |
+  | Minor                 | advisory    | omit     | omit     |
+  | Nit                   | omit        | omit     | omit     |
+
+  Override: a finding that would otherwise be omitted (Minor × Medium/Low,
+  Nit × any) stays in the report if it lands on the AI-introduced-defects
+  checklist above.
+
+- Tool-specific enums: some review tools have their own severity scale (e.g.
+  Gemini Code Assist's `LOW` / `MEDIUM` / `HIGH` / `CRITICAL`). When a tool
+  requires picking one, map: Nit → LOW, Minor → LOW, Major → HIGH,
+  Blocker → CRITICAL.
 
 ### Honest ceiling
 
