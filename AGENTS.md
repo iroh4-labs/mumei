@@ -364,10 +364,12 @@ above). mumei-specific mapping examples:
   shipped artifact picking up gitignored content) → **Blocker**.
 - Hook ID drift between code and `ARCHITECTURE.md` (Hook rules table) → **Major**.
 - Doc-sync miss (agent / skill count off, `_lib/` tree out of date) → **Major**.
-- `mumei_` / `_mumei_` prefix violation on a new bash function → **Minor**
-  (lint catches at pre-commit, surface only if added in this PR).
 - Workflow `uses:` referencing a mutable tag (`@v2` / `@main`) → **Blocker**
   (`mutable-tag-guard` is a hard gate, but surface in the review too).
+
+Violations that pre-commit / lint already catches deterministically (`mumei_`
+prefix check, frontmatter check, `lint-hook-ids`, `lint-docs-drift`) are not
+re-raised at review time — the local gate is the authoritative signal there.
 
 If you cannot articulate a concrete failure scenario, do not raise the finding.
 Hypothetical concerns without a chain to user impact are filtered out at
