@@ -133,6 +133,30 @@ repos:
         language: system
         pass_filenames: false
         files: ^(\.github/review-rubric\.md|AGENTS\.md|\.gemini/styleguide\.md|\.github/workflows/review-reusable\.yml|scripts/lint-review-rubric\.sh)$
+      - id: lint-bash-prefix
+        name: lint-bash-prefix (mumei_ / _mumei_)
+        entry: bash scripts/lint-bash-prefix.sh
+        language: system
+        pass_filenames: false
+        files: ^(hooks/|scripts/).*\.sh$
+      - id: lint-frontmatter
+        name: lint-frontmatter (agents / skills)
+        entry: bash scripts/lint-frontmatter.sh
+        language: system
+        pass_filenames: false
+        files: ^(agents/.*\.md|skills/.*\.md)$
+      - id: lint-plan-vehicle-hooks
+        name: lint-plan-vehicle-hooks (registration)
+        entry: bash scripts/lint-plan-vehicle-hooks.sh
+        language: system
+        pass_filenames: false
+        files: ^(hooks/hooks\.json|hooks/.*\.sh|scripts/lint-plan-vehicle-hooks\.sh)$
+      - id: jq-empty-manifests
+        name: jq empty (plugin.json + hooks.json)
+        entry: bash -c 'jq empty .claude-plugin/plugin.json && jq empty hooks/hooks.json'
+        language: system
+        pass_filenames: false
+        files: ^(\.claude-plugin/plugin\.json|hooks/hooks\.json)$
 
   # Run the project's own bats suite at pre-push time so test failures
   # land before reaching CI without paying the cost on every commit.
@@ -163,21 +187,17 @@ repos:
         stages: [pre-push]
         files: '\.md$'
 
-  # Full lint at pre-push — calls scripts/lint-all.sh, which is the
-  # SAME entry point CI's `lint` job uses (via individual sub-script
-  # calls). Catches "passes locally but fails CI" issues *before* push:
-  # missing `mumei_` prefix, broken hooks.json registration, frontmatter
-  # drift, etc. always_run because the checks are full-glob (independent
-  # of which files changed in the commits being pushed).
-  - repo: local
-    hooks:
-      - id: lint-all
-        name: lint-all (CI parity)
-        entry: bash scripts/lint-all.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
+  # NOTE: scripts/lint-all.sh used to run at pre-push as a "CI parity"
+  # gate, but every check it ran is now individually wired into
+  # pre-commit above with a `files:` scope (lint-hook-ids /
+  # lint-docs-drift / lint-review-rubric / lint-bash-prefix /
+  # lint-frontmatter / lint-plan-vehicle-hooks / jq-empty-manifests /
+  # shellcheck / shfmt). The only checks lint-all.sh adds on top —
+  # `bash -n` full-glob and `shellharden` — are covered by shellcheck
+  # (parse-time errors fail there too) and by CI's lint-extra job
+  # (shellharden requires a local install we don't mandate). CI's
+  # `task lint` still runs the full sweep on every PR as the
+  # authoritative safety net.
 
   # Dashboard biome lint at pre-push — mirrors dashboard-ci.yml's lint
   # step. `--error-on-warnings` upgrades any warning to a non-zero exit,
