@@ -43,6 +43,7 @@ import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
 import { Header } from './Header'
 import { PhaseBadge, PulseRing, VerdictBadge } from './primitives'
+import { ReliabilityTab } from './ReliabilityTab'
 
 const SECTION_INVALIDATIONS: Record<string, ReadonlyArray<readonly (string | number)[]>> = {
   features: [['features']],
@@ -53,7 +54,7 @@ const SECTION_INVALIDATIONS: Record<string, ReadonlyArray<readonly (string | num
   detail: [],
 }
 
-type TabId = 'features' | 'tokens' | 'activity'
+type TabId = 'features' | 'tokens' | 'activity' | 'reliability'
 
 const ARCHIVED_PAGE_SIZE = 12
 
@@ -104,6 +105,12 @@ export function Dashboard(): ReactElement {
             >
               Activity
             </TabsTrigger>
+            <TabsTrigger
+              value="reliability"
+              className="rounded-full px-5 data-[state=active]:bg-foreground/10 data-[state=active]:shadow-none"
+            >
+              Reliability
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="features">
@@ -145,6 +152,14 @@ export function Dashboard(): ReactElement {
             <div className="mumei-card p-5">
               <ErrorBoundarySection name="activity">
                 <ActivityFeed />
+              </ErrorBoundarySection>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="reliability">
+            <div className="mumei-card p-5">
+              <ErrorBoundarySection name="reliability">
+                <ReliabilityTab />
               </ErrorBoundarySection>
             </div>
           </TabsContent>
