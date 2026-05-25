@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { access, readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type {
   ReliabilityFeatureRow,
@@ -27,51 +27,64 @@ export async function listReliability(args: {
   const { projectRoot, includeArchive = false } = args
   const sources: Array<{ vehicle: ReliabilityFeatureRow['vehicle']; dir: string }> = []
 
+  type ActiveSource = (typeof sources)[number] & { hasState: boolean }
+  const activeRaw: ActiveSource[] = []
   for (const sub of ['specs', 'plans'] as const) {
     const root = path.join(projectRoot, '.mumei', sub)
-    sources.push(
-      ...(await listFeatureDirs(root)).map((d) => ({
+    const dirs = await listFeatureDirs(root)
+    for (const d of dirs) {
+      activeRaw.push({
         vehicle: sub === 'specs' ? ('spec' as const) : ('plan' as const),
         dir: d,
-      })),
-    )
+        hasState: await hasFile(path.join(d, 'state.json')),
+      })
+    }
   }
+  // Codex C6 / C9 fix: deduplicate dual-state ACTIVE features (same
+  // slug appears under both .mumei/specs/ and .mumei/plans/). Mirror
+  // bash-side `mumei_reliability_log_dir`: state.json presence is
+  // the primary signal, with spec > plan as the tie-breaker. A bare
+  // directory left over from migration must NOT shadow the real
+  // active state on the other side (Codex C9). Codex C8 fix: archive
+  // entries are NOT deduped against active ones because the archive
+  // layout repeats slug names across months and historical rows must
+  // survive when an active feature happens to share the slug.
+  const ACTIVE_PRECEDENCE: Record<'spec' | 'plan', number> = { spec: 0, plan: 1 }
+  const dedupActive = new Map<string, ActiveSource>()
+  for (const s of activeRaw) {
+    const slug = path.basename(s.dir)
+    const existing = dedupActive.get(slug)
+    if (!existing) {
+      dedupActive.set(slug, s)
+      continue
+    }
+    // state.json-present wins over state.json-absent.
+    if (s.hasState && !existing.hasState) {
+      dedupActive.set(slug, s)
+      continue
+    }
+    if (!s.hasState && existing.hasState) continue
+    // Both same state.json presence → spec precedence.
+    if (
+      ACTIVE_PRECEDENCE[s.vehicle as 'spec' | 'plan'] <
+      ACTIVE_PRECEDENCE[existing.vehicle as 'spec' | 'plan']
+    ) {
+      dedupActive.set(slug, s)
+    }
+  }
+  const archives: typeof sources = []
   if (includeArchive) {
     const archiveRoot = path.join(projectRoot, '.mumei', 'archive')
     const months = await listFeatureDirs(archiveRoot)
     for (const monthDir of months) {
       const inside = await listFeatureDirs(monthDir)
-      sources.push(...inside.map((d) => ({ vehicle: 'archive' as const, dir: d })))
+      archives.push(...inside.map((d) => ({ vehicle: 'archive' as const, dir: d })))
     }
   }
-
-  // Codex C6 fix: deduplicate dual-state ACTIVE features (same slug
-  // appears under both .mumei/specs/ and .mumei/plans/). The repo
-  // treats this transitional state as a single feature with spec
-  // precedence — match that contract by keeping spec > plan on slug
-  // collision. Codex C8 fix: archive entries are NOT deduped against
-  // active ones because the archive layout (`.mumei/archive/<month>/
-  // <slug>/`) is intentionally allowed to repeat slug names across
-  // months, and archived rows are historical data that must survive
-  // even when an active feature happens to share the slug.
-  const ACTIVE_PRECEDENCE: Record<'spec' | 'plan', number> = { spec: 0, plan: 1 }
-  const dedupActive = new Map<string, (typeof sources)[number]>()
-  const archives: typeof sources = []
-  for (const s of sources) {
-    if (s.vehicle === 'archive') {
-      archives.push(s)
-      continue
-    }
-    const slug = path.basename(s.dir)
-    const existing = dedupActive.get(slug)
-    if (
-      !existing ||
-      ACTIVE_PRECEDENCE[s.vehicle] < ACTIVE_PRECEDENCE[existing.vehicle as 'spec' | 'plan']
-    ) {
-      dedupActive.set(slug, s)
-    }
-  }
-  const deduped = [...dedupActive.values(), ...archives]
+  const deduped = [
+    ...[...dedupActive.values()].map((s) => ({ vehicle: s.vehicle, dir: s.dir })),
+    ...archives,
+  ]
 
   const rows = await Promise.all(deduped.map((s) => readOneFeature(s.dir, s.vehicle)))
   // Sort by last_updated descending (most recent first); rows with no
@@ -92,6 +105,15 @@ async function listFeatureDirs(root: string): Promise<string[]> {
     return entries.filter((e) => e.isDirectory()).map((e) => path.join(root, e.name))
   } catch {
     return []
+  }
+}
+
+async function hasFile(p: string): Promise<boolean> {
+  try {
+    await access(p)
+    return true
+  } catch {
+    return false
   }
 }
 

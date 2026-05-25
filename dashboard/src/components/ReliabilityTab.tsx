@@ -44,7 +44,13 @@ function ReliabilityTabContent(): ReactElement {
         </thead>
         <tbody className="divide-y divide-border">
           {data.map((row) => (
-            <ReliabilityRow key={`${row.vehicle}::${row.feature}`} row={row} />
+            <ReliabilityRow
+              // last_updated is unique per archived-month directory so
+              // including it disambiguates same-slug rows that survive
+              // across archive months (Gemini follow-up).
+              key={`${row.vehicle}::${row.feature}::${row.last_updated ?? 'no-log'}`}
+              row={row}
+            />
           ))}
         </tbody>
       </table>
