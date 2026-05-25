@@ -263,8 +263,14 @@ jobs:
           Begin your review with exactly one status badge on its own line,
           picking the highest-severity bucket that applies:
 
+          Apply each finding's **final** severity × confidence (after any
+          Override promotion has been resolved) when matching it against the
+          rules below — Override changes the severity of a finding, so a
+          promoted Minor × High becomes a Major × High and is classified by
+          the Major × High rule, not by the original Minor.
+
           - ![status-PASS](https://img.shields.io/badge/status-PASS-brightgreen) when no Major or higher finding is reported
-          - ![status-ADVISORY](https://img.shields.io/badge/status-ADVISORY-yellow) when only advisory-tier findings (Major × Medium/Low, or Minor × * promoted via Override) are reported
+          - ![status-ADVISORY](https://img.shields.io/badge/status-ADVISORY-yellow) when only advisory-tier findings are reported (Major × Medium/Low), and no Major × High or Blocker is reported
           - ![status-ACTION-REQUIRED](https://img.shields.io/badge/status-ACTION%20REQUIRED-orange) when at least one Major × High is reported and no Blocker is reported
           - ![status-BLOCKER](https://img.shields.io/badge/status-BLOCKER-critical) when at least one Blocker is reported (Blocker × any confidence: High, Medium, or Low all map to this status)
 
