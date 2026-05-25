@@ -45,24 +45,33 @@ export async function listReliability(args: {
     }
   }
 
-  // Codex C6 fix: deduplicate dual-state features (same slug appears
-  // under both .mumei/specs/ and .mumei/plans/). The repo treats this
-  // transitional state as a single feature with spec precedence — match
-  // that contract by keeping spec > plan > archive on slug collision.
-  const PRECEDENCE: Record<ReliabilityFeatureRow['vehicle'], number> = {
-    spec: 0,
-    plan: 1,
-    archive: 2,
-  }
-  const dedup = new Map<string, (typeof sources)[number]>()
+  // Codex C6 fix: deduplicate dual-state ACTIVE features (same slug
+  // appears under both .mumei/specs/ and .mumei/plans/). The repo
+  // treats this transitional state as a single feature with spec
+  // precedence — match that contract by keeping spec > plan on slug
+  // collision. Codex C8 fix: archive entries are NOT deduped against
+  // active ones because the archive layout (`.mumei/archive/<month>/
+  // <slug>/`) is intentionally allowed to repeat slug names across
+  // months, and archived rows are historical data that must survive
+  // even when an active feature happens to share the slug.
+  const ACTIVE_PRECEDENCE: Record<'spec' | 'plan', number> = { spec: 0, plan: 1 }
+  const dedupActive = new Map<string, (typeof sources)[number]>()
+  const archives: typeof sources = []
   for (const s of sources) {
+    if (s.vehicle === 'archive') {
+      archives.push(s)
+      continue
+    }
     const slug = path.basename(s.dir)
-    const existing = dedup.get(slug)
-    if (!existing || PRECEDENCE[s.vehicle] < PRECEDENCE[existing.vehicle]) {
-      dedup.set(slug, s)
+    const existing = dedupActive.get(slug)
+    if (
+      !existing ||
+      ACTIVE_PRECEDENCE[s.vehicle] < ACTIVE_PRECEDENCE[existing.vehicle as 'spec' | 'plan']
+    ) {
+      dedupActive.set(slug, s)
     }
   }
-  const deduped = [...dedup.values()]
+  const deduped = [...dedupActive.values(), ...archives]
 
   const rows = await Promise.all(deduped.map((s) => readOneFeature(s.dir, s.vehicle)))
   // Sort by last_updated descending (most recent first); rows with no
@@ -112,13 +121,18 @@ async function readOneFeature(
   }
 
   // Parse JSONL line-by-line. Single corrupt line yields a per-feature
-  // `error` row instead of crashing the whole tab (REQ-25.4.2).
+  // `error` row instead of crashing the whole tab (REQ-25.4.2). Also
+  // guard against non-object JSON values (literal `null`, bare
+  // strings/numbers) which would otherwise crash the downstream
+  // `r.pass` access — Gemini follow-up.
   const lines = raw.split('\n').filter((l) => l.trim().length > 0)
   const rows: ReliabilityLogEntry[] = []
   try {
     for (const line of lines) {
-      const obj = JSON.parse(line) as ReliabilityLogEntry
-      rows.push(obj)
+      const obj = JSON.parse(line) as unknown
+      if (obj !== null && typeof obj === 'object' && !Array.isArray(obj)) {
+        rows.push(obj as ReliabilityLogEntry)
+      }
     }
   } catch (e) {
     return { ...base, error: `parse error: ${(e as Error).message}` }

@@ -120,6 +120,90 @@ describe('listReliability', () => {
     expect(r.features[0]?.n_trials).toBe(2)
   })
 
+  it('Codex C8: archive entries are NOT deduped against active features (preserve historical rows)', async () => {
+    const slug = 'shared-slug'
+    // Active spec-vehicle feature with this slug.
+    const specDir = path.join(projectRoot, '.mumei', 'specs', slug)
+    await mkdir(specDir, { recursive: true })
+    await writeFile(
+      path.join(specDir, 'reliability-log.jsonl'),
+      JSON.stringify({
+        feature: slug,
+        wave: '1',
+        task_id: '1.1',
+        trial_n: 1,
+        pass: true,
+        ts: '2026-05-25T00:00:00Z',
+      }) + '\n',
+    )
+    // Archived feature with the SAME slug from an earlier month.
+    const archiveDir = path.join(projectRoot, '.mumei', 'archive', '2026-04', slug)
+    await mkdir(archiveDir, { recursive: true })
+    await writeFile(
+      path.join(archiveDir, 'reliability-log.jsonl'),
+      JSON.stringify({
+        feature: slug,
+        wave: '1',
+        task_id: '1.1',
+        trial_n: 1,
+        pass: false,
+        ts: '2026-04-01T00:00:00Z',
+      }) + '\n',
+    )
+
+    const r = await listReliability({ projectRoot, includeArchive: true })
+    expect(r.features).toHaveLength(2)
+    const active = r.features.find((f) => f.vehicle === 'spec')
+    const archived = r.features.find((f) => f.vehicle === 'archive')
+    expect(active?.feature).toBe(slug)
+    expect(archived?.feature).toBe(slug)
+  })
+
+  it('Gemini follow-up: JSONL line containing literal `null` is filtered, not crashing pass_rate calc', async () => {
+    const featDir = path.join(projectRoot, '.mumei', 'specs', 'REQ-1-nullrow')
+    await mkdir(featDir, { recursive: true })
+    // Mix valid object rows with a literal `null` line and a bare string.
+    // All three would JSON.parse without throwing, but only the object
+    // is a ReliabilityLogEntry. The pre-fix code would push them all
+    // and crash on r.pass.
+    await writeFile(
+      path.join(featDir, 'reliability-log.jsonl'),
+      [
+        JSON.stringify({
+          feature: 'REQ-1-nullrow',
+          wave: '1',
+          task_id: '1.1',
+          trial_n: 1,
+          pass: true,
+          ts: '2026-05-25T00:00:00Z',
+        }),
+        'null',
+        '"bare string"',
+        JSON.stringify({
+          feature: 'REQ-1-nullrow',
+          wave: '1',
+          task_id: '1.2',
+          trial_n: 1,
+          pass: true,
+          ts: '2026-05-25T00:00:01Z',
+        }),
+        JSON.stringify({
+          feature: 'REQ-1-nullrow',
+          wave: '1',
+          task_id: '1.3',
+          trial_n: 1,
+          pass: true,
+          ts: '2026-05-25T00:00:02Z',
+        }),
+      ].join('\n') + '\n',
+    )
+    const r = await listReliability({ projectRoot })
+    expect(r.features).toHaveLength(1)
+    expect(r.features[0]?.error).toBeUndefined()
+    expect(r.features[0]?.n_trials).toBe(3)
+    expect(r.features[0]?.pass_rate).toBe(1)
+  })
+
   it('Codex C6: dedups dual-state features (same slug in specs/ + plans/) with spec precedence', async () => {
     const slug = 'dual-state-slug'
     // Place the same slug under BOTH .mumei/specs/ and .mumei/plans/
