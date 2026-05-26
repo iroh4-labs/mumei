@@ -17,12 +17,10 @@ load '../test_helper'
 
 _run_hook() {
   local input_json="$1"
-  local input_file
-  input_file="$(mktemp -t mumei-hook-input.XXXXXX)"
+  local input_file="${BATS_TEST_TMPDIR}/hook-input.json"
   printf '%s' "$input_json" >"$input_file"
   run --separate-stderr bash -c \
     "bash '${CLAUDE_PLUGIN_ROOT}/hooks/pre-exitplan-guard.sh' < '${input_file}'"
-  rm -f "$input_file"
 }
 
 _plan_input() {
@@ -45,12 +43,10 @@ _plan_input() {
 @test "no .mumei/current → true no-op (no files created)" {
   # Simulate an arbitrary project that has the mumei plugin enabled but
   # has never run /mumei:arrange or /mumei:proceed. No .mumei/ exists.
-  local plan_file
-  plan_file="$(mktemp -t mumei-plan.XXXXXX.md)"
+  local plan_file="${BATS_TEST_TMPDIR}/plan.md"
   printf '# my plan\n' >"$plan_file"
 
   _run_hook "$(_plan_input "$plan_file")"
-  rm -f "$plan_file"
 
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
@@ -76,14 +72,12 @@ _plan_input() {
   mkdir -p .mumei
   : >.mumei/current
 
-  local plan_file
-  plan_file="$(mktemp -t mumei-plan.XXXXXX.md)"
+  local plan_file="${BATS_TEST_TMPDIR}/plan.md"
   printf '# captured plan\n' >"$plan_file"
   local slug
   slug="$(basename "$plan_file" .md)"
 
   _run_hook "$(_plan_input "$plan_file")"
-  rm -f "$plan_file"
 
   [ "$status" -eq 0 ]
   [ -d ".mumei/plans/${slug}" ]
@@ -103,12 +97,10 @@ _plan_input() {
   mkdir -p .mumei
   printf 'my-fixed-slug\n' >.mumei/current
 
-  local plan_file
-  plan_file="$(mktemp -t mumei-plan.XXXXXX.md)"
+  local plan_file="${BATS_TEST_TMPDIR}/plan.md"
   printf '# captured plan\n' >"$plan_file"
 
   _run_hook "$(_plan_input "$plan_file")"
-  rm -f "$plan_file"
 
   [ "$status" -eq 0 ]
   [ -d ".mumei/plans/my-fixed-slug" ]
@@ -156,18 +148,14 @@ _plan_input() {
   mkdir -p .mumei
   : >.mumei/current
 
-  local plan_file
-  plan_file="$(mktemp -t mumei-plan.XXXXXX.md)"
+  local plan_file="${BATS_TEST_TMPDIR}/plan.md"
   printf '# plan\n' >"$plan_file"
 
-  local input_file
-  input_file="$(mktemp -t mumei-hook-input.XXXXXX)"
+  local input_file="${BATS_TEST_TMPDIR}/hook-input.json"
   _plan_input "$plan_file" >"$input_file"
 
   MUMEI_BYPASS=1 run --separate-stderr bash -c \
     "bash '${CLAUDE_PLUGIN_ROOT}/hooks/pre-exitplan-guard.sh' < '${input_file}'"
-
-  rm -f "$input_file" "$plan_file"
 
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
