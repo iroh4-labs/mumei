@@ -321,6 +321,13 @@ jobs:
           sudo /tmp/bats-core/install.sh /usr/local
           bats --version
 
+      # tests/scripts/lint-frontmatter.bats exercises scripts/lint-frontmatter.sh
+      # which strict-parses YAML via python3 + PyYAML. PyYAML is not contractually
+      # pre-installed on either runner image — install it on both OSes so the
+      # regression test runs everywhere bats runs.
+      - name: install PyYAML (for lint-frontmatter regression tests)
+        run: python3 -m pip install --quiet --break-system-packages pyyaml
+
       - name: bats tests/
         run: task test:bats
 
