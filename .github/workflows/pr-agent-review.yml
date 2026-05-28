@@ -63,6 +63,13 @@ jobs:
       LLM_BANNER: "## Gemini 3.1 Pro"
       LLM_BADGE_LABEL: "Gemini%203.1%20Pro"
       STATUS_MARKER: "<!-- mumei-review-status:gemini-3.1-pro -->"
+      # Per-1M-token prices in USD (Google AI Studio list, May 2026).
+      INPUT_PRICE_PER_M: "2"
+      OUTPUT_PRICE_PER_M: "12"
+      # `name:` of this job — used to find the matching entry in the
+      # API's /actions/runs/{run_id}/jobs response when fetching this
+      # job's own log to compute LiteLLM token usage.
+      JOB_DISPLAY_NAME: "review (gemini-3.1-pro)"
       REPO: ${{ github.repository }}
       PR: ${{ github.event.pull_request.number }}
     steps:
@@ -160,6 +167,33 @@ jobs:
               printf '%s' "$count"
             })
 
+          # Compute the actual API spend for this run by pulling this
+          # job's own log and summing every prompt_tokens /
+          # completion_tokens record (pr-agent's DEBUG-level
+          # `Full_response` log dumps each LiteLLM response, which
+          # includes the usage struct). Falls back to "n/a" if the
+          # log query fails or returns no token records.
+          job_id=$(gh api "/repos/${REPO}/actions/runs/${GITHUB_RUN_ID}/jobs" \
+            --jq ".jobs[] | select(.name == \"${JOB_DISPLAY_NAME}\") | .id" 2>/dev/null | head -1)
+          cost_line=""
+          if [ -n "${job_id:-}" ]; then
+            log_file=$(mktemp)
+            if gh api "/repos/${REPO}/actions/jobs/${job_id}/logs" >"${log_file}" 2>/dev/null; then
+              p_tokens=$(grep -oE '"prompt_tokens": [0-9]+' "${log_file}" |
+                grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')
+              c_tokens=$(grep -oE '"completion_tokens": [0-9]+' "${log_file}" |
+                grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')
+              if [ "${p_tokens:-0}" -gt 0 ]; then
+                cost_usd=$(awk -v p="$p_tokens" -v c="$c_tokens" \
+                  -v ip="$INPUT_PRICE_PER_M" -v op="$OUTPUT_PRICE_PER_M" \
+                  'BEGIN { printf "%.4f", (p*ip + c*op) / 1000000 }')
+                cost_line=$(printf '_Cost: $%s (%s prompt + %s completion tokens)_' \
+                  "$cost_usd" "$p_tokens" "$c_tokens")
+              fi
+            fi
+            rm -f "${log_file}"
+          fi
+
           # Compose final status badge + summary line.
           if [ "${new_inline}" -eq 0 ]; then
             badge_url="https://img.shields.io/badge/${LLM_BADGE_LABEL}-PASS-brightgreen"
@@ -168,8 +202,13 @@ jobs:
             badge_url="https://img.shields.io/badge/${LLM_BADGE_LABEL}-${new_inline}%20findings-red"
             summary="_See ${new_inline} inline review comment(s) below._"
           fi
-          final_body=$(printf '%s\n\n![](%s)\n\n%s\n\n%s' \
-            "${LLM_BANNER}" "${badge_url}" "${summary}" "${STATUS_MARKER}")
+          if [ -n "${cost_line}" ]; then
+            final_body=$(printf '%s\n\n![](%s)\n\n%s  \n%s\n\n%s' \
+              "${LLM_BANNER}" "${badge_url}" "${summary}" "${cost_line}" "${STATUS_MARKER}")
+          else
+            final_body=$(printf '%s\n\n![](%s)\n\n%s\n\n%s' \
+              "${LLM_BANNER}" "${badge_url}" "${summary}" "${STATUS_MARKER}")
+          fi
           jq -n --arg body "$final_body" '{body: $body}' |
             gh api -X PATCH "/repos/${REPO}/issues/comments/${STATUS_ID}" --input - >/dev/null
 
@@ -183,6 +222,10 @@ jobs:
       LLM_BANNER: "## GPT-5.5"
       LLM_BADGE_LABEL: "GPT--5.5"
       STATUS_MARKER: "<!-- mumei-review-status:gpt-5.5 -->"
+      # Per-1M-token prices in USD (OpenAI platform list, May 2026).
+      INPUT_PRICE_PER_M: "5"
+      OUTPUT_PRICE_PER_M: "30"
+      JOB_DISPLAY_NAME: "review (gpt-5.5)"
       REPO: ${{ github.repository }}
       PR: ${{ github.event.pull_request.number }}
     steps:
