@@ -41,9 +41,18 @@ schema=$(cat "${script_dir}/schema.json")
 # Safely truncate $1 to at most $2 bytes, stripping any partial UTF-8 sequence
 # at the boundary so we never embed an invalid byte in the JSON payload.
 # `head -c` cuts at the byte boundary; `iconv //IGNORE` discards the trailing
-# malformed code point (if any) without affecting valid prefix bytes.
+# malformed code point. iconv still exits 1 on a truncated tail multibyte
+# sequence even with //IGNORE (verified on GNU libiconv 2.39), so we
+# swallow the exit code — the truncated bytes are already absent from
+# stdout by then.
 mumei_truncate_bytes() {
-  printf '%s' "$1" | head -c "$2" | iconv -f UTF-8 -t UTF-8//IGNORE
+  printf '%s' "$1" | head -c "$2" | { iconv -f UTF-8 -t UTF-8//IGNORE 2>/dev/null || true; }
+}
+
+# Byte length of $1. Bash's `${#var}` counts characters under UTF-8 locales,
+# which would let a multibyte body sneak past a byte-denominated cap.
+mumei_byte_len() {
+  printf '%s' "$1" | wc -c | tr -d ' \n'
 }
 
 # HTTP POST to a provider endpoint with retries on transient failures and a
@@ -80,7 +89,7 @@ pr_title=$(printf '%s' "${pr_json}" | jq -r '.title')
 pr_body=$(printf '%s' "${pr_json}" | jq -r '.body // ""')
 
 # Truncate body to 8k bytes to keep prompt size predictable.
-if [ "${#pr_body}" -gt 8000 ]; then
+if [ "$(mumei_byte_len "${pr_body}")" -gt 8000 ]; then
   pr_body="$(mumei_truncate_bytes "${pr_body}" 8000)…(truncated)"
 fi
 
@@ -89,7 +98,8 @@ fi
 project_context=""
 if [ -f CLAUDE.md ]; then
   # head -c may cut mid-codepoint; iconv //IGNORE strips the partial tail.
-  project_context=$(head -c 4000 CLAUDE.md | iconv -f UTF-8 -t UTF-8//IGNORE)
+  # See mumei_truncate_bytes for why the exit code must be tolerated.
+  project_context=$(head -c 4000 CLAUDE.md | { iconv -f UTF-8 -t UTF-8//IGNORE 2>/dev/null || true; })
 fi
 
 # The full PR diff, capped at 200k bytes to fit both providers' context
@@ -106,7 +116,7 @@ if [ -z "${diff_raw}" ]; then
   exit 1
 fi
 diff_truncated=false
-if [ "${#diff_raw}" -gt 200000 ]; then
+if [ "$(mumei_byte_len "${diff_raw}")" -gt 200000 ]; then
   diff_raw=$(mumei_truncate_bytes "${diff_raw}" 200000)
   diff_truncated=true
 fi

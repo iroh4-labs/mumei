@@ -225,8 +225,14 @@ body_file=$(mktemp)
 # so the PR timeline stays clean across pushes. Falls back to POST on the
 # first run. Paginate so older PRs with > 30 comments still match.
 # ---------------------------------------------------------------------------
-existing_id=$(gh api --paginate "/repos/${REPO}/issues/${PR}/comments" \
-  --jq "[.[] | select(.body | contains(\"${STATUS_MARKER}\")) | .id] | last // empty")
+# `gh api --paginate` concatenates per-page JSON; `--jq` would apply to each
+# page separately and emit a newline-joined id list across pages. Slurp the
+# combined stream with `jq -s` and flatten before filtering so the result is
+# a single id (or empty).
+existing_id=$(gh api --paginate "/repos/${REPO}/issues/${PR}/comments" |
+  jq -s -r --arg marker "${STATUS_MARKER}" '
+    add // [] | [.[] | select(.body | contains($marker)) | .id] | last // empty
+  ')
 
 payload=$(jq -n --rawfile body "${body_file}" '{body: $body}')
 if [ -n "${existing_id}" ]; then
@@ -250,10 +256,12 @@ fi
 # ---------------------------------------------------------------------------
 INLINE_MARKER="<!-- ai-review-inline -->"
 
-# Delete inline comments from prior runs by INLINE_MARKER. Use --paginate so
-# busy PRs (>30 comments) still surface every match.
-prior_inline=$(gh api --paginate "/repos/${REPO}/pulls/${PR}/comments" \
-  --jq "[.[] | select(.body | contains(\"${INLINE_MARKER}\")) | .id] | join(\" \")")
+# Delete inline comments from prior runs by INLINE_MARKER. Same paginate
+# caveat as the status comment fetch above — slurp + flatten before filtering.
+prior_inline=$(gh api --paginate "/repos/${REPO}/pulls/${PR}/comments" |
+  jq -s -r --arg marker "${INLINE_MARKER}" '
+    add // [] | [.[] | select(.body | contains($marker)) | .id] | join(" ")
+  ')
 if [ -n "${prior_inline}" ]; then
   prior_count=0
   for cid in ${prior_inline}; do
