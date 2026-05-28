@@ -83,7 +83,13 @@ clusters=$(printf '%s' "${findings_flat}" | jq --argjson n "${provider_count}" '
       findings: .,
       tier: (
         ([.[]._provider] | unique | length) as $unique_providers
-        | if $unique_providers >= $n then "consensus"
+        # Consensus requires both >= total provider count AND at least 2
+        # providers actually participating. Without the >=2 floor, a
+        # degraded run where only one reviewer artifact uploaded would
+        # promote every single-provider finding to consensus (the only
+        # provider trivially satisfies "all flagged"). Caught by GPT-5.5
+        # in its own review of this file.
+        | if ($unique_providers >= $n and $n >= 2) then "consensus"
           elif $unique_providers >= 2 then "majority"
           else "individual"
           end
