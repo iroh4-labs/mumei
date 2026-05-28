@@ -45,8 +45,14 @@ schema=$(cat "${script_dir}/schema.json")
 # sequence even with //IGNORE (verified on GNU libiconv 2.39), so we
 # swallow the exit code — the truncated bytes are already absent from
 # stdout by then.
+#
+# The outer `|| true` is also load-bearing: with `set -euo pipefail`, the
+# bash builtin `printf` is killed by SIGPIPE when `head -c` closes the
+# pipe after reading the byte limit. That sets PIPESTATUS[0]=141 and the
+# whole assignment exits non-zero. Verified to reproduce on ~1MB inputs.
 mumei_truncate_bytes() {
-  printf '%s' "$1" | head -c "$2" | { iconv -f UTF-8 -t UTF-8//IGNORE 2>/dev/null || true; }
+  { printf '%s' "$1" 2>/dev/null | head -c "$2" |
+    { iconv -f UTF-8 -t UTF-8//IGNORE 2>/dev/null || true; }; } || true
 }
 
 # Byte length of $1. Bash's `${#var}` counts characters under UTF-8 locales,
@@ -76,6 +82,13 @@ mumei_http_post() {
   if [ "${status}" -ne 0 ]; then
     echo "[ai-review] WARN: curl exit ${status} for ${url}" >&2
   fi
+  # Intentionally NOT returning ${status}: caller uses `raw=$(mumei_http_post …)`
+  # under `set -e`, and a non-zero return would abort the script before the
+  # downstream fail-closed validation can write meta.json with status=error.
+  # The body of an HTTP 4xx/5xx response will simply lack `.output[]` /
+  # `.choices[]`, so findings_text comes out empty and the existing
+  # validation block sets status=error and exits 1. Surfacing the curl
+  # exit here would degrade observability, not improve it.
   printf '%s' "${response}"
 }
 
