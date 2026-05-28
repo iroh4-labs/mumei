@@ -85,11 +85,19 @@ mumei_http_post() {
   # Intentionally NOT returning ${status}: caller uses `raw=$(mumei_http_post …)`
   # under `set -e`, and a non-zero return would abort the script before the
   # downstream fail-closed validation can write meta.json with status=error.
-  # The body of an HTTP 4xx/5xx response will simply lack `.output[]` /
-  # `.choices[]`, so findings_text comes out empty and the existing
-  # validation block sets status=error and exits 1. Surfacing the curl
-  # exit here would degrade observability, not improve it.
+  # The empty / non-JSON body case is handled by mumei_jq_or_default below.
   printf '%s' "${response}"
+}
+
+# Run jq against a body that may be empty or non-JSON (DNS/TLS failure, HTML
+# error page, etc.) and substitute a default on any parse error. Without this,
+# `prompt_tokens=$(printf '%s' "" | jq -r '...')` would leave the variable
+# empty and the subsequent `jq --argjson p ""` would crash before meta.json
+# could be written — defeating the fail-closed-with-diagnostics path.
+mumei_jq_or_default() {
+  local body="$1" filter="$2" default="$3" out
+  out=$(printf '%s' "${body}" | jq -r "${filter}" 2>/dev/null || true)
+  printf '%s' "${out:-${default}}"
 }
 
 # ---------------------------------------------------------------------------
@@ -183,10 +191,10 @@ gemini)
     "https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${GEMINI_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "${request}")
-  findings_text=$(printf '%s' "${raw}" | jq -r '.candidates[0].content.parts[0].text // empty')
-  prompt_tokens=$(printf '%s' "${raw}" | jq -r '.usageMetadata.promptTokenCount // 0')
-  completion_tokens=$(printf '%s' "${raw}" | jq -r '.usageMetadata.candidatesTokenCount // 0')
-  cached_tokens=$(printf '%s' "${raw}" | jq -r '.usageMetadata.cachedContentTokenCount // 0')
+  findings_text=$(mumei_jq_or_default "${raw}" '.candidates[0].content.parts[0].text // empty' "")
+  prompt_tokens=$(mumei_jq_or_default "${raw}" '.usageMetadata.promptTokenCount // 0' "0")
+  completion_tokens=$(mumei_jq_or_default "${raw}" '.usageMetadata.candidatesTokenCount // 0' "0")
+  cached_tokens=$(mumei_jq_or_default "${raw}" '.usageMetadata.cachedContentTokenCount // 0' "0")
   ;;
 
 openai)
@@ -241,7 +249,7 @@ openai)
   # `output_parsed` (already deserialised) or as `output[].content[].text`
   # for type=output_text. We accept either to stay robust to API surface
   # changes between preview releases.
-  findings_text=$(printf '%s' "${raw}" | jq -r '
+  findings_text=$(mumei_jq_or_default "${raw}" '
     if .output_parsed then (.output_parsed | tojson)
     elif (.output // [] | length) > 0 then
       [.output[]?
@@ -249,10 +257,10 @@ openai)
        | .content[]?
        | select(.type == "output_text")
        | .text] | join("")
-    else empty end // empty')
-  prompt_tokens=$(printf '%s' "${raw}" | jq -r '.usage.input_tokens // 0')
-  completion_tokens=$(printf '%s' "${raw}" | jq -r '.usage.output_tokens // 0')
-  cached_tokens=$(printf '%s' "${raw}" | jq -r '.usage.input_tokens_details.cached_tokens // 0')
+    else empty end // empty' "")
+  prompt_tokens=$(mumei_jq_or_default "${raw}" '.usage.input_tokens // 0' "0")
+  completion_tokens=$(mumei_jq_or_default "${raw}" '.usage.output_tokens // 0' "0")
+  cached_tokens=$(mumei_jq_or_default "${raw}" '.usage.input_tokens_details.cached_tokens // 0' "0")
   ;;
 
 *)
