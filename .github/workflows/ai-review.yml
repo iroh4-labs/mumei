@@ -47,17 +47,20 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
+  pull-requests: write # also covers issue-comments on PRs (sticky status)
 
 concurrency:
   group: ai-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Skip fork PRs: GitHub does not pass repo secrets to workflows triggered by
+# pull_request from forks, so GEMINI_API_KEY / OPENAI_KEY would be empty and
+# every run would fail with HTTP 401. Maintainers can re-run after merging
+# the fork into a same-repo branch if a review is needed.
 jobs:
   gemini:
     name: review (gemini-3.1-pro)
-    if: ${{ github.event.sender.type != 'Bot' }}
+    if: ${{ github.event.sender.type != 'Bot' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -102,7 +105,7 @@ jobs:
 
   openai:
     name: review (gpt-5.5)
-    if: ${{ github.event.sender.type != 'Bot' }}
+    if: ${{ github.event.sender.type != 'Bot' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -138,7 +141,7 @@ jobs:
   aggregate:
     name: aggregate review
     needs: [gemini, openai]
-    if: ${{ always() && github.event.sender.type != 'Bot' }}
+    if: ${{ always() && github.event.sender.type != 'Bot' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:

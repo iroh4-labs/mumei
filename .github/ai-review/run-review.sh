@@ -111,6 +111,11 @@ if [ "${#diff_raw}" -gt 200000 ]; then
   diff_truncated=true
 fi
 
+# Order: project_context (stable per repo) first, then variable PR meta and
+# diff. Both Gemini and OpenAI cache the longest matching prefix of the
+# request; putting the stable bytes up front maximises the cache hit rate
+# across runs on the same repo. system_prompt is also stable but is sent in
+# `systemInstruction` / `instructions` and benefits from caching too.
 user_prompt=$(jq -n \
   --arg repo "${REPO}" \
   --arg pr "${PR}" \
@@ -120,13 +125,13 @@ user_prompt=$(jq -n \
   --arg diff "${diff_raw}" \
   --argjson trunc "${diff_truncated}" \
   '
+  (if $ctx == "" then "" else "## Project conventions (from CLAUDE.md)\n\n" + $ctx + "\n\n" end) +
   "# Pull request\n" +
   "Repository: " + $repo + "\n" +
   "PR: #" + $pr + "\n" +
   "Title: " + $title + "\n\n" +
   "## PR description\n\n" + $body + "\n\n" +
-  (if $ctx == "" then "" else "## Project conventions (from CLAUDE.md)\n\n" + $ctx + "\n\n" end) +
-  (if $trunc then "## Diff (truncated to 200k chars — review only what is visible)\n\n" else "## Diff\n\n" end) +
+  (if $trunc then "## Diff (truncated to 200k bytes — review only what is visible)\n\n" else "## Diff\n\n" end) +
   "```diff\n" + $diff + "\n```\n\n" +
   "Review the diff above. Return only JSON matching the schema."')
 
