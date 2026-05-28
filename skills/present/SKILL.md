@@ -1,6 +1,6 @@
 ---
 name: present
-description: Render a one-line reliability summary of the active mumei feature (or a specified one). Prints `<feature> | pass^3: <value-or-N/A> (n=<n_trials>, window=10, k=3)` to stdout — exactly one line, no headers. Triggered only by explicit user invocation `/mumei:present` (no args reads `.mumei/current`) or `/mumei:present <feature>`. Outputs `no active feature` to stdout (not stderr) and exits 0 when `.mumei/current` is missing or points to a non-existent feature. Read-only via hooks/_lib/reliability.sh.
+description: "Render a one-line reliability summary of the active mumei feature (or a specified one). Prints `<feature> | pass^3: <value-or-N/A> (n=<n_trials>, window=10, k=3)` to stdout — exactly one line, no headers. Triggered only by explicit user invocation `/mumei:present` (no args reads `.mumei/current`) or `/mumei:present <feature>`. Outputs `no active feature` to stdout (not stderr) and exits 0 when `.mumei/current` is missing or points to a non-existent feature. Read-only via hooks/_lib/reliability.sh."
 allowed-tools: [Bash]
 disable-model-invocation: true
 argument-hint: "[feature]"

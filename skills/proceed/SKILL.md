@@ -1,8 +1,8 @@
 ---
 name: proceed
-description: The mumei orchestrator. For new features, presents a vehicle picker — `spec` (full SDD workflow: clarification → requirements → design → tasks each auto-reviewed up to 3 iterations → single user approval → Wave-by-Wave implementation → 4-stage review) or `plan` (Claude Code plan-mode wrapper: hand off to plan mode, capture via hook, run /mumei:examine at the end). Resumes existing features automatically by detecting which vehicle's state.json exists. Triggers when the user invokes /mumei:proceed <feature> or naturally asks to "plan", "spec", "design", or "implement" a feature with mumei. Always renders body content (User Story prose, AC bodies after EARS keywords, Assumptions, Open Questions, design narratives, task descriptions, Wave goals/verifies) in the user's conversation language; English section headings, EARS keywords, REQ trace IDs, and [CONFIRMED]/[ASSUMPTION] annotations remain literal.
+description: 'The mumei orchestrator. For new features, presents a vehicle picker — `spec` (full SDD workflow: clarification → requirements → design → tasks each auto-reviewed up to 3 iterations → single user approval → Wave-by-Wave implementation → 4-stage review) or `plan` (Claude Code plan-mode wrapper: hand off to plan mode, capture via hook, run /mumei:examine at the end). Resumes existing features automatically by detecting which vehicle''s state.json exists. Triggers when the user invokes /mumei:proceed <feature> or naturally asks to "plan", "spec", "design", or "implement" a feature with mumei. Always renders body content (User Story prose, AC bodies after EARS keywords, Assumptions, Open Questions, design narratives, task descriptions, Wave goals/verifies) in the user''s conversation language; English section headings, EARS keywords, REQ trace IDs, and [CONFIRMED]/[ASSUMPTION] annotations remain literal.'
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion]
-argument-hint: <feature-slug>
+argument-hint: "<feature-slug>"
 ---
 
 <!--

@@ -1,9 +1,9 @@
 ---
 name: assure
-description: Render a detailed reliability view of a mumei feature — pass^3 over the most recent 10 trials plus a table of the last 10 trial rows from reliability-log.jsonl. Triggered only by explicit user invocation `/mumei:assure <feature>`. Reads .mumei/specs/<feature>/reliability-log.jsonl or .mumei/plans/<feature>/reliability-log.jsonl via hooks/_lib/reliability.sh. Exits non-zero with `feature not found: <feature>` to stderr when the feature directory is absent. The k=3 / window=10 parameters are fixed.
+description: "Render a detailed reliability view of a mumei feature — pass^3 over the most recent 10 trials plus a table of the last 10 trial rows from reliability-log.jsonl. Triggered only by explicit user invocation `/mumei:assure <feature>`. Reads .mumei/specs/<feature>/reliability-log.jsonl or .mumei/plans/<feature>/reliability-log.jsonl via hooks/_lib/reliability.sh. Exits non-zero with `feature not found: <feature>` to stderr when the feature directory is absent. The k=3 / window=10 parameters are fixed."
 allowed-tools: [Bash]
 disable-model-invocation: true
-argument-hint: <feature>
+argument-hint: "<feature>"
 ---
 
 # Assure — detailed reliability view
