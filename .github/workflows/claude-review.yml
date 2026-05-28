@@ -11,12 +11,17 @@ name: claude-review
 # Do NOT also set ANTHROPIC_API_KEY: a static key takes precedence and would
 # bill the API account.
 #
-# DISABLED (manual-trigger only): PR-time auto-run was turning PASS too
-# early relative to other LLM reviewers (gemini-code-assist /
-# chatgpt-codex-connector / copilot), so it was muting real findings.
-# Kept on disk + manually invokable via `gh workflow run claude-review.yml`
-# so the harness wiring is preserved and can be re-enabled by reinstating
-# the pull_request trigger when the upstream rubric is tightened.
+# DISABLED: PR-time auto-run was turning PASS too early relative to other LLM
+# reviewers (gemini-code-assist / chatgpt-codex-connector / copilot), so it
+# was muting real findings. The workflow file is kept on disk for harness
+# wiring and so the OAuth secret / job topology can be re-enabled by a
+# one-line revert (restore the `pull_request` trigger below).
+#
+# Manual `gh workflow run claude-review.yml` will NOT work even though
+# `workflow_dispatch` is the active trigger: the called reusable workflow
+# (`review-reusable.yml`) has a Gate step that rejects any event other than
+# `pull_request`. The dispatch trigger is here only to keep the workflow
+# file syntactically valid (GitHub requires at least one `on:` event).
 
 on:
   workflow_dispatch:
