@@ -10,11 +10,16 @@ name: claude-review
 # (generate locally with `claude setup-token` and store as a repo secret).
 # Do NOT also set ANTHROPIC_API_KEY: a static key takes precedence and would
 # bill the API account.
+#
+# DISABLED (manual-trigger only): PR-time auto-run was turning PASS too
+# early relative to other LLM reviewers (gemini-code-assist /
+# chatgpt-codex-connector / copilot), so it was muting real findings.
+# Kept on disk + manually invokable via `gh workflow run claude-review.yml`
+# so the harness wiring is preserved and can be re-enabled by reinstating
+# the pull_request trigger when the upstream rubric is tightened.
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, ready_for_review, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -7,8 +7,11 @@
 # Strict YAML parsing is required: the Claude plugin validator silently
 # drops ALL frontmatter fields when YAML parsing fails (e.g. unquoted
 # colons in a description value), so a grep-based check is not enough.
-# python3 + PyYAML is pre-installed on ubuntu-latest CI runners and on
-# default macOS Python 3 environments.
+#
+# Dependencies: python3 + PyYAML. Neither is contractually guaranteed by
+# the runner images, so CI installs PyYAML explicitly (see ci.yml lint /
+# bats jobs); local contributors can install via `pip3 install pyyaml`.
+# `task doctor` verifies both are present.
 #
 # Source-of-truth for both pre-push and CI; both call this script.
 
