@@ -106,8 +106,8 @@ gemini)
         contents: [{ role: "user", parts: [{ text: $usr }] }],
         generationConfig: {
           temperature: 0.2,
-          response_mime_type: "application/json",
-          response_schema: $schema
+          responseMimeType: "application/json",
+          responseSchema: $schema
         }
       }')
   raw=$(curl -sS \
@@ -169,11 +169,17 @@ openai)
   ;;
 esac
 
+# Track per-call failure so we can exit non-zero at the end. Without this
+# we'd silently emit a synthetic PASS artifact and the aggregate job would
+# report green on a failed LLM call — fail-open behaviour that erodes
+# reviewer trust (GPT-5.5 self-review finding).
+exit_code=0
 if [ -z "${findings_text}" ] || [ "${findings_text}" = "null" ]; then
   echo "LLM returned empty response. Raw payload:" >&2
   printf '%s\n' "${raw}" | head -c 4000 >&2
   status="error"
-  printf '%s' '{"overall_assessment":"PASS","summary":"LLM call failed — see workflow log.","findings":[]}' >"${OUT_DIR}/findings.json"
+  printf '%s' '{"overall_assessment":"MAJOR_ISSUES","summary":"LLM call failed — see workflow log.","findings":[]}' >"${OUT_DIR}/findings.json"
+  exit_code=1
 else
   # Validate the LLM output parses as JSON and matches the schema's root shape.
   if printf '%s' "${findings_text}" | jq -e 'has("overall_assessment") and has("findings")' >/dev/null 2>&1; then
@@ -182,8 +188,9 @@ else
   else
     echo "LLM output did not match schema. Saving raw text for debugging." >&2
     printf '%s' "${findings_text}" | head -c 4000 >&2
-    printf '%s' '{"overall_assessment":"PASS","summary":"LLM returned malformed output — see workflow log.","findings":[]}' >"${OUT_DIR}/findings.json"
+    printf '%s' '{"overall_assessment":"MAJOR_ISSUES","summary":"LLM returned malformed output — see workflow log.","findings":[]}' >"${OUT_DIR}/findings.json"
     status="schema_error"
+    exit_code=1
   fi
 fi
 
@@ -213,3 +220,9 @@ jq -n \
   }' >"${OUT_DIR}/meta.json"
 
 echo "[ai-review] ${LLM_DISPLAY_NAME}: status=${status} prompt=${prompt_tokens} completion=${completion_tokens} cost=\$${cost_usd}"
+
+# Fail closed so a degraded LLM call surfaces as a failed CI check rather
+# than a silently-skipped review. The aggregate job still runs (it's
+# wrapped in `always()`) and will render an `⚠ ${status}` row in the
+# provider table, but the per-LLM check goes red.
+exit "${exit_code}"

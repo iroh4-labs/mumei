@@ -244,8 +244,8 @@ creates a topic branch in this repo.
      tags each cluster as **consensus** (both providers flagged),
      **majority** (most flagged — only when ≥3 providers
      configured), or **individual** (one provider only). The PR
-     gets a single sticky status comment (updated in place across
-     pushes via the `<!-- ai-review-status -->` marker) plus
+     gets a fresh status comment per push (timeline-friendly,
+     prior reviews stay visible for diffing across pushes) plus
      inline review comments for consensus / majority findings.
      Triage findings, push fix commits, and resolve threads before
      merging. Reviewer monitoring is the PR author's
