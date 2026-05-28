@@ -249,15 +249,23 @@ body_file=$(mktemp)
 } >"${body_file}"
 
 # ---------------------------------------------------------------------------
-# Post a fresh status comment per run (no in-place update). The marker is
-# kept in the body so a future iteration can switch to "update in place"
-# without changing the rendered output. Per-push history stays visible in
-# the PR timeline — useful for tracking how findings evolved across
-# pushes.
+# Sticky status comment: find the previous one by STATUS_MARKER and PATCH it
+# so the PR timeline stays clean across pushes. Falls back to POST on the
+# first run. Paginate so older PRs with > 30 comments still match.
 # ---------------------------------------------------------------------------
-new_id=$(jq -n --rawfile body "${body_file}" '{body: $body}' |
-  gh api -X POST "/repos/${REPO}/issues/${PR}/comments" --input - --jq '.id')
-echo "[ai-review] posted status comment ${new_id}"
+existing_id=$(gh api --paginate "/repos/${REPO}/issues/${PR}/comments" \
+  --jq "[.[] | select(.body | contains(\"${STATUS_MARKER}\")) | .id] | last // empty")
+
+payload=$(jq -n --rawfile body "${body_file}" '{body: $body}')
+if [ -n "${existing_id}" ]; then
+  printf '%s' "${payload}" |
+    gh api -X PATCH "/repos/${REPO}/issues/comments/${existing_id}" --input - --jq '.id' >/dev/null
+  echo "[ai-review] updated status comment ${existing_id}"
+else
+  new_id=$(printf '%s' "${payload}" |
+    gh api -X POST "/repos/${REPO}/issues/${PR}/comments" --input - --jq '.id')
+  echo "[ai-review] posted status comment ${new_id}"
+fi
 
 # ---------------------------------------------------------------------------
 # Post inline review comments. We only post for consensus + majority clusters
