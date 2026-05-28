@@ -1,0 +1,85 @@
+name: pr-agent-review
+
+# Two parallel Qodo PR-Agent (open-source, Apache-2.0, v0.35.0) reviews:
+# one with Gemini 3.1 Pro, one with GPT-5.5. Each posts an independent
+# AI perspective on every PR — replacing the previous Codex /
+# Copilot / Gemini-Code-Assist trio (all disabled by the repo owner
+# via GitHub UI / account settings; `claude-review.yml` is also
+# disabled, see its file header).
+#
+# Why dual-LLM rather than fallback? pr-agent's `fallback_models` is
+# triggered only when the primary errors out — it never runs both in
+# parallel. Running pr-agent twice (one job per provider) gives genuine
+# two-perspective review at the cost of two LiteLLM calls per PR.
+#
+# Cost model (May 2026 list prices):
+#   - Gemini 3.1 Pro Preview: $2  / 1M input, $12 / 1M output
+#   - GPT-5.5:                $5  / 1M input, $30 / 1M output
+# Typical mumei PR (~3-10k diff tokens) → low-single-digit USD/month
+# on personal cadence. Cost is the maintainer's responsibility, billed
+# to the API keys stored as repo secrets.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   - GEMINI_API_KEY  (Google AI Studio)
+#   - OPENAI_KEY      (OpenAI Platform)
+#
+# Action pinned to v0.35.0 (commit 0bd56c0) per CodeQL's "pinned
+# 3rd-party action" rule. Bump by changing the SHA + tag comment.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-agent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gemini:
+    name: review (gemini-3.1-pro)
+    # Skip when the PR was opened by a bot (Dependabot etc.) so we
+    # don't burn API quota on mechanical bumps.
+    if: ${{ github.event.sender.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: PR-Agent (Gemini 3.1 Pro)
+        uses: the-pr-agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7 # v0.35.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          config.model: gemini/gemini-3.1-pro-preview
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_improve: "true"
+          # Identify which LLM authored the review when two run on the
+          # same PR (both post as github-actions[bot]).
+          pr_reviewer.extra_instructions: |
+            Begin your review summary with the line `## 🔷 Gemini 3.1 Pro` so the reader can distinguish this review from the GPT-5.5 review running in parallel.
+          pr_code_suggestions.extra_instructions: |
+            Begin your suggestions summary with the line `## 🔷 Gemini 3.1 Pro — code suggestions`.
+
+  openai:
+    name: review (gpt-5.5)
+    if: ${{ github.event.sender.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: PR-Agent (GPT-5.5)
+        uses: the-pr-agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7 # v0.35.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          config.model: gpt-5.5
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_improve: "true"
+          pr_reviewer.extra_instructions: |
+            Begin your review summary with the line `## 🟢 GPT-5.5` so the reader can distinguish this review from the Gemini 3.1 Pro review running in parallel.
+          pr_code_suggestions.extra_instructions: |
+            Begin your suggestions summary with the line `## 🟢 GPT-5.5 — code suggestions`.
