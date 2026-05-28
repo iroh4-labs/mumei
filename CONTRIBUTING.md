@@ -235,18 +235,39 @@ creates a topic branch in this repo.
    - `gh pr checks <N>` — CI status snapshot
    - **GitHub PR UI** — review findings from `pr-agent-review.yml`,
      which runs Qodo PR-Agent (Apache-2.0 OSS, pinned to v0.35.0)
-     twice per PR — once with **Gemini 3.1 Pro** and once with
-     **GPT-5.5** — so every push receives two independent AI reviews
-     plus inline code suggestions from each. Reviews self-identify
-     with `## 🔷 Gemini 3.1 Pro` / `## 🟢 GPT-5.5` headers; both post
-     as `github-actions[bot]`. Triage findings, push fix commits, and
-     resolve threads before merging. Reviewer monitoring is the PR
-     author's responsibility; an AI agent driving the PR watches CI
-     only. (The previous Codex / Gemini Code Assist / Copilot
-     auto-reviewers are turned off at the GitHub-App / account level
-     by the repo owner.)
+     twice per PR (sequentially) — once with **Gemini 3.1 Pro** and
+     once with **GPT-5.5** — so every push receives two independent
+     AI reviews plus inline code suggestions from each. Each LLM
+     job posts a sticky status comment (in-place updated across
+     pushes via a `<!-- mumei-review-status:* -->` marker) showing
+     a shields.io badge — `reviewing` (blue) while running,
+     `PASS` (green) when zero inline findings, or `N findings`
+     (red) otherwise. New non-status comments are prepended with
+     a `## Gemini 3.1 Pro` / `## GPT-5.5` heading so readers can
+     tell which LLM authored each block. A PR with both status
+     badges showing `PASS` is the maintainer-defined merge-ready
+     signal. Triage findings, push fix commits, and resolve
+     threads before merging. Reviewer monitoring is the PR
+     author's responsibility; an AI agent driving the PR watches
+     CI only. (The previous Codex / Gemini Code Assist / Copilot
+     auto-reviewers are turned off at the GitHub-App / account
+     level by the repo owner.)
 9. Self-merge via squash or rebase (linear history; merge commits should
    be avoided). No required approval count.
+
+### `pr-agent-review.yml` one-time setup
+
+Two repo secrets are required before `pr-agent-review.yml` will run
+successfully (`GITHUB_TOKEN` is provided automatically):
+
+| Secret name      | Value                                                          |
+| ---------------- | -------------------------------------------------------------- |
+| `GEMINI_API_KEY` | Google AI Studio API key (https://aistudio.google.com/apikey)  |
+| `OPENAI_KEY`     | OpenAI Platform API key (https://platform.openai.com/api-keys) |
+
+Add them via `Settings → Secrets and variables → Actions → New repository secret`.
+Until both are set, the corresponding job fails at the pr-agent step.
+Other CI jobs are independent.
 
 ## Spec-driven changes
 

@@ -1,30 +1,44 @@
 name: pr-agent-review
 
-# Two parallel Qodo PR-Agent (open-source, Apache-2.0, v0.35.0) reviews:
-# one with Gemini 3.1 Pro, one with GPT-5.5. Each posts an independent
-# AI perspective on every PR — replacing the previous Codex /
-# Copilot / Gemini-Code-Assist trio (all disabled by the repo owner
-# via GitHub UI / account settings; `claude-review.yml` is also
-# disabled, see its file header).
+# Two sequential Qodo PR-Agent (open-source, Apache-2.0, v0.35.0)
+# reviews — Gemini 3.1 Pro first, then GPT-5.5 — so each PR receives
+# two independent AI perspectives. Replaces the previous Codex /
+# Copilot / Gemini-Code-Assist trio (turned off at the GitHub-App /
+# account level by the repo owner). `claude-review.yml` remains
+# disabled (see its file header).
 #
-# Why dual-LLM rather than fallback? pr-agent's `fallback_models` is
-# triggered only when the primary errors out — it never runs both in
-# parallel. Running pr-agent twice (one job per provider) gives genuine
-# two-perspective review at the cost of two LiteLLM calls per PR.
+# UI design — per-LLM status comment with shields.io badge:
+#   1. Pre-step finds (or creates) a sticky status comment via a
+#      `<!-- mumei-review-status:<llm> -->` marker. It is set to a
+#      blue "reviewing" badge.
+#   2. pr-agent runs (auto_review + auto_improve, auto_describe off).
+#   3. Post-step:
+#      - Counts new inline review comments authored in this run.
+#      - Updates the status comment in place:
+#          * 0 inline findings  → green PASS badge + "no issues" line
+#          * N inline findings  → red "N findings" badge + "see below"
+#      - Prepends an `## <llm name>` heading to every other new
+#        github-actions[bot] comment so readers can tell which LLM
+#        authored each block of pr-agent output.
 #
-# Cost model (May 2026 list prices):
-#   - Gemini 3.1 Pro Preview: $2  / 1M input, $12 / 1M output
-#   - GPT-5.5:                $5  / 1M input, $30 / 1M output
-# Typical mumei PR (~3-10k diff tokens) → low-single-digit USD/month
-# on personal cadence. Cost is the maintainer's responsibility, billed
-# to the API keys stored as repo secrets.
+#   PR with both `[Gemini 3.1 Pro · PASS]` and `[GPT-5.5 · PASS]`
+#   badges = maintainer-defined "merge ready" signal.
+#
+# Why sequential? pr-agent's persistent_comment markers + `<!-- {SHA} -->`
+# trailer are not provider-scoped, so two parallel runs could race on
+# the same comment. Sequential also lets each job's post-step
+# attribute "new comments since pre-snapshot" unambiguously to its
+# own provider.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   - GEMINI_API_KEY  (Google AI Studio)
 #   - OPENAI_KEY      (OpenAI Platform)
+# `GITHUB_TOKEN` is provided automatically.
 #
-# Action pinned to v0.35.0 (commit 0bd56c0) per CodeQL's "pinned
-# 3rd-party action" rule. Bump by changing the SHA + tag comment.
+# Cost model (May 2026 list):
+#   - Gemini 3.1 Pro Preview: $2  in / $12 out per 1M tokens
+#   - GPT-5.5:                $5  in / $30 out per 1M tokens
+# Per-PR cost on mumei-typical diffs: ~$0.20-$0.60 combined.
 
 on:
   pull_request:
@@ -42,12 +56,49 @@ concurrency:
 jobs:
   gemini:
     name: review (gemini-3.1-pro)
-    # Skip when the PR was opened by a bot (Dependabot etc.) so we
-    # don't burn API quota on mechanical bumps.
     if: ${{ github.event.sender.type != 'Bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      LLM_BANNER: "## Gemini 3.1 Pro"
+      LLM_BADGE_LABEL: "Gemini%203.1%20Pro"
+      STATUS_MARKER: "<!-- mumei-review-status:gemini-3.1-pro -->"
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
     steps:
+      - name: Snapshot + post "reviewing" status
+        id: pre
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          # Snapshot existing IDs so the post-step can isolate
+          # comments created by this run.
+          issue_ids=$(gh api "/repos/${REPO}/issues/${PR}/comments" --jq '[.[].id] | join(",")')
+          review_ids=$(gh api "/repos/${REPO}/pulls/${PR}/comments" --jq '[.[].id] | join(",")')
+          {
+            printf 'issue_ids_before=%s\n' "${issue_ids}"
+            printf 'review_ids_before=%s\n' "${review_ids}"
+          } >>"${GITHUB_OUTPUT}"
+
+          # Build the "reviewing" body.
+          body=$(printf '%s\n\n![](https://img.shields.io/badge/%s-reviewing-blue)\n\n_Review in progress…_\n\n%s' \
+            "${LLM_BANNER}" "${LLM_BADGE_LABEL}" "${STATUS_MARKER}")
+
+          # Find existing status comment by marker.
+          existing_id=$(gh api "/repos/${REPO}/issues/${PR}/comments" \
+            --jq ".[] | select(.body | contains(\"${STATUS_MARKER}\")) | .id" | head -1)
+
+          if [ -n "$existing_id" ]; then
+            jq -n --arg body "$body" '{body: $body}' |
+              gh api -X PATCH "/repos/${REPO}/issues/comments/${existing_id}" --input - >/dev/null
+            printf 'status_id=%s\n' "${existing_id}" >>"${GITHUB_OUTPUT}"
+          else
+            new_id=$(jq -n --arg body "$body" '{body: $body}' |
+              gh api -X POST "/repos/${REPO}/issues/${PR}/comments" --input - --jq '.id')
+            printf 'status_id=%s\n' "${new_id}" >>"${GITHUB_OUTPUT}"
+          fi
+
       - name: PR-Agent (Gemini 3.1 Pro)
         uses: the-pr-agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7 # v0.35.0
         env:
@@ -57,26 +108,113 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "true"
-          # pr-agent's internal pr_actions allowlist defaults to
-          # ["opened", "reopened", "ready_for_review", "review_requested"]
-          # — note the absence of "synchronize". Without overriding this,
-          # pr-agent exits with "Skipping action: synchronize" on every
-          # push and never re-reviews. Adding synchronize gives the
-          # behaviour the workflow's `on:` block already wires for.
+          # pr-agent's default pr_actions allowlist excludes
+          # "synchronize" — without this override, every push is
+          # silently skipped.
           github_action_config.pr_actions: '["opened", "synchronize", "reopened", "ready_for_review"]'
-          # Identify which LLM authored the review when two run on the
-          # same PR (both post as github-actions[bot]).
-          pr_reviewer.extra_instructions: |
-            Begin your review summary with the line `## 🔷 Gemini 3.1 Pro` so the reader can distinguish this review from the GPT-5.5 review running in parallel.
-          pr_code_suggestions.extra_instructions: |
-            Begin your suggestions summary with the line `## 🔷 Gemini 3.1 Pro — code suggestions`.
+          # persistent_comment off so the OpenAI job cannot overwrite
+          # this review when both share the `<!-- SHA -->` marker.
+          pr_reviewer.persistent_comment: "false"
+          pr_code_suggestions.persistent_comment: "false"
+
+      - name: Banner + finalize status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATUS_ID: ${{ steps.pre.outputs.status_id }}
+          ISSUE_IDS_BEFORE: ${{ steps.pre.outputs.issue_ids_before }}
+          REVIEW_IDS_BEFORE: ${{ steps.pre.outputs.review_ids_before }}
+        run: |
+          set -u
+          # Prepend LLM banner to every NEW issue comment posted by
+          # github-actions[bot] in this run (skipping the status
+          # comment itself, which already starts with the banner).
+          gh api "/repos/${REPO}/issues/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .id' |
+            while read -r id; do
+              case ",${ISSUE_IDS_BEFORE}," in
+                *",${id},"*) continue ;;
+              esac
+              [ "${id}" = "${STATUS_ID}" ] && continue
+              body=$(gh api "/repos/${REPO}/issues/comments/${id}" --jq '.body')
+              case "$body" in
+                "${LLM_BANNER}"*) continue ;;
+              esac
+              new_body=$(printf '%s\n\n---\n\n%s' "${LLM_BANNER}" "$body")
+              jq -n --arg body "$new_body" '{body: $body}' |
+                gh api -X PATCH "/repos/${REPO}/issues/comments/${id}" --input - >/dev/null
+            done
+
+          # Count new inline review comments (= line-level pr-agent
+          # findings from auto_improve).
+          new_inline=$(gh api "/repos/${REPO}/pulls/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .id' |
+            {
+              count=0
+              while read -r id; do
+                case ",${REVIEW_IDS_BEFORE}," in
+                  *",${id},"*) continue ;;
+                esac
+                count=$((count + 1))
+              done
+              printf '%s' "$count"
+            })
+
+          # Compose final status badge + summary line.
+          if [ "${new_inline}" -eq 0 ]; then
+            badge_url="https://img.shields.io/badge/${LLM_BADGE_LABEL}-PASS-brightgreen"
+            summary="_✓ No inline findings._"
+          else
+            badge_url="https://img.shields.io/badge/${LLM_BADGE_LABEL}-${new_inline}%20findings-red"
+            summary="_See ${new_inline} inline review comment(s) below._"
+          fi
+          final_body=$(printf '%s\n\n![](%s)\n\n%s\n\n%s' \
+            "${LLM_BANNER}" "${badge_url}" "${summary}" "${STATUS_MARKER}")
+          jq -n --arg body "$final_body" '{body: $body}' |
+            gh api -X PATCH "/repos/${REPO}/issues/comments/${STATUS_ID}" --input - >/dev/null
 
   openai:
     name: review (gpt-5.5)
-    if: ${{ github.event.sender.type != 'Bot' }}
+    needs: gemini
+    if: ${{ always() && github.event.sender.type != 'Bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      LLM_BANNER: "## GPT-5.5"
+      LLM_BADGE_LABEL: "GPT--5.5"
+      STATUS_MARKER: "<!-- mumei-review-status:gpt-5.5 -->"
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
     steps:
+      - name: Snapshot + post "reviewing" status
+        id: pre
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          issue_ids=$(gh api "/repos/${REPO}/issues/${PR}/comments" --jq '[.[].id] | join(",")')
+          review_ids=$(gh api "/repos/${REPO}/pulls/${PR}/comments" --jq '[.[].id] | join(",")')
+          {
+            printf 'issue_ids_before=%s\n' "${issue_ids}"
+            printf 'review_ids_before=%s\n' "${review_ids}"
+          } >>"${GITHUB_OUTPUT}"
+
+          body=$(printf '%s\n\n![](https://img.shields.io/badge/%s-reviewing-blue)\n\n_Review in progress…_\n\n%s' \
+            "${LLM_BANNER}" "${LLM_BADGE_LABEL}" "${STATUS_MARKER}")
+
+          existing_id=$(gh api "/repos/${REPO}/issues/${PR}/comments" \
+            --jq ".[] | select(.body | contains(\"${STATUS_MARKER}\")) | .id" | head -1)
+
+          if [ -n "$existing_id" ]; then
+            jq -n --arg body "$body" '{body: $body}' |
+              gh api -X PATCH "/repos/${REPO}/issues/comments/${existing_id}" --input - >/dev/null
+            printf 'status_id=%s\n' "${existing_id}" >>"${GITHUB_OUTPUT}"
+          else
+            new_id=$(jq -n --arg body "$body" '{body: $body}' |
+              gh api -X POST "/repos/${REPO}/issues/${PR}/comments" --input - --jq '.id')
+            printf 'status_id=%s\n' "${new_id}" >>"${GITHUB_OUTPUT}"
+          fi
+
       - name: PR-Agent (GPT-5.5)
         uses: the-pr-agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7 # v0.35.0
         env:
@@ -86,14 +224,56 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "true"
-          # pr-agent's internal pr_actions allowlist defaults to
-          # ["opened", "reopened", "ready_for_review", "review_requested"]
-          # — note the absence of "synchronize". Without overriding this,
-          # pr-agent exits with "Skipping action: synchronize" on every
-          # push and never re-reviews. Adding synchronize gives the
-          # behaviour the workflow's `on:` block already wires for.
           github_action_config.pr_actions: '["opened", "synchronize", "reopened", "ready_for_review"]'
-          pr_reviewer.extra_instructions: |
-            Begin your review summary with the line `## 🟢 GPT-5.5` so the reader can distinguish this review from the Gemini 3.1 Pro review running in parallel.
-          pr_code_suggestions.extra_instructions: |
-            Begin your suggestions summary with the line `## 🟢 GPT-5.5 — code suggestions`.
+          pr_reviewer.persistent_comment: "false"
+          pr_code_suggestions.persistent_comment: "false"
+
+      - name: Banner + finalize status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATUS_ID: ${{ steps.pre.outputs.status_id }}
+          ISSUE_IDS_BEFORE: ${{ steps.pre.outputs.issue_ids_before }}
+          REVIEW_IDS_BEFORE: ${{ steps.pre.outputs.review_ids_before }}
+        run: |
+          set -u
+          gh api "/repos/${REPO}/issues/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .id' |
+            while read -r id; do
+              case ",${ISSUE_IDS_BEFORE}," in
+                *",${id},"*) continue ;;
+              esac
+              [ "${id}" = "${STATUS_ID}" ] && continue
+              body=$(gh api "/repos/${REPO}/issues/comments/${id}" --jq '.body')
+              case "$body" in
+                "${LLM_BANNER}"*) continue ;;
+              esac
+              new_body=$(printf '%s\n\n---\n\n%s' "${LLM_BANNER}" "$body")
+              jq -n --arg body "$new_body" '{body: $body}' |
+                gh api -X PATCH "/repos/${REPO}/issues/comments/${id}" --input - >/dev/null
+            done
+
+          new_inline=$(gh api "/repos/${REPO}/pulls/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .id' |
+            {
+              count=0
+              while read -r id; do
+                case ",${REVIEW_IDS_BEFORE}," in
+                  *",${id},"*) continue ;;
+                esac
+                count=$((count + 1))
+              done
+              printf '%s' "$count"
+            })
+
+          if [ "${new_inline}" -eq 0 ]; then
+            badge_url="https://img.shields.io/badge/${LLM_BADGE_LABEL}-PASS-brightgreen"
+            summary="_✓ No inline findings._"
+          else
+            badge_url="https://img.shields.io/badge/${LLM_BADGE_LABEL}-${new_inline}%20findings-red"
+            summary="_See ${new_inline} inline review comment(s) below._"
+          fi
+          final_body=$(printf '%s\n\n![](%s)\n\n%s\n\n%s' \
+            "${LLM_BANNER}" "${badge_url}" "${summary}" "${STATUS_MARKER}")
+          jq -n --arg body "$final_body" '{body: $body}' |
+            gh api -X PATCH "/repos/${REPO}/issues/comments/${STATUS_ID}" --input - >/dev/null
