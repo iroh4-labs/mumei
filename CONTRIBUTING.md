@@ -225,7 +225,7 @@ creates a topic branch in this repo.
 7. CI runs on the PR. The relevant workflows are `ci.yml` (`lint`,
    `lint-extra`, `bats` on macOS / Ubuntu, `codeql`), `pr.yml`
    (`mutable-tag-guard`, `pr-target-guard`), `gitleaks.yml`,
-   `plugin-json-validate.yml`, `pr-agent-review.yml` (dual-LLM AI
+   `plugin-json-validate.yml`, `ai-review.yml` (custom dual-LLM
    review), and `dashboard-ci.yml` (path-triggered). Address failures
    before merge. (`claude-review.yml` is on disk but disabled — see
    the file header for why and how to re-enable.)
@@ -233,32 +233,33 @@ creates a topic branch in this repo.
    sufficient — automated reviewers also post feedback:
    - `task pr:watch` — wait for the latest CI run on this branch
    - `gh pr checks <N>` — CI status snapshot
-   - **GitHub PR UI** — review findings from `pr-agent-review.yml`,
-     which runs Qodo PR-Agent (Apache-2.0 OSS, pinned to v0.35.0)
-     twice per PR (sequentially) — once with **Gemini 3.1 Pro** and
-     once with **GPT-5.5** — so every push receives two independent
-     AI reviews plus inline code suggestions from each. Each LLM
-     job posts a sticky status comment (in-place updated across
-     pushes via a `<!-- mumei-review-status:* -->` marker) showing
-     a shields.io badge — `reviewing` (blue) while running,
-     `PASS` (green) when zero inline findings, or `N findings`
-     (red) otherwise. New non-status comments are prepended with
-     a `## Gemini 3.1 Pro` / `## GPT-5.5` heading so readers can
-     tell which LLM authored each block. A PR with both status
-     badges showing `PASS` is the maintainer-defined merge-ready
-     signal. Triage findings, push fix commits, and resolve
-     threads before merging. Reviewer monitoring is the PR
-     author's responsibility; an AI agent driving the PR watches
-     CI only. (The previous Codex / Gemini Code Assist / Copilot
+   - **GitHub PR UI** — review findings from `ai-review.yml`. This
+     workflow is home-grown (see `.github/ai-review/` for the
+     prompt + JSON schema + bash orchestration) and runs the same
+     review prompt — tuned for defects characteristic of
+     AI-generated code (hallucinated APIs, phantom parameters,
+     silent inversion, defensive overengineering, type drift) — in
+     parallel through **Gemini 3.1 Pro** and **GPT-5.5**. An
+     aggregate job clusters findings by file + line proximity and
+     tags each cluster as **consensus** (both providers flagged),
+     **majority** (most flagged — only when ≥3 providers
+     configured), or **individual** (one provider only). The PR
+     gets a single sticky status comment (updated in place across
+     pushes via the `<!-- ai-review-status -->` marker) plus
+     inline review comments for consensus / majority findings.
+     Triage findings, push fix commits, and resolve threads before
+     merging. Reviewer monitoring is the PR author's
+     responsibility; an AI agent driving the PR watches CI only.
+     (The previous Codex / Gemini Code Assist / Copilot
      auto-reviewers are turned off at the GitHub-App / account
      level by the repo owner.)
 9. Self-merge via squash or rebase (linear history; merge commits should
    be avoided). No required approval count.
 
-### `pr-agent-review.yml` one-time setup
+### `ai-review.yml` one-time setup
 
-Two repo secrets are required before `pr-agent-review.yml` will run
-successfully (`GITHUB_TOKEN` is provided automatically):
+Two repo secrets are required before `ai-review.yml` will run
+successfully (`GITHUB_TOKEN` is supplied automatically):
 
 | Secret name      | Value                                                          |
 | ---------------- | -------------------------------------------------------------- |
@@ -266,8 +267,16 @@ successfully (`GITHUB_TOKEN` is provided automatically):
 | `OPENAI_KEY`     | OpenAI Platform API key (https://platform.openai.com/api-keys) |
 
 Add them via `Settings → Secrets and variables → Actions → New repository secret`.
-Until both are set, the corresponding job fails at the pr-agent step.
-Other CI jobs are independent.
+Until both are set, the matching job fails at the API call. Other CI
+jobs are independent.
+
+The review prompt is in `.github/ai-review/system-prompt.md` (rooted in
+the defect taxonomy from arxiv:2512.05239 and arxiv:2601.19106 — AI-code
+review research, May 2026). The output schema is in
+`.github/ai-review/schema.json`. Both files are deliberately kept
+mumei-agnostic so the workflow can be copied verbatim into any other
+repo by dropping `.github/ai-review/` and `.github/workflows/ai-review.yml`
+in and configuring the two secrets.
 
 ## Spec-driven changes
 
