@@ -123,11 +123,19 @@ mumei runs the same lint suite (`prettier`, `markdownlint-cli2`, `typos`,
 `shfmt`, `shellcheck`, `actionlint`, `gitleaks`) locally via
 [pre-commit](https://pre-commit.com/) so CI failures are caught before push.
 
+`scripts/lint-frontmatter.sh` (invoked by both the pre-commit hook and
+`task lint:frontmatter`) strict-parses YAML via **python3 + PyYAML**. On
+fresh dev machines this means a one-time `pip3 install pyyaml` is needed;
+`task doctor` flags it as missing if absent. CI installs PyYAML
+explicitly in `ci.yml` (`lint` and `bats` jobs), so the contributor
+setup mirrors what the runner has.
+
 Set up once per clone:
 
 ```bash
 brew install pre-commit  # or: pip install pre-commit
 pre-commit install
+pip3 install pyyaml      # required by lint-frontmatter
 ```
 
 After install, every `git commit` triggers the configured hooks against
@@ -217,8 +225,9 @@ creates a topic branch in this repo.
 7. CI runs on the PR. The relevant workflows are `ci.yml` (`lint`,
    `lint-extra`, `bats` on macOS / Ubuntu, `codeql`), `pr.yml`
    (`mutable-tag-guard`, `pr-target-guard`), `gitleaks.yml`,
-   `plugin-json-validate.yml`, `claude-review.yml`, and `dashboard-ci.yml`
-   (path-triggered). Address failures before merge.
+   `plugin-json-validate.yml`, and `dashboard-ci.yml` (path-triggered).
+   Address failures before merge. (`claude-review.yml` is on disk but
+   disabled — see the file header for why and how to re-enable.)
 8. Monitor the PR after opening. CI green is necessary but not
    sufficient — automated reviewers also post feedback:
    - `task pr:watch` — wait for the latest CI run on this branch
@@ -226,8 +235,7 @@ creates a topic branch in this repo.
    - **GitHub PR UI** — review findings from automated reviewers. Gemini
      Code Assist comments on PR open (a re-review after a push needs a
      manual `/gemini review` comment); OpenAI Codex comments on PR open
-     and on each push; Claude Code Action (`claude-review.yml`) comments on
-     PR open and on each push. Triage them, push fix commits, and resolve
+     and on each push. Triage them, push fix commits, and resolve
      the threads before merging. Reviewer monitoring is the PR author's
      responsibility; an AI agent driving the PR watches CI only.
 9. Self-merge via squash or rebase (linear history; merge commits should
