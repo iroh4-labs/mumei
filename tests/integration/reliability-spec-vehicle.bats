@@ -175,6 +175,24 @@ _rel_rows() {
   [ "$(_rel_rows | jq -s 'length')" = "2" ]
 }
 
+# ─── observability (adversarial F-003) ─────────────────────
+
+@test "F-003: no-signal skip emits a log line (not silent)" {
+  _init_spec_feature
+  # No commit-gate seeded → derive_pass empty → skip path.
+  _commit_and_run_hook
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"reliability append skipped"* ]]
+}
+
+@test "F-003: successful append emits a row-count log line" {
+  _init_spec_feature
+  _seed_commit_gate 0
+  _commit_and_run_hook
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"appended 2 reliability row"* ]]
+}
+
 # ─── plan-vehicle isolation (REQ-26.5 boundary) ─────────────
 
 @test "REQ-26.5: X3 reliability append does not fire for a plan-vehicle feature" {
