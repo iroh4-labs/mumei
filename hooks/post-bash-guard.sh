@@ -199,6 +199,32 @@ if printf '%s' "$COMMAND" | grep -qE '(^|[[:space:];|&])git[[:space:]]+commit([[
   # so a subsequent failed commit cannot replay this advance.
   mumei_state_set_observed_head "$FEATURE" "$POST_HEAD" >/dev/null 2>&1 || true
 
+  # REQ-26: spec-vehicle reliability append. Fires on every confirmed Wave
+  # commit (triple-gate passed) so partial-Wave commits still log the tasks
+  # they completed. Append one row per completed-but-unlogged task, deriving
+  # pass from this commit's verify-log signal via the shared helper; skip the
+  # whole append when no test signal exists (REQ-26.3 — never fabricate pass).
+  # Enumeration is log-based (mumei_reliability_has_row dedup), NOT git diff of
+  # tasks.md: .mumei/ is gitignored in mumei's own dogfood repo (= the #97
+  # repro), so a tasks.md diff would be empty there. Purely additive: source
+  # best-effort and gate on function availability so a plugin downgrade that
+  # lacks reliability.sh degrades to the legacy (no-append) behavior.
+  _rel_log_dir=".mumei/specs/${FEATURE}"
+  # shellcheck source=_lib/reliability.sh disable=SC1091
+  source "${PLUGIN_ROOT}/hooks/_lib/reliability.sh" 2>/dev/null || true
+  if declare -F mumei_reliability_append >/dev/null 2>&1; then
+    _rel_pass="$(mumei_reliability_derive_pass "$_rel_log_dir" 600)"
+    if [[ -n "$_rel_pass" ]]; then
+      while IFS= read -r _rel_tid; do
+        [[ -n "$_rel_tid" ]] || continue
+        [[ "$(mumei_tasks_status "$FEATURE" "$_rel_tid" 2>/dev/null)" == "complete" ]] || continue
+        _rel_wave="${_rel_tid%%.*}"
+        mumei_reliability_has_row "$FEATURE" "$_rel_wave" "$_rel_tid" "$_rel_log_dir" && continue
+        (mumei_reliability_append "$FEATURE" "$_rel_wave" "$_rel_tid" "$_rel_pass" "$_rel_log_dir") || true
+      done < <(mumei_tasks_list_ids "$FEATURE" 2>/dev/null)
+    fi
+  fi
+
   # A commit just landed. Recompute the current Wave: smallest Wave
   # number whose tasks include any [ ]. If every Wave is complete, this
   # returns the empty string and we transition phase=review.
