@@ -149,17 +149,26 @@ mumei_review_apply_advisory_downgrade() {
     mumei_log_error "advisory-downgrade: input is not a JSON array; refusing to transform"
     return 1
   fi
-  # Detector ground-truth is matched by EXACT source value, not a substring
-  # of "detector" — a reviewer finding whose `source` is a code location
-  # (e.g. a path containing "pre-review-detector.sh") must NOT be exempted
-  # from advisory downgrade.
+  # Class-aware fail-open (REQ-27.9 / REQ-27.11 / REQ-27.13):
+  #   - ground_truth findings (osv-scanner / secret-scan / type-check /
+  #     test-check) and structural-integrity are deterministic evidence and
+  #     always block.
+  #   - candidate findings (semgrep / codeql / linters / LLM reviewers) at
+  #     HIGH/CRITICAL block ONLY when the validator supplied positive evidence
+  #     (reproducible == true and severity_action != report_only). Absence of
+  #     evidence → advisory (report_only), never an auto-block. This replaces
+  #     the old fail-closed "any semgrep/source-match → block" behavior, which
+  #     false-merge-blocked on the ~91% SAST false-positive rate.
+  # precision_class is matched exactly; a finding whose `source` is a code
+  # location must NOT be mistaken for a ground_truth detector.
   jq -c '
     map(
-      if ((.source // "") | (. == "semgrep" or . == "osv-scanner" or . == "structural-integrity"))
+      if ((.precision_class // "") == "ground_truth")
+         or ((.source // "") == "structural-integrity")
       then .severity_action = "block"
       elif (.severity == "HIGH" or .severity == "CRITICAL")
         and ((.validator.severity_action == "report_only")
-             or (.validator.axes.reproducible == false))
+             or ((.validator.axes.reproducible // null) != true))
       then .severity_action = "report_only"
       else .severity_action = (.severity_action // "block")
       end
@@ -170,14 +179,71 @@ mumei_review_apply_advisory_downgrade() {
   }
 }
 
+# Count surfaced findings that are ground_truth deterministic failures at
+# HIGH/CRITICAL severity. These block the verdict unconditionally (REQ-27.10):
+# a failing compile/test, a detected secret, or a matched CVE is not subject
+# to the LLM adjudication gate. Callers pass the result as the high_count arg
+# to mumei_review_aggregate_verdict (which now means "ground_truth HIGH count",
+# NOT the raw detector HIGH count — candidate detectors flow through the gate).
+# Args: $1 surfaced_findings_json (JSON array)
+mumei_review_ground_truth_high_count() {
+  jq -r '
+    [.[] | select(((.precision_class // "") == "ground_truth")
+                  and (.severity == "HIGH" or .severity == "CRITICAL"))] | length
+  ' <<<"${1:-[]}" 2>/dev/null || echo 0
+}
+
+# Decide whether a finding must pass the adjudication gate (issue-validator).
+# ground_truth findings (osv / secret / type-check / test) are deterministic
+# evidence and skip the gate; candidate findings (semgrep / codeql / linters /
+# LLM reviewers) require it (REQ-27.8 / REQ-27.11). Returns 0 = needs gate,
+# 1 = skip gate (ground truth). Args: $1 finding_json
+mumei_review_finding_needs_gate() {
+  local finding="${1:-}"
+  [[ -n "$finding" ]] || finding='{}'
+  local pc
+  pc="$(jq -r '.precision_class // "candidate"' <<<"$finding" 2>/dev/null || echo candidate)"
+  [[ "$pc" == "ground_truth" ]] && return 1
+  return 0
+}
+
+# Compute the surfaced-finding cap from the diff size (REQ-27.14): a base of 10
+# plus 1 per 100 changed lines. Overflow is disclosed via residual, never
+# dropped silently. Args: $1 diff_line_count
+mumei_review_surface_cap() {
+  local lines="${1:-0}"
+  [[ "$lines" =~ ^[0-9]+$ ]] || lines=0
+  printf '%s' "$((10 + lines / 100))"
+}
+
+# Split a surfaced findings array into {kept, overflow} by a severity-ranked
+# cap (CRITICAL > HIGH > MEDIUM > LOW). kept = top-<cap>; overflow = remainder
+# (the orchestrator appends overflow to residual so nothing is dropped).
+# Args: $1 surfaced_json $2 cap
+mumei_review_apply_surface_cap() {
+  local surfaced_json="${1:-[]}" cap="${2:-10}"
+  jq -c --argjson cap "$cap" '
+    (sort_by(if .severity == "CRITICAL" then 0
+             elif .severity == "HIGH" then 1
+             elif .severity == "MEDIUM" then 2
+             else 3 end)) as $ranked
+    | { kept: $ranked[0:$cap], overflow: $ranked[$cap:] }
+  ' <<<"$surfaced_json" 2>/dev/null || printf '{"kept":[],"overflow":[]}'
+}
+
 # Aggregate the final verdict from inputs.
 # Args:
-#   $1 high_count                  (integer, from detector summary)
-#   $2 surfaced_findings_json      (JSON array of {severity, ...})
+#   $1 high_count                  (integer — GROUND_TRUTH HIGH/CRITICAL count
+#                                   from mumei_review_ground_truth_high_count;
+#                                   deterministic failures that block
+#                                   unconditionally. NOT the raw detector HIGH
+#                                   count — candidate detectors flow through the
+#                                   adjudication gate and surface via $2.)
+#   $2 surfaced_findings_json      (JSON array of {severity, severity_action, ...})
 #   $3 reviewer_verdicts_json      (JSON object { reviewer_name: "PASS"|"NEEDS_IMPROVEMENT"|"MAJOR_ISSUES", ... })
 # Echoes one of: PASS / NEEDS_IMPROVEMENT / MAJOR_ISSUES
 # HIGH/CRITICAL findings stamped severity_action="report_only" (advisory
-# downgrade) are excluded from the blocking count.
+# downgrade, fail-open) are excluded from the blocking count.
 mumei_review_aggregate_verdict() {
   local high_count="$1"
   local surfaced_json="$2"
