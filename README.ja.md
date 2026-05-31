@@ -7,10 +7,6 @@
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/hir4ta/mumei/network/updates)
 
-<div align="center">
-  <img src="./assets/mumei-mascot.png" alt="mumei mascot" width="220" />
-</div>
-
 Claude Code 用の Quality Enforcement Layer。
 
 spec の phase、Wave 単位の commit、review を Hook で物理的に強制します。プロンプトでお願いするのではなく、エージェントが回避できない OS の境界で tool の呼び出しを止めます。
@@ -53,7 +49,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 - **Harness — prompt ではなく Hook で強制** — phase / Wave / commit / push の各 gate は Claude Code Hook で tool 呼び出しの段階で enforce されます。エージェントの意図は untrusted input として OS layer で検証。
 - **Hook で phase を物理強制** — phase / Wave / commit / push の遷移を tool 呼び出しの段階で deny します。エージェントは prompt-level で回避できません。
 - **harness state 保護 (S1 rule)** — `.mumei/current` / state.json / review JSON は LLM の Edit/Write を Hook 層で deny します。暴走した agent が内部 state を壊せません。orchestrator の bash helper は hook を経由しない経路で正規 write を保持します。
-- **決定論的なセキュリティ ground-truth** — `semgrep` と `osv-scanner` を LLM reviewer の前に走らせ、HIGH の finding が出たら verdict を `MAJOR_ISSUES` に固定します。
+- **決定論的 ground-truth + class-aware fail-open** — pluggable な detector registry: `semgrep` + `osv-scanner` 内蔵、Tier1 (`secret-scan` / `type-check` / `test-check`) は install 済なら既定実行、Tier2 (`opengrep` / `gosec` / `brakeman` / `codeql` / `bandit`) は `MUMEI_DETECTOR_TIER2=1` で opt-in。ground-truth の失敗 (CVE / secret / 型エラー / テスト失敗) は verdict を `MAJOR_ISSUES` に固定。ノイズの多い SAST candidate は issue-validator の adjudication gate を通し、validator が確証した時のみ block — semgrep の false-positive 1 件で誤 merge-block しません。不在ツールは warn-skip (fatal にしない)。
 - **clean-HEAD 検証 integrity** — commit 時に、`HEAD` を checkout した detached worktree で test を再実行します。未 commit の改ざん (rig した `conftest.py`、monkeypatch した `TestReport`、いじった bytecode) では pass を偽装できません。working-tree green・clean-HEAD red の食い違いは deny されます (I3)。`.mumei/config.json` の `golden_paths` は不可侵の spec/oracle ファイルを指定します: Edit/Write を block (G1)、明白な Bash 書き込み経路 (redirect / `rm` / `mv` / `cp` の dest / `tee` / `truncate` / `sed -i`) を block (G2)、worktree は golden が既に commit 済み内容を保持する clean な `HEAD` tree で test を実行します。
 - **3 つの spec reviewer + 4 段階の review pipeline** — `requirements` / `design` / `tasks` reviewer が fresh context で独立に走り、最大 3 回まで自動 iterate。続けて `spec-compliance` と `security` を並列、`adversarial` を直列、最後に per-issue validator が回ります。
 - **AI review の補助強化 (柱C)** — review pipeline は補助であり、mumei はそれを誠実に明示します。HIGH/CRITICAL の finding は反証可能な `trace` を必須とし、validator の `REPRODUCIBLE` 軸が反証不能なものを advisory に降格します (surfaced に残し、drop も自動 block もしない。HIGH を自動抑制しない)。`security-reviewer` には full spec context を渡し `adversarial-reviewer` は cold に保ちます (model rotation でなく入力非対称化で多様化)。immutable な agent-body prefix が全 reviewer に diff/PR/comment の "safe"/"reviewed" 主張を無視しコードから再導出させます。cross-feature の `finding-ledger.jsonl` が再発する false positive を validator に注記します (注記のみ)。各 review JSON は Claude family 共有盲点と検出天井を明示する `confidence_ceiling` を持ちます — 人間レビューを不要にするとは主張しません。
