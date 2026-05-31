@@ -42,7 +42,8 @@ mumei/
 │   │   ├── state.sh        # .mumei/specs/<feat>/state.json read/write (atomic)
 │   │   ├── tasks.sh        # tasks.md parser (BSD-awk compatible)
 │   │   ├── safe-grep.sh    # null-safe grep + git check-ignore helper
-│   │   ├── detectors.sh    # semgrep / osv-scanner runners + severity normalizer
+│   │   ├── detectors.sh    # detector registry core + builtin semgrep / osv-scanner + severity normalizer
+│   │   ├── detectors-ext.sh # Tier1/Tier2 ext detectors (secret-scan / type-check / test-check)
 │   │   ├── review.sh       # shared Phase 5 / /mumei:examine pipeline helpers
 │   │   ├── ledger.sh       # cross-feature finding ledger (pillar C: move-resistant fingerprint + FP annotation, annotate-only)
 │   │   ├── residual.sh     # residual exposition (pillar D: deterministic aggregation of advisory/unsure/needs_*/valid_by_assertion + always-on ai-blindspot-ceiling)
