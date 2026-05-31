@@ -587,8 +587,11 @@ mumei_detector_run_all() {
   : >"$errors_path"
 
   local ran=() skipped=() failed=()
-  local name tier rc
-  for name in $MUMEI_DETECTOR_REGISTRY; do
+  local name tier rc reg
+  # Split the space-separated registry into an array (shellharden-safe; a bare
+  # `for name in $MUMEI_DETECTOR_REGISTRY` trips shellharden 4.3.1's parser).
+  read -ra reg <<<"$MUMEI_DETECTOR_REGISTRY"
+  for name in "${reg[@]+"${reg[@]}"}"; do
     tier="$(mumei_detector_tier "$name")"
     if [[ "$tier" == "2" && "${MUMEI_DETECTOR_TIER2:-0}" != "1" ]]; then
       continue # opt-in only; not requested this run
