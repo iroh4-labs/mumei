@@ -7,7 +7,7 @@
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/hir4ta/mumei/network/updates)
 
-**mumei (無名) — the butler with no name.** A quality-enforcement harness for
+**mumei — the butler with no name.** A quality-enforcement harness for
 Claude Code that upholds your project's standards at the OS boundary — not via
 prompt-level instructions the agent can ignore. It treats the agent's intent as
 untrusted input and validates at the Hook layer.
@@ -54,7 +54,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 - **Gates that don't false-block** — CVE / secret / type-error / failing-test pin the verdict to `MAJOR_ISSUES`; noisy SAST is run through an adjudication gate and blocks only when confirmed, so a false positive never false-merge-blocks. Absent tools are warn-skipped, not fatal.
 - **Tamper-proof verification** — at commit, tests re-run against a clean `HEAD` worktree, so uncommitted rigging (a doctored `conftest.py`, monkeypatched reporter, edited bytecode) can't fake a pass.
 - **Tests the agent can't game** — invariant properties are written blind, from the spec and signature alone without seeing the implementation, then frozen, so the test can't be tuned to a flawed implementation. Opt-in per AC.
-- **Diverse-lens review** — independent requirements / design / tasks reviewers on fresh contexts, a parallel security + adversarial pass (asymmetric context, not model rotation), and a per-finding validator that downgrades ungrounded findings to advisory.
+- **Diverse-lens review** — independent requirements / design / tasks reviewers on fresh contexts, then a security and adversarial review pass over the diff (asymmetric context, not model rotation), and a per-finding validator that downgrades ungrounded findings to advisory.
 - **Honest about its ceiling** — every verdict carries a blind-spot disclaimer and names exactly what to review by hand; mumei never claims to replace human review.
 - **Wave-based commits** — 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` to block phantom completion.
 - **Signed, attestable releases** — Sigstore keyless signing, SLSA Level 3, CycloneDX SBOM. See [docs/getting-started.md → Security & supply chain](./docs/getting-started.md#security--supply-chain).

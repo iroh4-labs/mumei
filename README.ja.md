@@ -54,7 +54,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 - **誤 block しない gate** — CVE / secret / 型エラー / テスト失敗は verdict を `MAJOR_ISSUES` に固定。ノイズの多い SAST は adjudication gate を通し確証時のみ block するので、false-positive で誤 merge-block しません。不在ツールは warn-skip (fatal にしない)。
 - **改ざん不能な検証** — commit 時に test を clean な `HEAD` worktree で再実行します。未 commit の改ざん (rig した `conftest.py`、monkeypatch した reporter、いじった bytecode) では pass を偽装できません。
 - **エージェントが細工できない test** — invariant の property test を、実装を見ずに spec と signature だけから盲目的に生成し、freeze します。欠陥のある実装に合わせて test を調整できません。AC 単位で opt-in。
-- **多様な視点の review** — `requirements` / `design` / `tasks` reviewer が fresh context で独立に走り、`security` + `adversarial` を並列 (model rotation でなく context 非対称化)、per-finding validator が ungrounded な finding を advisory に降格します。
+- **多様な視点の review** — `requirements` / `design` / `tasks` reviewer が fresh context で独立に走り、続けて `security` と `adversarial` が diff をレビュー (model rotation でなく context 非対称化)、per-finding validator が ungrounded な finding を advisory に降格します。
 - **天井を誠実に明示** — 各 verdict は盲点 disclaimer を持ち、「人間が手で見るべき箇所」を明示します。mumei は人間レビューを不要にするとは主張しません。
 - **Wave 単位の commit** — 1 Wave = 1 commit。Hook が diff を各 task の `_Files:_` と突き合わせ、phantom completion (実装の diff がないのに `[x]` を付ける) を止めます。
 - **署名 + provenance 付きリリース** — Sigstore keyless 署名、SLSA Level 3、CycloneDX SBOM。詳細は [docs/getting-started.ja.md → Security & supply chain](./docs/getting-started.ja.md#security--supply-chain) を参照。
