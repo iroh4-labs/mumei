@@ -7,11 +7,12 @@
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/hir4ta/mumei/network/updates)
 
-**mumei is a quality-enforcement harness for Claude Code.** It runs your
-spec-driven workflow and a grounded, multi-agent code review through Hooks that
-physically gate every phase, commit, and push at the OS boundary. The agent's
-intent is treated as untrusted input — standards are _enforced_, never merely
-suggested in a prompt the agent can choose to ignore.
+**mumei is a quality-enforcement harness for Claude Code.** It runs two things —
+your spec-driven workflow and a grounded, multi-agent code review. Both pass
+through Hooks that inspect every phase, commit, and push at the OS boundary, and
+physically refuse the ones that break a rule. The agent's intent is treated as
+untrusted input — standards are _enforced_, never merely suggested in a prompt
+the agent can choose to ignore.
 
 _The butler with no name: it serves quietly, takes no credit, and holds the line
 — "I'm afraid that won't do."_
@@ -22,8 +23,8 @@ _The butler with no name: it serves quietly, takes no credit, and holds the line
 
 A `CLAUDE.md` rule, a system prompt, a "please run the tests first" — these are
 suggestions, and a capable agent under pressure routes around suggestions. mumei
-moves the standards you care about off the prompt and onto the OS boundary,
-where a Hook inspects the project-changing tool calls — edits, commits, pushes,
+moves the standards you care about off the prompt and onto the OS boundary.
+There, a Hook inspects the project-changing tool calls — edits, commits, pushes,
 plan transitions — and refuses the ones that break an invariant. Three things it
 _enforces_ rather than asks for:
 
@@ -38,8 +39,8 @@ _enforces_ rather than asks for:
   or committing a broken Wave is physically blocked, not politely discouraged.
 - **Review that is grounded, not vibes.** Deterministic detectors (CVE / secret
   / type / test / SAST) run first and _ground_ a diverse-lens review — security
-  and adversarial passes on fresh contexts — while a per-finding validator drops
-  ungrounded concerns to advisory so a false positive never false-blocks a
+  and adversarial passes on fresh contexts. A per-finding validator then drops
+  ungrounded concerns to advisory, so a false positive never false-blocks a
   merge. The verdict gates the push, and it always names what a human still has
   to check.
 
