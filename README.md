@@ -23,13 +23,14 @@ _The butler with no name: it serves quietly, takes no credit, and holds the line
 A `CLAUDE.md` rule, a system prompt, a "please run the tests first" — these are
 suggestions, and a capable agent under pressure routes around suggestions. mumei
 moves the standards you care about off the prompt and onto the OS boundary,
-where a Hook inspects every tool call and refuses the ones that break an
-invariant. Three things it _enforces_ rather than asks for:
+where a Hook inspects the project-changing tool calls — edits, commits, pushes,
+plan transitions — and refuses the ones that break an invariant. Three things it
+_enforces_ rather than asks for:
 
 - **A harness, not a chat.** Phases, Waves, commits, pushes, and the entire
   review pipeline are driven deterministically by Hooks — the agent cannot
-  prompt its way past one. The only escape hatch is a single, auditable
-  `MUMEI_BYPASS=1`.
+  prompt its way past one. The only escape hatch is a single, explicit
+  `MUMEI_BYPASS=1` (an env var you set deliberately; it short-circuits silently).
 - **Spec-driven development that actually holds.** Plenty of tools _generate_ a
   spec; mumei makes the agent _build to it_. A feature runs requirements →
   design → tasks (each independently reviewed) → one approval gate →
@@ -99,14 +100,14 @@ review precision, not from a hunch. A few of the load-bearing findings (arXiv
 IDs given so you can look them up):
 
 - Capable agents selectively ignore prompt-level rules, so enforcement has to
-  live at a hard boundary — mumei's Hooks. (PCAS, arXiv 2602.16708; AgentPex, arXiv 2603.23806)
+  live at a hard boundary — mumei's Hooks. ("Formal Policy Enforcement for Real-World Agentic Systems", arXiv 2602.16708; "Willful Disobedience", arXiv 2603.23806)
 - An agent misses most of its own mistakes, so a reviewer must run on a fresh
-  context and never self-review. (Self-Correction Bench, arXiv 2507.02778)
+  context and never self-review. ("Self-Correction Bench", arXiv 2507.02778)
 - Raw SAST is noisy; precision rises sharply when an LLM adjudicates _structured_
   detector findings instead of scanning cold — mumei's class-aware detector →
-  validator gate. (ZeroFalse, arXiv 2510.02534)
+  validator gate. ("ZeroFalse", arXiv 2510.02534)
 - A few diverse review lenses beat a swarm of identical agents, so mumei uses
-  asymmetric-context reviewers, not a voting committee. (arXiv 2602.03794)
+  asymmetric-context reviewers, not a voting committee. ("Understanding Agent Scaling in LLM-Based Multi-Agent Systems via Diversity", arXiv 2602.03794)
 
 These inform the design; mumei claims none of the papers' own results, and — as
 the next section says plainly — never claims to replace human review.
