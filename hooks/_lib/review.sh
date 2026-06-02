@@ -546,22 +546,26 @@ mumei_review_trace_ok() {
   fi
 
   # Each baseline reviewer must have >=1 phase:"after" record for this
-  # feature. fromjson? skips unparsable lines and `objects` drops
-  # non-object lines, so neither a corrupt nor a scalar line can throw a
-  # type error that truncates the stream.
-  local agent hits
-  for agent in adversarial-reviewer security-reviewer spec-compliance-reviewer; do
-    hits="$(jq -rn -R --arg a "$agent" '
-      [ inputs
-        | fromjson? | objects
-        | select(.agent == $a and .phase == "after")
-      ] | length' "$cost_log" 2>/dev/null || echo 0)"
-    if [[ "${hits:-0}" -lt 1 ]]; then
-      printf '%s has no cost-log record for this feature (review not backed by its execution)' \
-        "$agent"
-      return 1
-    fi
-  done
+  # feature. One streaming jq pass: `reduce inputs` accumulates the set of
+  # agents seen (no full-array materialisation), then echo the first
+  # required reviewer NOT in that set (empty when all present). fromjson?
+  # skips unparsable lines and `objects` drops non-object lines, so neither
+  # a corrupt nor a scalar line can throw a type error that truncates the
+  # stream. jq failure → fail-closed (treat as a missing reviewer).
+  local missing
+  if ! missing="$(jq -rn -R '
+    (reduce (inputs | fromjson? | objects
+             | select(.phase == "after") | .agent) as $a ({}; .[$a] = true)) as $ran
+    | (["adversarial-reviewer", "security-reviewer", "spec-compliance-reviewer"]
+       | map(select($ran[.] | not)))
+    | .[0] // ""' "$cost_log" 2>/dev/null)"; then
+    missing="a baseline reviewer"
+  fi
+  if [[ -n "$missing" ]]; then
+    printf '%s has no cost-log record for this feature (review not backed by its execution)' \
+      "$missing"
+    return 1
+  fi
   return 0
 }
 
