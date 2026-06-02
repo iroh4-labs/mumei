@@ -161,6 +161,26 @@ EOF
   [[ "$reason" == *"spec-compliance-reviewer has no cost-log record"* ]]
 }
 
+@test "allows git push when a malformed cost-log line precedes valid baseline records (R2)" {
+  _init_feature_with_tasks
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '{"verdict":"PASS","iteration":1}' \
+    >.mumei/specs/REQ-1-foo/reviews/2026-01-01T00-00-00Z.json
+  # A malformed object (non-string agent) + a bare scalar must be skipped,
+  # not abort the scan and false-block the valid records that follow.
+  {
+    printf '{"agent":123,"phase":"after"}\n'
+    printf '"stray scalar line"\n'
+    _cost_record adversarial-reviewer
+    _cost_record security-reviewer
+    _cost_record spec-compliance-reviewer
+  } >.mumei/specs/REQ-1-foo/cost-log.jsonl
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  [ -z "$stderr" ]
+}
+
 @test "denies git push when a short-circuit PASS sits on a MAJOR_ISSUES real review (R2)" {
   _init_feature_with_tasks
   mkdir -p .mumei/specs/REQ-1-foo/reviews

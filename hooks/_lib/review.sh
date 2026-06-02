@@ -555,7 +555,8 @@ mumei_review_trace_ok() {
   local missing
   if ! missing="$(jq -rn -R '
     (reduce (inputs | fromjson? | objects
-             | select(.phase == "after") | .agent) as $a ({}; .[$a] = true)) as $ran
+             | select(.phase == "after" and (.agent | type) == "string")
+             | .agent) as $a ({}; .[$a] = true)) as $ran
     | (["adversarial-reviewer", "security-reviewer", "spec-compliance-reviewer"]
        | map(select($ran[.] | not)))
     | .[0] // ""' "$cost_log" 2>/dev/null)"; then
