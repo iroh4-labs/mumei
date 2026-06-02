@@ -52,6 +52,7 @@ if ! declare -F mumei_hook_stats_record >/dev/null 2>&1; then
     source "$HOOK_STATS_LIB"
   fi
 fi
+
 _mumei_clog_stat() {
   local decision="$1" reason="$2"
   if declare -F mumei_hook_stats_record >/dev/null 2>&1; then

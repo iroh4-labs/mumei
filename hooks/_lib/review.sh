@@ -469,6 +469,107 @@ mumei_review_should_short_circuit() {
   return 1
 }
 
+# Verify the gating review verdict is backed by reviewer execution.
+# The push-guard (R2 / L-R2) calls this before letting a non-MAJOR_ISSUES
+# verdict clear `git push`.
+#
+# Presence model (deliberately coarse): cost-log records are written by
+# the SubagentStop hook, which attributes each record to the launch-time
+# feature via the in-flight sidecar and which the orchestrator cannot
+# produce without actually launching the reviewer subagent. This checks
+# that EACH baseline reviewer (adversarial + security + spec-compliance —
+# every feature's first review launches all three on both vehicles) has
+# at least one `phase:"after"` record for THIS feature. That robustly
+# blocks a hand-written PASS for which a baseline reviewer never ran.
+#
+# What it intentionally does NOT do (and why): it does not verify per-
+# iteration freshness — e.g. an iter-1 MAJOR_ISSUES re-issued as an iter-2
+# PASS with no re-run (the REQ-28 shape). The SubagentStop hook is async
+# (it can fire after the review JSON is written) and the cost-log carries
+# no trustworthy per-iteration tag, so iteration attribution cannot be
+# made robust on this artifact; attempting it produced false-blocks and
+# cross-feature pollution. Per-iteration freshness needs a synchronous,
+# feature-scoped, iteration-tagged marker — out of scope here, tracked for
+# a dedicated design (#132). It also does not defend against deliberate
+# forgery of cost-log lines.
+#
+# A reviews dir holding ONLY synthetic short-circuits (no real review) is
+# unverifiable -> blocked. A resolved gating review whose own verdict is
+# MAJOR_ISSUES cannot be laundered into a pass by a later short-circuit ->
+# blocked.
+#
+# Args:
+#   $1 feature_dir   .mumei/specs/<f>  or  .mumei/plans/<f>
+# Returns 0 when the trace is present (or there is no review at all -
+#   R2(a) owns "review missing"). On a missing trace, prints a one-line
+#   reason to stdout and returns 1.
+mumei_review_trace_ok() {
+  local feature_dir="$1"
+  local review_dir="${feature_dir%/}/reviews"
+  local cost_log="${feature_dir%/}/cost-log.jsonl"
+  [[ -d "$review_dir" ]] || return 0
+
+  # gating = latest real (non-detector, non-short-circuit) review.
+  # `saw_any` distinguishes "no review files at all" (R2(a)'s job) from
+  # "files exist but none is real" (block).
+  local gating="" f sc saw_any=0
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    saw_any=1
+    [[ "$f" == *-shortcircuit.json ]] && continue
+    sc="$(jq -r '.short_circuited_from // empty' "$f" 2>/dev/null || true)"
+    [[ -n "$sc" ]] && continue
+    gating="$f"
+    break
+  done < <(find "$review_dir" -maxdepth 1 -type f -name '*.json' \
+    ! -name '*-detectors.json' 2>/dev/null | sort -r)
+
+  if [[ -z "$gating" ]]; then
+    [[ "$saw_any" == "0" ]] && return 0
+    printf 'review dir holds only synthetic short-circuit reviews; no real reviewer run to verify'
+    return 1
+  fi
+
+  # A short-circuit PASS sitting on top cannot launder a MAJOR_ISSUES real
+  # review: the resolved gating review's OWN verdict must clear.
+  local gverdict
+  gverdict="$(jq -r '.verdict // empty' "$gating" 2>/dev/null || true)"
+  if [[ "$gverdict" == "MAJOR_ISSUES" ]]; then
+    printf 'resolved gating review %s is MAJOR_ISSUES' "$(basename "$gating")"
+    return 1
+  fi
+
+  if [[ ! -r "$cost_log" ]]; then
+    printf 'no reviewer execution trace (cost-log.jsonl absent) backing %s' \
+      "$(basename "$gating")"
+    return 1
+  fi
+
+  # Each baseline reviewer must have >=1 phase:"after" record for this
+  # feature. One streaming jq pass: `reduce inputs` accumulates the set of
+  # agents seen (no full-array materialisation), then echo the first
+  # required reviewer NOT in that set (empty when all present). fromjson?
+  # skips unparsable lines and `objects` drops non-object lines, so neither
+  # a corrupt nor a scalar line can throw a type error that truncates the
+  # stream. jq failure → fail-closed (treat as a missing reviewer).
+  local missing
+  if ! missing="$(jq -rn -R '
+    (reduce (inputs | fromjson? | objects
+             | select(.phase == "after" and (.agent | type) == "string")
+             | .agent) as $a ({}; .[$a] = true)) as $ran
+    | (["adversarial-reviewer", "security-reviewer", "spec-compliance-reviewer"]
+       | map(select($ran[.] | not)))
+    | .[0] // ""' "$cost_log" 2>/dev/null)"; then
+    missing="a baseline reviewer"
+  fi
+  if [[ -n "$missing" ]]; then
+    printf '%s has no cost-log record for this feature (review not backed by its execution)' \
+      "$missing"
+    return 1
+  fi
+  return 0
+}
+
 # Atomically write a review JSON to <review_dir>/<ts>.json (or
 # <ts>-shortcircuit.json when short-circuiting).
 #
