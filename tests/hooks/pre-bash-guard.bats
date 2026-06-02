@@ -186,6 +186,51 @@ EOF
   [[ "$reason" == *"adversarial-reviewer did not run for review iteration 2"* ]]
 }
 
+@test "denies git push when a new wave's baseline PASS skips security/spec-compliance (R2)" {
+  _init_feature_with_tasks
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  # Wave 1 had a real review; Wave 2 iter-1 is a fresh baseline that must
+  # launch all three reviewers — but only adversarial ran for it.
+  printf '{"verdict":"PASS","iteration":1,"wave":1}' \
+    >.mumei/specs/REQ-1-foo/reviews/2026-01-01T00-00-00Z.json
+  printf '{"verdict":"PASS","iteration":1,"wave":2}' \
+    >.mumei/specs/REQ-1-foo/reviews/2026-01-01T01-00-00Z.json
+  {
+    _cost_record adversarial-reviewer 1
+    _cost_record security-reviewer 1
+    _cost_record spec-compliance-reviewer 1
+    _cost_record adversarial-reviewer 2
+  } >.mumei/specs/REQ-1-foo/cost-log.jsonl
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"security-reviewer did not run for review iteration 2"* ]]
+}
+
+@test "allows git push when a new wave's baseline PASS has the full reviewer set (R2)" {
+  _init_feature_with_tasks
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  printf '{"verdict":"PASS","iteration":1,"wave":1}' \
+    >.mumei/specs/REQ-1-foo/reviews/2026-01-01T00-00-00Z.json
+  printf '{"verdict":"PASS","iteration":1,"wave":2}' \
+    >.mumei/specs/REQ-1-foo/reviews/2026-01-01T01-00-00Z.json
+  # Wave 2 baseline ran all three reviewers, each stamped global index 2.
+  {
+    _cost_record adversarial-reviewer 1
+    _cost_record security-reviewer 1
+    _cost_record spec-compliance-reviewer 1
+    _cost_record adversarial-reviewer 2
+    _cost_record security-reviewer 2
+    _cost_record spec-compliance-reviewer 2
+  } >.mumei/specs/REQ-1-foo/cost-log.jsonl
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  [ -z "$stderr" ]
+}
+
 @test "denies git push when a short-circuit PASS sits on a MAJOR_ISSUES real review (R2)" {
   _init_feature_with_tasks
   mkdir -p .mumei/specs/REQ-1-foo/reviews

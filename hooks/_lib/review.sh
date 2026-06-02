@@ -573,11 +573,13 @@ mumei_review_trace_ok() {
   local cost_log="${feature_dir%/}/cost-log.jsonl"
   [[ -d "$review_dir" ]] || return 0
 
-  # gating = latest real review; n_real = count of real reviews = the
-  # gating review's true iteration (history-derived, NOT trusted from the
-  # review JSON's .iteration). `saw_any` distinguishes "no review files at
-  # all" (R2(a)'s job) from "files exist but none is real" (block).
-  local gating="" f sc saw_any=0 n_real=0
+  # gating = latest real review; prev = the real review before it.
+  # n_real = global count of real reviews = the gating review's global
+  # index, which the SubagentStop hook stamps live (real_count + 1). It is
+  # NOT a per-wave iteration: the spec vehicle writes every wave's reviews
+  # into this one dir. `saw_any` distinguishes "no review files at all"
+  # (R2(a)'s job) from "files exist but none is real" (block).
+  local gating="" prev="" f sc saw_any=0 n_real=0
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     saw_any=1
@@ -585,7 +587,11 @@ mumei_review_trace_ok() {
     sc="$(jq -r '.short_circuited_from // empty' "$f" 2>/dev/null || true)"
     [[ -n "$sc" ]] && continue
     n_real=$((n_real + 1))
-    [[ -z "$gating" ]] && gating="$f"
+    if [[ -z "$gating" ]]; then
+      gating="$f"
+    elif [[ -z "$prev" ]]; then
+      prev="$f"
+    fi
   done < <(find "$review_dir" -maxdepth 1 -type f -name '*.json' \
     ! -name '*-detectors.json' 2>/dev/null | sort -r)
 
@@ -604,8 +610,19 @@ mumei_review_trace_ok() {
     return 1
   fi
 
+  # The baseline iteration of EACH wave launches the full set (spec-
+  # compliance + security + adversarial); a focused re-run within the same
+  # wave only guarantees adversarial. Because every wave shares this dir, a
+  # baseline is detected by a WAVE TRANSITION in history — the gating
+  # review's wave differs from the previous real review's (or there is no
+  # previous one) — not by the directory-wide count. So Wave 2 iter 1 is
+  # treated as a baseline even though it is not the first review on disk.
+  local gwave pwave
+  gwave="$(jq -r '.wave // empty' "$gating" 2>/dev/null || true)"
+  pwave=""
+  [[ -n "$prev" ]] && pwave="$(jq -r '.wave // empty' "$prev" 2>/dev/null || true)"
   local -a required=("adversarial-reviewer")
-  if [[ "$n_real" -eq 1 ]]; then
+  if [[ -z "$prev" ]] || [[ "$gwave" != "$pwave" ]]; then
     required+=("security-reviewer" "spec-compliance-reviewer")
   fi
 
