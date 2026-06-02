@@ -26,3 +26,38 @@ input. Reassess on 2027-05-23 — by then the review pipeline should
 have moved off 1.111.0 anyway, or the upstream advisory should have
 been backported to the 4.25.x line.
 """
+
+# --- PyJWT 2.12.1 advisory cluster (all fixed in pyjwt 2.13.0) ---
+# Shared path + assessment for the four entries below:
+#   pyjwt==2.12.1 is a transitive dependency of semgrep==1.163.0 (via mcp
+#   and semgrep itself) in .github/requirements/semgrep-release/
+#   requirements.txt, consumed only by release-reusable.yml's supply-chain
+#   scan step. mumei never imports PyJWT and never verifies, decodes, or
+#   fetches JWTs / JWKS; semgrep's own use is internal and not exposed to
+#   PR-author input, so none of the four exploit paths (PyJWKClient SSRF,
+#   unbounded JWKS refetch DoS, detached-JWS decode, algorithm/JWK-use
+#   confusion) is reachable here.
+# Real fix (deferred): regenerate the semgrep-release lock with
+#   `pyjwt>=2.13.0` (needs the Python 3.14 pip-compile toolchain documented
+#   in requirements.in; out of scope for this change). The short
+#   ignoreUntil forces that bump rather than letting the bypass linger.
+
+[[IgnoredVulns]]
+id = "CVE-2026-48522"
+ignoreUntil = 2026-09-02
+reason = "GHSA-993g-76c3-p5m4 / PYSEC-2026-175: PyJWKClient passes its uri straight to urllib urlopen (SSRF / file scheme). Transitive pyjwt==2.12.1 via semgrep==1.163.0; mumei never calls PyJWKClient. Fixed in pyjwt 2.13.0 — bump the semgrep-release lock by 2026-09-02."
+
+[[IgnoredVulns]]
+id = "CVE-2026-48524"
+ignoreUntil = 2026-09-02
+reason = "GHSA-fhv5-28vv-h8m8 / PYSEC-2026-177: PyJWKClient.get_signing_key() refetches the JWKS endpoint per unknown kid with no rate limit (DoS). Transitive pyjwt==2.12.1 via semgrep==1.163.0; mumei never fetches JWKS. Fixed in pyjwt 2.13.0 — bump the semgrep-release lock by 2026-09-02."
+
+[[IgnoredVulns]]
+id = "CVE-2026-48525"
+ignoreUntil = 2026-09-02
+reason = "GHSA-w7vc-732c-9m39 / PYSEC-2026-178: detached-JWS unencoded-payload (b64:false, RFC 7797) Base64URL-decodes the compact payload. Transitive pyjwt==2.12.1 via semgrep==1.163.0; mumei never verifies JWS. Fixed in pyjwt 2.13.0 — bump the semgrep-release lock by 2026-09-02."
+
+[[IgnoredVulns]]
+id = "CVE-2026-48526"
+ignoreUntil = 2026-09-02
+reason = "GHSA-xgmm-8j9v-c9wx / PYSEC-2026-179: decode does not validate JWK use when supporting both asymmetric and HMAC algorithms (algorithm confusion). Transitive pyjwt==2.12.1 via semgrep==1.163.0; mumei never decodes JWTs. Fixed in pyjwt 2.13.0 — bump the semgrep-release lock by 2026-09-02."

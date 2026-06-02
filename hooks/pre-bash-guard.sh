@@ -605,7 +605,7 @@ if mumei_is_git_push "$COMMAND"; then
       # real reviewer run. Phase-independent (like (b)) so it still fires
       # at phase=done, the moment the push actually happens.
       FEATURE_DIR="${REVIEW_DIR%/reviews}"
-      if ! TRACE_REASON="$(mumei_review_trace_ok "$FEATURE_DIR" "$IS_PLAN_VEHICLE")"; then
+      if ! TRACE_REASON="$(mumei_review_trace_ok "$FEATURE_DIR")"; then
         if [[ "$IS_PLAN_VEHICLE" == "1" ]]; then
           mumei_deny \
             "Review verdict (${VERDICT}) is not backed by a reviewer-execution trace: ${TRACE_REASON}. Re-run /mumei:examine so the reviewers actually run against the current diff." \

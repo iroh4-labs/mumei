@@ -487,34 +487,39 @@ mumei_review_should_short_circuit() {
 # Required always-on reviewers (rotation-safe — see
 # mumei_review_compute_next_iter_reviewers):
 #   adversarial-reviewer  — launched on EVERY iteration.
-#   iter-1 additionally   — security-reviewer (both vehicles) and
-#                           spec-compliance-reviewer (spec vehicle only),
-#                           which the baseline iteration always launches.
+#   iter-1 additionally   — security-reviewer AND spec-compliance-reviewer,
+#                           which the baseline iteration always launches on
+#                           BOTH vehicles (spec: requirements.md scope;
+#                           plan: /mumei:examine launches it with
+#                           scope_source=plan.md).
 #   iter-2+               — only adversarial is guaranteed (the focused
 #                           re-run launches a subset via next_iter_reviewers),
 #                           so requiring more would false-positive.
 # Short-circuit reviews (synthetic, `-shortcircuit.json` / non-null
 # `short_circuited_from`) launch no reviewers by design; the gating
-# review is resolved to the latest real review the verdict rests on.
+# review is resolved to the latest real review the verdict rests on. A
+# reviews dir that holds ONLY synthetic short-circuits (no real backing
+# review reachable) is unverifiable → blocked, not silently allowed.
 #
 # Args:
 #   $1 feature_dir   .mumei/specs/<f>  or  .mumei/plans/<f>
-#   $2 is_plan       "1" plan vehicle / "0" spec vehicle
-# Returns 0 when the trace is present (or there is no real review to
-#   check). On a missing required record, prints a one-line reason to
-#   stdout and returns 1.
+# Returns 0 when the trace is present (or there is no review at all —
+#   R2(a) owns the "review missing" case). On a missing required record,
+#   prints a one-line reason to stdout and returns 1.
 mumei_review_trace_ok() {
   local feature_dir="$1"
-  local is_plan="${2:-0}"
   local review_dir="${feature_dir%/}/reviews"
   local cost_log="${feature_dir%/}/cost-log.jsonl"
   [[ -d "$review_dir" ]] || return 0
 
   # Resolve the gating review = latest non-detector, non-short-circuit
   # review; capture the one before it to bound the execution window.
-  local gating="" prev="" f sc
+  # `saw_any` distinguishes "no review files at all" (R2(a)'s job) from
+  # "files exist but none is a real review" (unverifiable → block).
+  local gating="" prev="" f sc saw_any=0
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
+    saw_any=1
     [[ "$f" == *-shortcircuit.json ]] && continue
     sc="$(jq -r '.short_circuited_from // empty' "$f" 2>/dev/null || true)"
     [[ -n "$sc" ]] && continue
@@ -527,15 +532,22 @@ mumei_review_trace_ok() {
   done < <(find "$review_dir" -maxdepth 1 -type f -name '*.json' \
     ! -name '*-detectors.json' 2>/dev/null | sort -r)
 
-  # No real review yet → R2(a) "review missing" handles that case.
-  [[ -n "$gating" ]] || return 0
+  if [[ -z "$gating" ]]; then
+    [[ "$saw_any" == "0" ]] && return 0
+    printf 'review dir holds only synthetic short-circuit reviews; no real reviewer run to verify'
+    return 1
+  fi
 
-  local iter t_review t_prev
-  iter="$(jq -r '.iteration // 1' "$gating" 2>/dev/null || echo 1)"
-  # Normalise both timestamps to YYYY-MM-DDTHH-MM-SS so jq codepoint
-  # comparison is chronological: the review filename uses '-' in the
-  # time, the cost-log ts uses ':'. Strip the trailing Z.
-  t_review="$(basename "$gating" .json | sed 's/Z$//; s/:/-/g')"
+  # iter as a canonical integer (tolerate "01" / numbers / junk → 1).
+  local iter t_prev
+  iter="$(jq -r '(.iteration // 1) | (tonumber? // 1) | floor' "$gating" 2>/dev/null || echo 1)"
+  # Lower bound only: the cost-log ts is stamped when the (possibly queued
+  # or backfilled) SubagentStop hook runs, which can land at or just after
+  # the review-JSON write — an upper bound would false-block a reviewer
+  # that genuinely ran. Requiring a record strictly after the previous
+  # review's ts proves it ran for THIS iteration, not a stale one. The
+  # review filename uses '-' in the time, the cost-log ts uses ':'; both
+  # normalise to YYYY-MM-DDTHH-MM-SS for chronological codepoint compare.
   if [[ -n "$prev" ]]; then
     t_prev="$(basename "$prev" .json | sed 's/Z$//; s/:/-/g')"
   else
@@ -544,8 +556,7 @@ mumei_review_trace_ok() {
 
   local -a required=("adversarial-reviewer")
   if [[ "$iter" == "1" ]]; then
-    required+=("security-reviewer")
-    [[ "$is_plan" != "1" ]] && required+=("spec-compliance-reviewer")
+    required+=("security-reviewer" "spec-compliance-reviewer")
   fi
 
   if [[ ! -r "$cost_log" ]]; then
@@ -556,15 +567,16 @@ mumei_review_trace_ok() {
 
   local agent hits
   for agent in "${required[@]}"; do
-    # Read cost-log as raw lines and parse each with fromjson? so a
-    # single corrupt line cannot wrongly block a legitimate push.
+    # Read cost-log as raw lines: fromjson? skips unparsable lines and
+    # `objects` drops valid-but-non-object lines (bare strings / numbers /
+    # arrays), so neither a corrupt line nor a stray scalar can throw a
+    # jq type error that would truncate the stream and false-block.
     hits="$(jq -rn -R \
-      --arg a "$agent" --arg lo "$t_prev" --arg hi "$t_review" '
+      --arg a "$agent" --arg lo "$t_prev" '
       [ inputs
-        | fromjson?
+        | fromjson? | objects
         | select(.agent == $a and .phase == "after" and (.ts | type) == "string")
         | (.ts | sub("Z$"; "") | gsub(":"; "-")) as $n
-        | select($n <= $hi)
         | select($lo == "" or $n > $lo)
       ] | length' "$cost_log" 2>/dev/null || echo 0)"
     if [[ "${hits:-0}" -lt 1 ]]; then

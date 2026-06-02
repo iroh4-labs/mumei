@@ -223,15 +223,41 @@ EOF
     >.mumei/plans/fix-login/state.json
   printf '{"verdict":"PASS","iteration":1}' \
     >.mumei/plans/fix-login/reviews/2026-01-01T00-00-00Z.json
-  # Plan vehicle iter-1 requires adversarial + security (no spec-compliance).
+  # Plan vehicle iter-1 launches spec-compliance (scope_source=plan.md) too,
+  # so all three baseline reviewers are required.
   {
     printf '{"ts":"2025-12-31T23:59:59Z","feature":"fix-login","wave":null,"iteration":null,"agent":"adversarial-reviewer","phase":"after","input_tokens":10,"output_tokens":5,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}\n'
     printf '{"ts":"2025-12-31T23:59:58Z","feature":"fix-login","wave":null,"iteration":null,"agent":"security-reviewer","phase":"after","input_tokens":10,"output_tokens":5,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}\n'
+    printf '{"ts":"2025-12-31T23:59:57Z","feature":"fix-login","wave":null,"iteration":null,"agent":"spec-compliance-reviewer","phase":"after","input_tokens":10,"output_tokens":5,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}\n'
   } >.mumei/plans/fix-login/cost-log.jsonl
   _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
   [ -z "$stderr" ]
+}
+
+@test "denies git push when reviews dir holds only a synthetic short-circuit (no real review) (R2)" {
+  _init_feature REQ-1-foo review 1
+  cat >".mumei/specs/REQ-1-foo/tasks.md" <<'EOF'
+# foo plan
+
+## Wave 1: alpha
+
+- [x] 1.1 task one
+  - _Files: src/a.ts_
+  - _Depends: -_
+  - _Requirements: REQ-1.1_
+EOF
+  mkdir -p .mumei/specs/REQ-1-foo/reviews
+  # Only a hand-written short-circuit PASS — no real backing review exists.
+  printf '{"verdict":"PASS","iteration":2,"short_circuited_from":".mumei/specs/REQ-1-foo/reviews/missing.json"}' \
+    >.mumei/specs/REQ-1-foo/reviews/2026-01-01T01-00-00Z-shortcircuit.json
+  _run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')"
+  [ "$decision" = "deny" ]
+  reason="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+  [[ "$reason" == *"only synthetic short-circuit"* ]]
 }
 
 @test "denies git push when phase=review but no review JSON exists yet (R2)" {
