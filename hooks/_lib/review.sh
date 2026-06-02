@@ -497,6 +497,41 @@ mumei_review_real_count() {
   printf '%s' "$n"
 }
 
+# Count real reviews whose file mtime is strictly older than $2 (epoch
+# seconds). Used by the cost-log backfill path (scripts/cost-backfill.sh)
+# to reconstruct the review iteration a backfilled reviewer ran for, the
+# same value the forward SubagentStop hook stamps live: a reviewer's own
+# iteration-N review file is written AFTER the reviewer stops, so it has a
+# newer mtime and is excluded here, leaving the N-1 prior reviews → the
+# caller adds 1 to get N. Best-effort: if mtime cannot be read (or was
+# reset by a backup-restore) the file is skipped, which can only
+# under-count → a lower, fail-closed iteration stamp.
+mumei_review_real_count_before_mtime() {
+  local review_dir="$1"
+  local before="$2"
+  [[ -d "$review_dir" ]] || {
+    printf '0'
+    return 0
+  }
+  local n=0 f sc fm
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    [[ "$f" == *-shortcircuit.json ]] && continue
+    sc="$(jq -r '.short_circuited_from // empty' "$f" 2>/dev/null || true)"
+    [[ -n "$sc" ]] && continue
+    if fm="$(stat -f %m "$f" 2>/dev/null)"; then
+      :
+    elif fm="$(stat -c %Y "$f" 2>/dev/null)"; then
+      :
+    else
+      continue
+    fi
+    [[ "$fm" -lt "$before" ]] && n=$((n + 1))
+  done < <(find "$review_dir" -maxdepth 1 -type f -name '*.json' \
+    ! -name '*-detectors.json' 2>/dev/null)
+  printf '%s' "$n"
+}
+
 # Verify the gating review verdict is backed by a real reviewer-execution
 # trace. The push-guard (R2 / L-R2) calls this before letting a non-
 # MAJOR_ISSUES verdict clear `git push`.
