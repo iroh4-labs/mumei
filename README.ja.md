@@ -7,12 +7,39 @@
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/hir4ta/mumei/network/updates)
 
-**mumei (無名) — 名前を持たない執事。** Claude Code 用の品質強制 harness。
-プロジェクトの基準を OS の境界で守り抜きます — エージェントが無視できる
-prompt-level の指示ではなく。エージェントの意図は untrusted input として
-Hook 層で検証します。
+**mumei は Claude Code のための品質強制 harness です。** spec 駆動の
+ワークフローと、grounded な multi-agent コードレビューを、すべての phase /
+commit / push を OS の境界で物理的に gate する Hook を通して走らせます。
+エージェントの意図は untrusted input として扱い、基準は「強制」します —
+エージェントが無視できる prompt 上の「お願い」ではなく。
+
+_名前のない執事。静かに仕え、手柄を取らず、一線を守ります — 「それはいたしかねます」。_
 
 [English README](./README.md)
+
+## なぜ mumei
+
+`CLAUDE.md` のルール、system prompt、「先にテストを実行して」——これらは
+「お願い」であり、能力の高いエージェントはプレッシャー下でお願いを迂回します。
+mumei は守りたい基準を prompt から OS の境界へ移し、Hook がプロジェクトを
+変更する tool 呼び出し——編集 / commit / push / plan 遷移——を検査して
+invariant を破るものを拒否します。mumei が「お願い」ではなく「強制」する 3 つ:
+
+- **Harness であって chat ではない。** phase / Wave / commit / push、そして
+  review pipeline 全体を Hook が決定論的に駆動します——エージェントは prompt
+  で迂回できません。唯一の escape hatch は明示的に設定する `MUMEI_BYPASS=1`
+  一つだけ（意図して立てる env var で、立つと静かに short-circuit します）。
+- **本当に守られる spec 駆動開発。** spec を「生成する」ツールは多いですが、
+  mumei はエージェントに「その spec に従って作らせ」ます。feature は
+  requirements → design → tasks（各々独立にレビュー）→ 一度の承認 gate →
+  Wave 単位の実装 → review を辿り、phase スキップ・scope 外編集・壊れた Wave
+  の commit は物理的に block されます（やんわり諭すのではなく）。
+- **vibes ではなく grounded なレビュー。** 決定論的 detector（CVE / secret /
+  型 / test / SAST）が先に走って diverse-lens レビュー（fresh context の
+  security と adversarial）を grounding し、per-finding validator が ungrounded
+  な懸念を advisory に降格するので、false-positive が merge を誤 block しま
+  せん。verdict が push を gate し、常に「人間がまだ確認すべき箇所」を明示し
+  ます。
 
 ## インストール
 
@@ -47,7 +74,9 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 > `/mumei:review` が同じレビュー engine を現 diff に走らせる — `.mumei` 不要、副作用なし。
 > 詳細は [Commands](#commands) を参照。
 
-## Features
+## mumei が enforce すること
+
+上の 3 本柱を、より詳しく:
 
 - **Harness であって prompt ではない** — phase / Wave / commit / push の各 gate は tool 呼び出しの段階で enforce されます。エージェントは prompt-level で回避できません。
 - **state 保護** — `.mumei/` の state と review verdict はエージェントの Edit/Write 対象外です。harness だけが書き込むので、暴走した agent が壊せません。
@@ -58,9 +87,27 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 - **天井を誠実に明示** — 各 verdict は盲点 disclaimer を持ち、「人間が手で見るべき箇所」を明示します。mumei は人間レビューを不要にするとは主張しません。
 - **Wave 単位の commit** — 1 Wave = 1 commit。Hook が diff を各 task の `_Files:_` と突き合わせ、phantom completion (実装の diff がないのに `[x]` を付ける) を止めます。
 - **署名 + provenance 付きリリース** — Sigstore keyless 署名、SLSA Level 3、CycloneDX SBOM。詳細は [docs/getting-started.ja.md → Security & supply chain](./docs/getting-started.ja.md#security--supply-chain) を参照。
-- **名前のない執事のスタンス** — mumei は静かに仕え、手柄を取りません: opt-in するまで副作用ゼロ (`.mumei/current` がなければ Hook はすべて no-op)、不要な発話なし、verdict は事実形式、テレメトリなし。そして一流の執事らしく一線も守ります — _「それはいたしかねます」_ — 越えられるのは `MUMEI_BYPASS=1` のみ。
+- **名前のない執事のスタンス** — mumei は静かに仕え、手柄を取りません: opt-in するまで副作用ゼロ (`.mumei/current` がなければ Hook はすべて no-op)、不要な発話なし、verdict は事実形式、テレメトリなし。
 
 > 詳細な機構 — hook ID、detector tier、盲目 property-author / review 強化 / 残余明示の各柱、cross-feature の finding-ledger、curator-gated な reviewer memory — は **[ARCHITECTURE.md](./ARCHITECTURE.md)** にあります。
+
+## 研究に基づく設計
+
+mumei の強制モデルは思いつきではなく、エージェントの信頼性とレビュー精度に
+関する近年の研究から導かれています（arXiv ID を併記、各自で参照可能）:
+
+- 能力の高いエージェントは prompt 上のルールを選択的に無視するため、強制は
+  hard boundary——mumei の Hook——に置く必要がある。("Formal Policy Enforcement for Real-World Agentic Systems", arXiv 2602.16708; "Willful Disobedience", arXiv 2603.23806)
+- エージェントは自分の誤りの大半を見落とすため、reviewer は fresh context で
+  走り、決して self-review しない。("Self-Correction Bench", arXiv 2507.02778)
+- 生の SAST はノイズが多いが、LLM が「構造化された」detector finding を
+  adjudicate すると精度が大きく上がる——mumei の class-aware な detector →
+  validator gate。("ZeroFalse", arXiv 2510.02534)
+- 少数の多様なレビュー視点は同質エージェントの swarm に勝るため、mumei は
+  voting committee ではなく context 非対称の reviewer を使う。("Understanding Agent Scaling in LLM-Based Multi-Agent Systems via Diversity", arXiv 2602.03794)
+
+これらは設計に影響を与えたものであり、mumei は各論文の結果そのものを主張しま
+せん。そして次節の通り、人間レビューを置き換えるとは決して主張しません。
 
 ## Commands
 
@@ -78,6 +125,7 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 
 ## `mumei` がやらないこと
 
+- 人間レビューの代替ではありません。pipeline は grounded な finding を提示し盲点を明示しますが、最終判断は人間です。gate はしますが、正しさを保証はしません。
 - CI/CD ツールではありません。Hook は Claude Code の中でしか動きません。
 - コードレビューサービスではありません。reviewer はあなたの Claude Code 契約でローカル実行します。
 - SDD adapter ではありません。mumei は独自の spec フォーマットを持っています。

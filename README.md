@@ -7,12 +7,41 @@
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/hir4ta/mumei/network/updates)
 
-**mumei — the butler with no name.** A quality-enforcement harness for
-Claude Code that upholds your project's standards at the OS boundary — not via
-prompt-level instructions the agent can ignore. It treats the agent's intent as
-untrusted input and validates at the Hook layer.
+**mumei is a quality-enforcement harness for Claude Code.** It runs your
+spec-driven workflow and a grounded, multi-agent code review through Hooks that
+physically gate every phase, commit, and push at the OS boundary. The agent's
+intent is treated as untrusted input — standards are _enforced_, never merely
+suggested in a prompt the agent can choose to ignore.
+
+_The butler with no name: it serves quietly, takes no credit, and holds the line
+— "I'm afraid that won't do."_
 
 [日本語版 README](./README.ja.md)
+
+## Why mumei
+
+A `CLAUDE.md` rule, a system prompt, a "please run the tests first" — these are
+suggestions, and a capable agent under pressure routes around suggestions. mumei
+moves the standards you care about off the prompt and onto the OS boundary,
+where a Hook inspects the project-changing tool calls — edits, commits, pushes,
+plan transitions — and refuses the ones that break an invariant. Three things it
+_enforces_ rather than asks for:
+
+- **A harness, not a chat.** Phases, Waves, commits, pushes, and the entire
+  review pipeline are driven deterministically by Hooks — the agent cannot
+  prompt its way past one. The only escape hatch is a single, explicit
+  `MUMEI_BYPASS=1` (an env var you set deliberately; it short-circuits silently).
+- **Spec-driven development that actually holds.** Plenty of tools _generate_ a
+  spec; mumei makes the agent _build to it_. A feature runs requirements →
+  design → tasks (each independently reviewed) → one approval gate →
+  Wave-by-Wave implementation → review. Skipping a phase, editing out of scope,
+  or committing a broken Wave is physically blocked, not politely discouraged.
+- **Review that is grounded, not vibes.** Deterministic detectors (CVE / secret
+  / type / test / SAST) run first and _ground_ a diverse-lens review — security
+  and adversarial passes on fresh contexts — while a per-finding validator drops
+  ungrounded concerns to advisory so a false positive never false-blocks a
+  merge. The verdict gates the push, and it always names what a human still has
+  to check.
 
 ## Installation
 
@@ -47,7 +76,9 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 > outside any vehicle, `/mumei:review` runs the same review engine against the
 > current diff — no `.mumei`, no side effects. See [Commands](#commands).
 
-## Features
+## What mumei enforces
+
+The three pillars above, in detail:
 
 - **Harness, not prompts** — every phase / Wave / commit / push gate is enforced at the tool-call boundary; the agent can't prompt its way around it.
 - **Protected state** — `.mumei/` state and review verdicts are off-limits to the agent's Edit/Write; only the harness writes them, so a runaway agent can't corrupt them.
@@ -58,9 +89,28 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 - **Honest about its ceiling** — every verdict carries a blind-spot disclaimer and names exactly what to review by hand; mumei never claims to replace human review.
 - **Wave-based commits** — 1 Wave = 1 commit. Hooks cross-check the diff against each task's `_Files:_` to block phantom completion.
 - **Signed, attestable releases** — Sigstore keyless signing, SLSA Level 3, CycloneDX SBOM. See [docs/getting-started.md → Security & supply chain](./docs/getting-started.md#security--supply-chain).
-- **Nameless-butler stance** — mumei serves quietly and takes no credit: zero side effects until you opt in (no `.mumei/current` → every Hook is a no-op), no unsolicited speech, fact-form verdicts, no telemetry. Like any proper butler, it also holds the line — _"I'm afraid that won't do"_ — overridable only by `MUMEI_BYPASS=1`.
+- **Nameless-butler stance** — mumei serves quietly and takes no credit: zero side effects until you opt in (no `.mumei/current` → every Hook is a no-op), no unsolicited speech, fact-form verdicts, no telemetry.
 
 > Mechanics — hook IDs, the detector tiers, the blind property-author / review-hardening / residual-exposition pillars, the cross-feature finding-ledger, and curator-gated reviewer memory — live in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
+
+## Design grounded in research
+
+mumei's enforcement model follows from recent work on agent reliability and
+review precision, not from a hunch. A few of the load-bearing findings (arXiv
+IDs given so you can look them up):
+
+- Capable agents selectively ignore prompt-level rules, so enforcement has to
+  live at a hard boundary — mumei's Hooks. ("Formal Policy Enforcement for Real-World Agentic Systems", arXiv 2602.16708; "Willful Disobedience", arXiv 2603.23806)
+- An agent misses most of its own mistakes, so a reviewer must run on a fresh
+  context and never self-review. ("Self-Correction Bench", arXiv 2507.02778)
+- Raw SAST is noisy; precision rises sharply when an LLM adjudicates _structured_
+  detector findings instead of scanning cold — mumei's class-aware detector →
+  validator gate. ("ZeroFalse", arXiv 2510.02534)
+- A few diverse review lenses beat a swarm of identical agents, so mumei uses
+  asymmetric-context reviewers, not a voting committee. ("Understanding Agent Scaling in LLM-Based Multi-Agent Systems via Diversity", arXiv 2602.03794)
+
+These inform the design; mumei claims none of the papers' own results, and — as
+the next section says plainly — never claims to replace human review.
 
 ## Commands
 
@@ -78,6 +128,7 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 
 ## What `mumei` is NOT
 
+- Not a replacement for human review. The pipeline surfaces grounded findings and names its blind spots; a human still decides. It gates; it does not guarantee correctness.
 - Not a CI/CD tool. Hooks run inside Claude Code only.
 - Not a code review service. Reviewers run locally via your Claude Code subscription.
 - Not a SDD adapter. mumei has its own opinionated spec format.
