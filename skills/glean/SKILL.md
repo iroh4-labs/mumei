@@ -11,7 +11,7 @@ Output: .mumei/scratch/<topic>.md (structured, consumed by /mumei:compose)
 Principle: Questions must be high-leverage. Cap at 5 per round x 3 rounds. No silent assumptions.
 -->
 
-# Gather
+# Glean
 
 Run a structured gathering session with the user before they invoke `/mumei:compose`. The output is a scratch file at `.mumei/scratch/<topic>.md` that captures the user's intent in a form `/mumei:compose` can consume cleanly.
 
@@ -57,7 +57,7 @@ mumei's scratch parser recognizes exactly two AC line prefixes; anything else is
 
 Use one of these forms:
 
-- **Gather form**: `- [Event] WHEN ...` / `- [Unwanted] IF ...` / `- [State] WHILE ...` / `- [Optional] WHERE ...`
+- **Glean form**: `- [Event] WHEN ...` / `- [Unwanted] IF ...` / `- [State] WHILE ...` / `- [Optional] WHERE ...`
 - **Mature spec form**: `- REQ-N.M WHEN ...` (only when hand-authoring a scratch that imports into an existing spec; `M` is the AC index within that REQ)
 
 Do NOT use `AC-N.M`. It is silently dropped by the parser, which enforces the AC `id` pattern `^REQ-[0-9]+\.[0-9]+(\.[0-9]+)?$` (see `hooks/_lib/scratch-parser.sh`). This makes the scratch invisible to downstream tooling.
@@ -177,7 +177,7 @@ Each AC carries an inline `Examples:` block of zero, one, or two natural-languag
 
 Tell the user:
 
-> Gather saved to `.mumei/scratch/<slug>.md`. Run `/mumei:compose <feature-name>` to start spec creation. The proceed skill will read this scratch file as input.
+> Glean saved to `.mumei/scratch/<slug>.md`. Run `/mumei:compose <feature-name>` to start spec creation. The compose skill will read this scratch file as input.
 
 ## Don'ts
 

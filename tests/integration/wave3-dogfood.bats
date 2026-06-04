@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Dogfood test for Wave 3 of detector-integration.
 #
-# The proceed skill and reviewer agents are markdown documents consumed by
+# The compose skill and reviewer agents are markdown documents consumed by
 # Claude, not executable code. This test verifies the structural
 # contract between the Hook output (high_count JSON) and the artifacts:
 #   1. The Hook produces the field the skill is supposed to branch on.

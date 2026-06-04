@@ -6,7 +6,7 @@ disable-model-invocation: true
 argument-hint: "[feature]"
 ---
 
-# Present — one-line reliability summary
+# Glance — one-line reliability summary
 
 Surface the active feature's reliability in a single line so the user can check stability without context switching.
 

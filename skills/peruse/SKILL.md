@@ -12,7 +12,7 @@ Output: .mumei/plans/<slug>/reviews/<ts>.json + state.json phase transition on P
 Principle: vehicle non-dependent reviewer + validator pipeline, fed by mumei_review_* helpers in hooks/_lib/review.sh
 -->
 
-# Examine — plan-vehicle review pipeline
+# Peruse — plan-vehicle review pipeline
 
 This skill is the plan-vehicle counterpart of Phase 5 in `/mumei:compose`. It runs only against plan-vehicle features (state.json under `.mumei/plans/<slug>/`). For spec-vehicle review, use `/mumei:compose` (which drives the same pipeline as part of its lifecycle).
 
@@ -541,5 +541,5 @@ esac
 - Do not run this skill against a spec-vehicle feature. Use `/mumei:compose` instead.
 - Do not skip the `pending_review` gate. Premature `/mumei:peruse` aborts with a hint message and does not consume detector / reviewer budget.
 - Do not edit source files inside this skill. Findings are surfaced to the user; fixes happen in the next session turn (or by the user manually) before the next `/mumei:peruse` invocation.
-- Do not auto-archive on PASS. The retire skill (`/mumei:shelve`) is `disable-model-invocation: true` and only the user can trigger it.
+- Do not auto-archive on PASS. The shelve skill (`/mumei:shelve`) is `disable-model-invocation: true` and only the user can trigger it.
 - Do not mutate `.mumei/current` here. Only `/mumei:shelve` is allowed to clear it.

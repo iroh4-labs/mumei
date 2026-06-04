@@ -12,7 +12,7 @@ Output: .mumei/specs/<feature>/{requirements,design,tasks}.md + spec-reviews/ + 
 Principle: 3 spec drafts are produced non-stop, each gated by an independent spec-reviewer agent (auto-iter max 3). User is asked exactly once — at the approval gate after all 3 specs PASS their reviewer.
 -->
 
-# Proceed — mumei orchestrator
+# Compose — mumei orchestrator
 
 You orchestrate the full lifecycle of a feature in mumei: gather input → clarification → requirements → design → tasks → single user approval gate → implement (Wave by Wave) → 4-stage review → done.
 
@@ -272,7 +272,7 @@ If the user passed only a slug, the orchestrator picks the next REQ-N. If the us
 
 After init, the rest of Phase 1 proceeds.
 
-### Phase 1.1 — Clarification (gather-like)
+### Phase 1.1 — Clarification (glean-like)
 
 Goal: drive the orchestrator's understanding to a level where it can write `requirements.md` without silent assumptions.
 
@@ -1433,8 +1433,8 @@ mumei_state_set "$feature" '.phase' '"done"'
 After phase=done is set, the orchestrator MUST hand off to retire cleanup. Skipping this leaves stale specs in the active workspace and the user with no clear next step:
 
 1. **Tell the user the feature reached done** and prompt them to run `/mumei:shelve <feature>` so the spec moves from `.mumei/specs/<feature>/` to `.mumei/archive/<YYYY-MM>/<feature>/`.
-2. **Do NOT clear `.mumei/current`.** Only `/mumei:shelve` is allowed to mutate `.mumei/current` — see retire skill which auto-clears the file when retiring the currently-active feature. Clearing it elsewhere (orchestrator, manual edit) creates a session-handoff inconsistency where the next session sees no active feature even though the spec dir still exists.
-3. **Do NOT invoke `/mumei:shelve` directly.** The retire skill is `disable-model-invocation: true` by design — it only runs on explicit user invocation. The orchestrator's job ends at the retire prompt.
+2. **Do NOT clear `.mumei/current`.** Only `/mumei:shelve` is allowed to mutate `.mumei/current` — see shelve skill which auto-clears the file when retiring the currently-active feature. Clearing it elsewhere (orchestrator, manual edit) creates a session-handoff inconsistency where the next session sees no active feature even though the spec dir still exists.
+3. **Do NOT invoke `/mumei:shelve` directly.** The shelve skill is `disable-model-invocation: true` by design — it only runs on explicit user invocation. The orchestrator's job ends at the retire prompt.
 
    In particular: do **NOT** call the `Skill` tool with `mumei:shelve`, do **NOT** ask the user via `AskUserQuestion` whether to "trigger retire" (the user must type `/mumei:shelve <feature>` themselves — there is no path the orchestrator can take to invoke it). The right behaviour is: print one line saying `Run /mumei:shelve <feature> when ready`, then stop. Any attempt to wrap it in a tool call produces `Skill mumei:shelve cannot be used with Skill tool due to disable-model-invocation` and wastes a turn.
 

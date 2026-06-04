@@ -6,7 +6,7 @@ disable-model-invocation: true
 argument-hint: <feature>
 ---
 
-# Reflect — auto-generate a feature retrospective
+# Muse — auto-generate a feature retrospective
 
 Produce a single markdown document summarising a finished mumei feature so the team builds institutional knowledge instead of forgetting what happened.
 

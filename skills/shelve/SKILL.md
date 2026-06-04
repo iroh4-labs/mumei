@@ -14,7 +14,7 @@ Principle: Side-effect heavy, so disable-model-invocation: true (user-invoked on
            Vehicle is auto-detected by directory existence.
 -->
 
-# Retire
+# Shelve
 
 Move a completed feature out of the active workspace into the archive directory. This skill is **user-invocable only** (`disable-model-invocation: true`) — Claude will not auto-trigger retirement even if the workflow seems "done".
 

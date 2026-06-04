@@ -158,7 +158,7 @@ implementation files actually changed (no phantom completion), no
 editing outside `_Files:_` scope, tests pass before commit, commit
 happens before starting the next Wave.
 
-### 4. Examine, done, retire
+### 4. Peruse, done, shelve
 
 When all tasks are `[x]`, the review pipeline runs:
 

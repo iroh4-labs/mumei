@@ -6,7 +6,7 @@ disable-model-invocation: true
 argument-hint: "<feature>"
 ---
 
-# Assure — detailed reliability view
+# Attest — detailed reliability view
 
 Render the reliability snapshot for one mumei feature so the user can judge whether it is stable enough to ship or extend.
 
