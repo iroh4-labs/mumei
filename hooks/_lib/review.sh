@@ -50,23 +50,24 @@ _mumei_review_sha256() {
 # the push-guard freshness check — so all three agree on which state was
 # reviewed.
 #
-# The anchor is the git TREE id of the TRACKED working-tree snapshot, NOT a
-# diff against a base ref. A throwaway index (GIT_INDEX_FILE) is seeded from
-# HEAD then `git add -u`'d (tracked modifications/deletions only — NOT
-# untracked files), and `git write-tree` records its tree object id. This is:
-#   - Reviewer-surface faithful: reviewers see `git diff <base>`, which does
-#     NOT show untracked files, so the anchor must exclude them too. Including
-#     untracked files (the old `git add -A`) anchored content reviewers never
-#     saw, letting an untracked-then-committed file clear the gate unreviewed
-#     (Codex P1). Committing a NEW file therefore correctly moves the anchor,
-#     forcing a re-review of code that only became part of the diff on commit.
-#   - Commit-boundary stable for TRACKED changes: committing a tracked
-#     modification does not alter the tracked content, so the tree id is
-#     identical whether the change lives in the working tree or a commit.
+# The anchor is the git TREE id of the reviewer's surface, NOT a diff against
+# a base ref. A throwaway index (GIT_INDEX_FILE) is seeded from the REAL
+# index's tree (`git write-tree` — committed + staged additions/modifications)
+# then `git add -u`'d to fold in unstaged tracked modifications; `git write-tree`
+# on the throwaway index records its tree object id. This is:
+#   - Reviewer-surface faithful: reviewers see `git diff <base>`, which shows
+#     staged-new + staged/unstaged tracked changes but NOT untracked-unstaged
+#     files. The anchor mirrors exactly that set — staged additions are
+#     included (Codex P2: a HEAD seed dropped them and forced a duplicate
+#     re-review after commit), untracked-unstaged files are excluded (Codex P1:
+#     `git add -A` anchored content reviewers never saw). A never-added file
+#     correctly moves the anchor only once committed (i.e. once it enters the diff).
+#   - Commit-boundary stable: committing the reviewed change does not alter the
+#     tracked/staged content, so the tree id is identical before and after.
 #   - Base-ref independent: there is no merge-base, so the degenerate
 #     single-branch case (HEAD == the only branch, no origin/HEAD) cannot
 #     collapse the surface to an empty diff and a constant hash.
-# The real index is never touched.
+# The real index is never mutated (`git write-tree` only reads it).
 #
 # Echoes a hash on success, or empty string when git / HEAD is unavailable
 # (callers treat empty as "anchor not applicable" for non-git / no-commit
@@ -83,12 +84,25 @@ mumei_review_diff_hash() {
     return 0
   }
 
-  local tmp_index tree
+  # Seed from the REAL index's tree (committed + staged additions/modifications),
+  # NOT bare HEAD. Reviewers' `git diff <base>` shows staged-new files, so the
+  # anchor must include them (a HEAD seed + `git add -u` dropped staged
+  # additions and forced a duplicate re-review after commit — Codex P2).
+  # `git write-tree` only reads the real index (never mutates it).
+  local tmp_index tree staged_tree
+  staged_tree="$(git write-tree 2>/dev/null)" || staged_tree=""
+  [[ -n "$staged_tree" ]] || {
+    printf ''
+    return 0
+  }
   tmp_index="$(mktemp "${TMPDIR:-/tmp}/mumei-didx.XXXXXX")" || {
     printf ''
     return 0
   }
-  if ! GIT_INDEX_FILE="$tmp_index" git read-tree HEAD 2>/dev/null ||
+  # read-tree the staged snapshot, then `git add -u` folds in UNSTAGED tracked
+  # modifications (working-tree content). Untracked-unstaged files are still
+  # excluded (reviewers don't see them via git diff — Codex P1).
+  if ! GIT_INDEX_FILE="$tmp_index" git read-tree "$staged_tree" 2>/dev/null ||
     ! GIT_INDEX_FILE="$tmp_index" git add -u 2>/dev/null; then
     rm -f "$tmp_index"
     printf ''

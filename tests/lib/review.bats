@@ -409,6 +409,20 @@ _make_git_repo() {
   [ "$base" != "$committed" ]
 }
 
+@test "diff_hash: staged-new file is included; committing it does NOT move the anchor (Codex P2)" {
+  # A file git-add'd before review IS visible to reviewers (git diff <base>
+  # shows staged additions), so it must be in the anchor — and committing it
+  # must be a no-op for the hash (no duplicate re-review).
+  _make_git_repo
+  printf 'staged\n' >s.txt
+  git add s.txt
+  staged="$(mumei_review_diff_hash)"
+  git commit -qm add-staged
+  committed="$(mumei_review_diff_hash)"
+  [ -n "$staged" ]
+  [ "$staged" = "$committed" ]
+}
+
 @test "diff_hash: ignored files do not affect the hash" {
   _make_git_repo
   printf 'change\n' >>base.txt
