@@ -178,9 +178,9 @@ tasks:
     deps: [lint, test, cron:check]
 
   # ---------------------------------------------------------------
-  # Reflect — generate retrospective from archived features.
+  # Muse — generate retrospective from archived features.
   # ---------------------------------------------------------------
-  reflect:
+  muse:
     desc: "Generate muse.md from .mumei/archive/<YYYY-MM>/"
     cmds:
       - bash scripts/generate-muse.sh {{.CLI_ARGS}}
