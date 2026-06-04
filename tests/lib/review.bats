@@ -544,3 +544,23 @@ _setup_trace_fixture() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"working tree changed"* ]]
 }
+
+# --- mumei_review_should_short_circuit (anchored-prev requirement, Codex P1) ---
+
+@test "should_short_circuit: anchored clean PASS prev -> short-circuit (0)" {
+  local rdir="${MUMEI_TEST_TMPDIR}/sc/reviews"
+  mkdir -p "$rdir"
+  jq -nc '{wave:1,iteration:1,verdict:"PASS",diff_hash:"abc123",findings_surfaced:[]}' \
+    >"${rdir}/2026-01-01T00-00-00Z.json"
+  run mumei_review_should_short_circuit "$rdir" 1 2
+  [ "$status" -eq 0 ]
+}
+
+@test "should_short_circuit: legacy clean PASS prev (no diff_hash) -> do NOT short-circuit (1)" {
+  local rdir="${MUMEI_TEST_TMPDIR}/sc/reviews"
+  mkdir -p "$rdir"
+  jq -nc '{wave:1,iteration:1,verdict:"PASS",findings_surfaced:[]}' \
+    >"${rdir}/2026-01-01T00-00-00Z.json"
+  run mumei_review_should_short_circuit "$rdir" 1 2
+  [ "$status" -eq 1 ]
+}

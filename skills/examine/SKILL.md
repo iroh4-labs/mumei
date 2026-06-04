@@ -389,10 +389,15 @@ otherwise a skipped curation on the plan path would never surface.
 ```bash
 latest_review="$(mumei_review_latest "$review_dir")"
 total_candidates=0
-for reviewer in spec-compliance security adversarial; do
-  n="$(jq -r '(.memory_candidates // []) | length' <<<"${reviewer_outputs[$reviewer]:-{}}" 2>/dev/null || echo 0)"
-  total_candidates=$((total_candidates + n))
-done
+# declare -p guard: under set -u, dereferencing reviewer_outputs when it is
+# undeclared raises 'unbound variable' (bash 3.2). Same guard as the residual
+# block in Step 8.
+if declare -p reviewer_outputs >/dev/null 2>&1; then
+  for reviewer in spec-compliance security adversarial; do
+    n="$(jq -r '(.memory_candidates // []) | length' <<<"${reviewer_outputs[$reviewer]:-{}}" 2>/dev/null || echo 0)"
+    total_candidates=$((total_candidates + n))
+  done
+fi
 jq --argjson c "$total_candidates" '. + {memory_candidates_count: $c}' \
   <"$latest_review" >"${latest_review}.tmp" && mv "${latest_review}.tmp" "$latest_review"
 ```

@@ -470,6 +470,14 @@ mumei_review_should_short_circuit() {
   prev_verdict="$(jq -r '.verdict' "$prev_review")"
   prev_high="$(jq -r '[.findings_surfaced[] | select(.severity=="HIGH" or .severity=="CRITICAL")] | length' "$prev_review")"
   if [[ "$prev_verdict" == "PASS" ]] && [[ "$prev_high" == "0" ]]; then
+    # Only short-circuit on an ANCHORED clean PASS. A legacy clean PASS with
+    # no diff_hash must NOT be short-circuited: trace_ok fail-closes on the
+    # missing anchor, and skipping the iter would just stack another synthetic
+    # PASS on the same unanchored review, deadlocking the push (Codex P1).
+    # Returning 1 forces a real re-run that produces an anchored review.
+    local prev_dh
+    prev_dh="$(jq -r '.diff_hash // empty' "$prev_review" 2>/dev/null || true)"
+    [[ -z "$prev_dh" ]] && return 1
     printf '%s' "$prev_review"
     return 0
   fi
