@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# UserPromptExpansion: inject retire-target feature summary
-# into `additionalContext` when /mumei:retire is invoked.
+# UserPromptExpansion: inject shelve-target feature summary
+# into `additionalContext` when /mumei:shelve is invoked.
 #
 # Reads the latest review JSON for the target feature and surfaces
 # verdict / Wave count / commit count so Claude can present an informative
 # archive summary.
 #
-# Falls silent when the feature does not exist (the retire skill itself
+# Falls silent when the feature does not exist (the shelve skill itself
 # refuses missing features). Never blocks.
 #
 # Env knobs:

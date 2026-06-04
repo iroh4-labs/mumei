@@ -1,6 +1,6 @@
 ---
-name: retire
-description: Moves a completed feature directory to .mumei/archive/<YYYY-MM>/<feature>/ once the feature reaches phase=done. Auto-detects the active vehicle by checking .mumei/specs/<feature>/ first, then .mumei/plans/<feature>/. Triggers when the user explicitly retires a feature or when /mumei:proceed or /mumei:examine finishes with verdict=PASS and the user confirms.
+name: shelve
+description: Moves a completed feature directory to .mumei/archive/<YYYY-MM>/<feature>/ once the feature reaches phase=done. Auto-detects the active vehicle by checking .mumei/specs/<feature>/ first, then .mumei/plans/<feature>/. Triggers when the user explicitly shelves a feature or when /mumei:compose or /mumei:peruse finishes with verdict=PASS and the user confirms.
 disable-model-invocation: true
 allowed-tools: [Read, Write, Bash, Glob]
 argument-hint: <feature>
@@ -14,13 +14,13 @@ Principle: Side-effect heavy, so disable-model-invocation: true (user-invoked on
            Vehicle is auto-detected by directory existence.
 -->
 
-# Retire
+# Shelve
 
-Move a completed feature out of the active workspace into the archive directory. This skill is **user-invocable only** (`disable-model-invocation: true`) — Claude will not auto-trigger retirement even if the workflow seems "done".
+Move a completed feature out of the active workspace into the archive directory. This skill is **user-invocable only** (`disable-model-invocation: true`) — Claude will not auto-trigger shelving even if the workflow seems "done".
 
 ## When to use
 
-- The user explicitly invokes `/mumei:retire <feature>`.
+- The user explicitly invokes `/mumei:shelve <feature>`.
 - A feature has `phase: done` and the user is ready to clean up the active workspace.
 
 ## Pre-flight checks
@@ -30,7 +30,7 @@ Refuse with a clear error if any of these fail:
 1. `<feature>` slug must exist as a directory under either `.mumei/specs/` (spec vehicle) or `.mumei/plans/` (plan vehicle). Try specs/ first, then plans/. Refuse if neither has the slug.
 2. `state.json` must have `phase: "done"` (or `phase: "review"` with the latest review verdict `PASS`, with explicit confirmation).
 3. Working tree must be clean for files within the feature's `_Files:_` scope (spec vehicle only — plan vehicle has no `_Files:_` meta and skips this check).
-4. **`.mumei/current` is exclusively owned by this skill.** No other skill or hook may clear it. If `<feature>` is the active feature in `.mumei/current`, this skill auto-clears the file as part of the retire operation (see Method below). The "owned exclusively" rule prevents session-handoff inconsistency where a prior turn cleared `.mumei/current` while leaving the spec / plan dir behind, causing the next session to lose track of in-progress work.
+4. **`.mumei/current` is exclusively owned by this skill.** No other skill or hook may clear it. If `<feature>` is the active feature in `.mumei/current`, this skill auto-clears the file as part of the shelve operation (see Method below). The "owned exclusively" rule prevents session-handoff inconsistency where a prior turn cleared `.mumei/current` while leaving the spec / plan dir behind, causing the next session to lose track of in-progress work.
 
 ## Method
 
@@ -41,7 +41,7 @@ feature="$1"
 
 # auto-detect vehicle by directory existence. spec vehicle
 # (.mumei/specs/) takes precedence when both happen to exist; the slug
-# collision picker in /mumei:proceed is supposed to prevent that situation
+# collision picker in /mumei:compose is supposed to prevent that situation
 # in the first place.
 source_dir=""
 state_path=""
@@ -65,17 +65,17 @@ if [[ "$phase" != "done" ]]; then
 fi
 
 # Phase D — cross-feature dependency guard.
-# Refuse to retire when an active feature declares a Wave-level
+# Refuse to shelve when an active feature declares a Wave-level
 # `**Depends-Feature**:` directive pointing at this feature. The user
-# can override by either retiring the dependency (remove the
+# can override by either shelving the dependency (remove the
 # directive in the dependent's tasks.md) or by archiving in the
 # correct order (dependents first).
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/dependencies.sh"
 dependents="$(mumei_dependencies_active_dependents_of "$feature" 2>/dev/null || true)"
 if [[ -n "$dependents" ]]; then
-  echo "Cannot retire ${feature}: active dependent feature(s) still declare it via Wave **Depends-Feature**:" >&2
+  echo "Cannot shelve ${feature}: active dependent feature(s) still declare it via Wave **Depends-Feature**:" >&2
   printf '  %s\n' $dependents >&2
-  echo "Either retire the dependents first, or remove the Depends-Feature line." >&2
+  echo "Either shelve the dependents first, or remove the Depends-Feature line." >&2
   exit 1
 fi
 
@@ -93,7 +93,7 @@ if [[ -e "${target_dir}/${feature}" ]]; then
   exit 1
 fi
 
-# Capture the gather scratch path BEFORE moving the source dir
+# Capture the glean scratch path BEFORE moving the source dir
 # (mumei_state_read_any no-ops once the dir is moved). Prefer the recorded
 # scratch_source — it survives a feature slug that diverged from the scratch
 # basename (collision -N suffix, rename), so the originating scratch is
@@ -108,22 +108,22 @@ scratch_src="$(mumei_state_scratch_source "$feature" 2>/dev/null || true)"
 # Move the source directory. The move + git history serves as
 # the audit trail. Refuse to continue if both git mv and the bare mv
 # fallback fail — without an explicit guard the scratch block would
-# still run on a half-retired feature.
+# still run on a half-shelved feature.
 git mv "$source_dir" "${target_dir}/${feature}" 2>/dev/null \
   || mv "$source_dir" "${target_dir}/${feature}" \
   || { echo "source dir move failed: ${source_dir}" >&2; exit 1; }
 
-# Move the gather scratch file alongside the spec / plan, if
+# Move the glean scratch file alongside the spec / plan, if
 # present. Vehicle-independent: plan vehicle uses the same scratch
 # co-move behaviour as spec vehicle.
 if [[ -n "$scratch_src" && -f "$scratch_src" ]]; then
   scratch_dst="${target_dir}/${feature}/scratch.md"
   git mv "$scratch_src" "$scratch_dst" 2>/dev/null \
     || mv "$scratch_src" "$scratch_dst" \
-    || mumei_log_warn "retire: scratch co-move failed for ${scratch_src} (left in place); move it manually or it will linger in .mumei/scratch/"
+    || mumei_log_warn "shelve: scratch co-move failed for ${scratch_src} (left in place); move it manually or it will linger in .mumei/scratch/"
 fi
 
-# Auto-clear .mumei/current if it points at the feature being retired.
+# Auto-clear .mumei/current if it points at the feature being shelved.
 if [[ -f .mumei/current ]]; then
   current="$(tr -d '[:space:]' <.mumei/current)"
   if [[ "$current" == "$feature" ]]; then
@@ -132,7 +132,7 @@ if [[ -f .mumei/current ]]; then
 fi
 ```
 
-## After retiring
+## After shelving
 
 Tell the user:
 
@@ -144,8 +144,8 @@ Tell the user:
 
 ## Don'ts
 
-- Don't retire a feature that is not `phase: done`. Refuse with a clear message.
-- Don't retire the active feature without auto-clearing `.mumei/current` (this skill does it; nothing else should).
+- Don't shelve a feature that is not `phase: done`. Refuse with a clear message.
+- Don't shelve the active feature without auto-clearing `.mumei/current` (this skill does it; nothing else should).
 - Don't overwrite an existing archive directory. Refuse with a clear message.
 - Don't auto-commit the move — let the user commit it themselves to keep audit trail clean.
 - Don't modify the feature's content during the move. The state.json is moved as-is.

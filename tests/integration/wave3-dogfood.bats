@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Dogfood test for Wave 3 of detector-integration.
 #
-# The proceed skill and reviewer agents are markdown documents consumed by
+# The compose skill and reviewer agents are markdown documents consumed by
 # Claude, not executable code. This test verifies the structural
 # contract between the Hook output (high_count JSON) and the artifacts:
 #   1. The Hook produces the field the skill is supposed to branch on.
@@ -65,28 +65,28 @@ JSON
 
 # ─── skill body contract ──────────────────────────────────────
 
-@test "skill proceed body documents Stage 0 with the hook path" {
-  local skill="$CLAUDE_PLUGIN_ROOT/skills/proceed/SKILL.md"
+@test "skill compose body documents Stage 0 with the hook path" {
+  local skill="$CLAUDE_PLUGIN_ROOT/skills/compose/SKILL.md"
   grep -q "Stage 0 — Detector run" "$skill"
   grep -q "hooks/pre-review-detector.sh" "$skill"
 }
 
-@test "skill proceed body documents fail-open: security-reviewer always launches" {
-  local skill="$CLAUDE_PLUGIN_ROOT/skills/proceed/SKILL.md"
+@test "skill compose body documents fail-open: security-reviewer always launches" {
+  local skill="$CLAUDE_PLUGIN_ROOT/skills/compose/SKILL.md"
   # Under fail-open (REQ-27.9) security-reviewer is NOT skipped on detector HIGH;
   # candidate detector findings flow through the Stage 4 gate instead.
   grep -qE "ALWAYS launches" "$skill"
   grep -qiE "candidate detector" "$skill"
 }
 
-@test "skill proceed body pins MAJOR_ISSUES on ground_truth detector findings (fail-open)" {
-  local skill="$CLAUDE_PLUGIN_ROOT/skills/proceed/SKILL.md"
+@test "skill compose body pins MAJOR_ISSUES on ground_truth detector findings (fail-open)" {
+  local skill="$CLAUDE_PLUGIN_ROOT/skills/compose/SKILL.md"
   grep -q "Ground_truth detector findings present" "$skill"
   grep -q "MAJOR_ISSUES" "$skill"
 }
 
-@test "skill proceed body documents ground_truth inject block syntax" {
-  local skill="$CLAUDE_PLUGIN_ROOT/skills/proceed/SKILL.md"
+@test "skill compose body documents ground_truth inject block syntax" {
+  local skill="$CLAUDE_PLUGIN_ROOT/skills/compose/SKILL.md"
   grep -q 'detector_findings ground_truth="true"' "$skill"
   # And the token-economy rule: do NOT inject when high_count == 0.
   grep -qE 'NOT.*inject|skip.*inject|absent' "$skill"
