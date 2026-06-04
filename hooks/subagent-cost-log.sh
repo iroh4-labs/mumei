@@ -105,8 +105,13 @@ if [[ -z "$ACTIVE_FEATURE" ]] && [[ -f .mumei/current ]]; then
   ACTIVE_FEATURE="$(tr -d '[:space:]' <.mumei/current 2>/dev/null || true)"
 fi
 
-# Always best-effort sidecar cleanup at script end (defer via trap).
-trap '[[ -n "${SIDECAR:-}" ]] && rm -f "$SIDECAR" 2>/dev/null || true' EXIT
+# Sidecar lifecycle (REQ-30.1): the sidecar is deleted ONLY after a record is
+# successfully appended (see the end of this script). Every early-return /
+# skip path below leaves the sidecar intact so the Stop-time backfill safety
+# net (scripts/cost-backfill.sh) can read its launch diff_hash and write an
+# anchored record. The eager hook loses the subagent-jsonl flush race almost
+# every time; destroying the sidecar on a failure path here would strip the
+# diff_hash anchor that the push-gate trace (mumei_review_trace_ok) requires.
 
 if [[ -z "$ACTIVE_FEATURE" ]]; then
   printf '[mumei] cost-log: no active feature, skipping\n' >&2
@@ -229,6 +234,11 @@ if ! printf '%s\n' "$RECORD" >>"$COST_LOG" 2>/dev/null; then
   _mumei_clog_stat "noop" "append failed"
   exit 0
 fi
+
+# Record written — consume the sidecar now that its launch diff_hash has
+# been folded into the record. The failure / skip paths above intentionally
+# leave it in place for the backfill safety net.
+[[ -n "${SIDECAR:-}" ]] && rm -f "$SIDECAR" 2>/dev/null || true
 
 _mumei_clog_stat "noop" "ok"
 exit 0

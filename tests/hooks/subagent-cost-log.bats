@@ -259,3 +259,42 @@ _run_hook() {
     ".mumei/specs/REQ-1-foo/cost-log.jsonl" | tail -1)"
   [ "$dh" = "LAUNCHHASH123" ]
 }
+
+@test "REQ-30.1: sidecar preserved when subagent jsonl not readable (failure path)" {
+  # The eager hook loses the jsonl flush race; the sidecar (and its launch
+  # diff_hash) MUST survive so the Stop-time backfill can anchor the record.
+  mkdir -p ".mumei/specs/REQ-1-foo" ".mumei/in-flight-agents"
+  printf 'REQ-1-foo\n' >".mumei/current"
+  printf 'REQ-1-foo\nLAUNCHHASH\n' >".mumei/in-flight-agents/keep-id"
+  # Do NOT create the subagent jsonl → "subagent jsonl not readable" path.
+  event="$(_event_json keep-id mumei:security-reviewer)"
+  _run_hook "$event"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"subagent jsonl not readable"* ]]
+  [ -f ".mumei/in-flight-agents/keep-id" ]
+  [ "$(sed -n 2p .mumei/in-flight-agents/keep-id)" = "LAUNCHHASH" ]
+}
+
+@test "REQ-30.1: sidecar preserved when no active feature resolves (failure path)" {
+  # Sidecar names a feature whose dir no longer exists → no-record path.
+  # The sidecar must remain (backfill resolves the live feature itself).
+  mkdir -p ".mumei/in-flight-agents"
+  printf 'REQ-gone\n' >".mumei/current"
+  printf 'REQ-gone\nLAUNCHHASH\n' >".mumei/in-flight-agents/orphan-id"
+  _run_hook "$(_event_json orphan-id mumei:tasks-reviewer)"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"no active feature"* ]]
+  [ -f ".mumei/in-flight-agents/orphan-id" ]
+}
+
+@test "REQ-30.1: sidecar deleted only on a successful record append" {
+  mkdir -p ".mumei/specs/REQ-1-foo" ".mumei/in-flight-agents"
+  printf 'REQ-1-foo\n' >".mumei/current"
+  printf 'REQ-1-foo\nLAUNCHHASH\n' >".mumei/in-flight-agents/done-id"
+  _make_subagent_jsonl done-id 5 100 200 50 >/dev/null
+  event="$(_event_json done-id mumei:security-reviewer)"
+  _run_hook "$event"
+  [ "$status" -eq 0 ]
+  [ -f ".mumei/specs/REQ-1-foo/cost-log.jsonl" ]
+  [ ! -f ".mumei/in-flight-agents/done-id" ]
+}
