@@ -1,6 +1,6 @@
 ---
 name: shelve
-description: Moves a completed feature directory to .mumei/archive/<YYYY-MM>/<feature>/ once the feature reaches phase=done. Auto-detects the active vehicle by checking .mumei/specs/<feature>/ first, then .mumei/plans/<feature>/. Triggers when the user explicitly retires a feature or when /mumei:compose or /mumei:peruse finishes with verdict=PASS and the user confirms.
+description: Moves a completed feature directory to .mumei/archive/<YYYY-MM>/<feature>/ once the feature reaches phase=done. Auto-detects the active vehicle by checking .mumei/specs/<feature>/ first, then .mumei/plans/<feature>/. Triggers when the user explicitly shelves a feature or when /mumei:compose or /mumei:peruse finishes with verdict=PASS and the user confirms.
 disable-model-invocation: true
 allowed-tools: [Read, Write, Bash, Glob]
 argument-hint: <feature>
@@ -16,7 +16,7 @@ Principle: Side-effect heavy, so disable-model-invocation: true (user-invoked on
 
 # Shelve
 
-Move a completed feature out of the active workspace into the archive directory. This skill is **user-invocable only** (`disable-model-invocation: true`) — Claude will not auto-trigger retirement even if the workflow seems "done".
+Move a completed feature out of the active workspace into the archive directory. This skill is **user-invocable only** (`disable-model-invocation: true`) — Claude will not auto-trigger shelving even if the workflow seems "done".
 
 ## When to use
 
@@ -65,17 +65,17 @@ if [[ "$phase" != "done" ]]; then
 fi
 
 # Phase D — cross-feature dependency guard.
-# Refuse to retire when an active feature declares a Wave-level
+# Refuse to shelve when an active feature declares a Wave-level
 # `**Depends-Feature**:` directive pointing at this feature. The user
-# can override by either retiring the dependency (remove the
+# can override by either shelving the dependency (remove the
 # directive in the dependent's tasks.md) or by archiving in the
 # correct order (dependents first).
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/dependencies.sh"
 dependents="$(mumei_dependencies_active_dependents_of "$feature" 2>/dev/null || true)"
 if [[ -n "$dependents" ]]; then
-  echo "Cannot retire ${feature}: active dependent feature(s) still declare it via Wave **Depends-Feature**:" >&2
+  echo "Cannot shelve ${feature}: active dependent feature(s) still declare it via Wave **Depends-Feature**:" >&2
   printf '  %s\n' $dependents >&2
-  echo "Either retire the dependents first, or remove the Depends-Feature line." >&2
+  echo "Either shelve the dependents first, or remove the Depends-Feature line." >&2
   exit 1
 fi
 
@@ -108,7 +108,7 @@ scratch_src="$(mumei_state_scratch_source "$feature" 2>/dev/null || true)"
 # Move the source directory. The move + git history serves as
 # the audit trail. Refuse to continue if both git mv and the bare mv
 # fallback fail — without an explicit guard the scratch block would
-# still run on a half-retired feature.
+# still run on a half-shelved feature.
 git mv "$source_dir" "${target_dir}/${feature}" 2>/dev/null \
   || mv "$source_dir" "${target_dir}/${feature}" \
   || { echo "source dir move failed: ${source_dir}" >&2; exit 1; }
@@ -120,10 +120,10 @@ if [[ -n "$scratch_src" && -f "$scratch_src" ]]; then
   scratch_dst="${target_dir}/${feature}/scratch.md"
   git mv "$scratch_src" "$scratch_dst" 2>/dev/null \
     || mv "$scratch_src" "$scratch_dst" \
-    || mumei_log_warn "retire: scratch co-move failed for ${scratch_src} (left in place); move it manually or it will linger in .mumei/scratch/"
+    || mumei_log_warn "shelve: scratch co-move failed for ${scratch_src} (left in place); move it manually or it will linger in .mumei/scratch/"
 fi
 
-# Auto-clear .mumei/current if it points at the feature being retired.
+# Auto-clear .mumei/current if it points at the feature being shelved.
 if [[ -f .mumei/current ]]; then
   current="$(tr -d '[:space:]' <.mumei/current)"
   if [[ "$current" == "$feature" ]]; then
@@ -132,7 +132,7 @@ if [[ -f .mumei/current ]]; then
 fi
 ```
 
-## After retiring
+## After shelving
 
 Tell the user:
 
@@ -144,8 +144,8 @@ Tell the user:
 
 ## Don'ts
 
-- Don't retire a feature that is not `phase: done`. Refuse with a clear message.
-- Don't retire the active feature without auto-clearing `.mumei/current` (this skill does it; nothing else should).
+- Don't shelve a feature that is not `phase: done`. Refuse with a clear message.
+- Don't shelve the active feature without auto-clearing `.mumei/current` (this skill does it; nothing else should).
 - Don't overwrite an existing archive directory. Refuse with a clear message.
 - Don't auto-commit the move — let the user commit it themselves to keep audit trail clean.
 - Don't modify the feature's content during the move. The state.json is moved as-is.

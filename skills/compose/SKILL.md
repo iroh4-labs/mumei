@@ -280,7 +280,7 @@ Approach:
 
 1. **If `.mumei/scratch/<feature>.md` exists** (the user ran `/mumei:glean` first), read it and treat its `[CONFIRMED]` items as settled. Ask **only about residual gaps** — things that are `[ASSUMPTION]` / `[NEEDS CLARIFICATION]` / missing dimensions, plus anything the orchestrator notices is underspecified.
 
-2. **If no scratch exists**, drive clarification from zero. Cover the same axes gather covers (Goal / Scope / Constraints / Edges / Done).
+2. **If no scratch exists**, drive clarification from zero. Cover the same axes glean covers (Goal / Scope / Constraints / Edges / Done).
 
 3. Use `AskUserQuestion` (multiple-choice where possible, 1-4 questions per call). Cap is **3 rounds × 5 questions = 15 questions max**. Track count.
 
@@ -364,8 +364,8 @@ This applies whether the user came via `/mumei:glean` (scratch attached, ACs imp
 
 When a scratch is attached and an AC is imported from it, follow this deterministic rule for the AC's `Examples:` block:
 
-- If the scratch AC carries a non-empty `Examples:` block, **preserve it exactly** as drafted in gather; do not re-draft.
-- If the scratch AC carries an empty `Examples:` block (header present, zero items), **preserve the empty block as-is**. The user explicitly chose to leave it blank in gather; honour that choice. The downstream `requirements-reviewer` will surface findings if the AC is high-risk.
+- If the scratch AC carries a non-empty `Examples:` block, **preserve it exactly** as drafted in glean; do not re-draft.
+- If the scratch AC carries an empty `Examples:` block (header present, zero items), **preserve the empty block as-is**. The user explicitly chose to leave it blank in glean; honour that choice. The downstream `requirements-reviewer` will surface findings if the AC is high-risk.
 - If the scratch AC has no `Examples:` line at all (line missing entirely), **draft 0–2 Examples now** under the same rules as a direct-path AC.
 
 This rule prevents silent overwrites of user-authored Examples and keeps the upstream/downstream contract observable.
@@ -530,7 +530,7 @@ Generate `.mumei/specs/<feature>/tasks.md` from the design's Wave Plan:
 
 Each task MUST have `_Files:_`, `_Depends:_`, `_Requirements:_`. Each Wave MUST have `**Goal**:` and `**Verify**:`. The `tasks-reviewer` agent will block on missing meta.
 
-`**Depends-Feature**:` is optional. Add it only when the Wave's implementation references symbols, files, or interfaces from another feature (typically still in `.mumei/specs/<other>/` or already archived). When present, `/mumei:shelve` refuses to move the depended-upon feature out of the active workspace until either this Wave's feature is also retired or the directive is removed. Use the bare `REQ-N` form to depend on whatever slug the dependency currently uses; use the compound `REQ-N-slug` form to pin to an exact dir.
+`**Depends-Feature**:` is optional. Add it only when the Wave's implementation references symbols, files, or interfaces from another feature (typically still in `.mumei/specs/<other>/` or already archived). When present, `/mumei:shelve` refuses to move the depended-upon feature out of the active workspace until either this Wave's feature is also shelved or the directive is removed. Use the bare `REQ-N` form to depend on whatever slug the dependency currently uses; use the compound `REQ-N-slug` form to pin to an exact dir.
 
 #### Format invariants (enforced by the parser, not just the reviewer)
 
@@ -1430,13 +1430,13 @@ If `verdict == PASS`:
 mumei_state_set "$feature" '.phase' '"done"'
 ```
 
-After phase=done is set, the orchestrator MUST hand off to retire cleanup. Skipping this leaves stale specs in the active workspace and the user with no clear next step:
+After phase=done is set, the orchestrator MUST hand off to shelve cleanup. Skipping this leaves stale specs in the active workspace and the user with no clear next step:
 
 1. **Tell the user the feature reached done** and prompt them to run `/mumei:shelve <feature>` so the spec moves from `.mumei/specs/<feature>/` to `.mumei/archive/<YYYY-MM>/<feature>/`.
-2. **Do NOT clear `.mumei/current`.** Only `/mumei:shelve` is allowed to mutate `.mumei/current` — see shelve skill which auto-clears the file when retiring the currently-active feature. Clearing it elsewhere (orchestrator, manual edit) creates a session-handoff inconsistency where the next session sees no active feature even though the spec dir still exists.
-3. **Do NOT invoke `/mumei:shelve` directly.** The shelve skill is `disable-model-invocation: true` by design — it only runs on explicit user invocation. The orchestrator's job ends at the retire prompt.
+2. **Do NOT clear `.mumei/current`.** Only `/mumei:shelve` is allowed to mutate `.mumei/current` — see shelve skill which auto-clears the file when shelving the currently-active feature. Clearing it elsewhere (orchestrator, manual edit) creates a session-handoff inconsistency where the next session sees no active feature even though the spec dir still exists.
+3. **Do NOT invoke `/mumei:shelve` directly.** The shelve skill is `disable-model-invocation: true` by design — it only runs on explicit user invocation. The orchestrator's job ends at the shelve prompt.
 
-   In particular: do **NOT** call the `Skill` tool with `mumei:shelve`, do **NOT** ask the user via `AskUserQuestion` whether to "trigger retire" (the user must type `/mumei:shelve <feature>` themselves — there is no path the orchestrator can take to invoke it). The right behaviour is: print one line saying `Run /mumei:shelve <feature> when ready`, then stop. Any attempt to wrap it in a tool call produces `Skill mumei:shelve cannot be used with Skill tool due to disable-model-invocation` and wastes a turn.
+   In particular: do **NOT** call the `Skill` tool with `mumei:shelve`, do **NOT** ask the user via `AskUserQuestion` whether to "trigger shelve" (the user must type `/mumei:shelve <feature>` themselves — there is no path the orchestrator can take to invoke it). The right behaviour is: print one line saying `Run /mumei:shelve <feature> when ready`, then stop. Any attempt to wrap it in a tool call produces `Skill mumei:shelve cannot be used with Skill tool due to disable-model-invocation` and wastes a turn.
 
 If `verdict == MAJOR_ISSUES` or `NEEDS_IMPROVEMENT`:
 

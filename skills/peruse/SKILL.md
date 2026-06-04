@@ -183,7 +183,7 @@ instead of requirements.md.
   directly.
 - iter 2+ full sweep: launch all three always-on reviewers
   (`spec-compliance-reviewer` + `security-reviewer` + `adversarial-reviewer`)
-  in parallel, exactly as iter 1 — examine has no separate sequential stage.
+  in parallel, exactly as iter 1 — peruse has no separate sequential stage.
   Do NOT derive the set from the previous review's `next_iter_reviewers`,
   which may be a narrow legacy value on a feature reviewed before the
   diff-anchor upgrade: launching fewer than all three would PASS without the

@@ -13,7 +13,7 @@ Produce a single markdown document summarising a finished mumei feature so the t
 ## When to use
 
 - The user invokes `/mumei:muse <feature>` after `/mumei:shelve`.
-- The user invokes it on a `phase: done` feature before archival (rare; lets them edit the muse.md before retire moves the docs).
+- The user invokes it on a `phase: done` feature before archival (rare; lets them edit the muse.md before shelve moves the docs).
 
 This skill is `disable-model-invocation: true` — only fires on explicit user request. Never auto-trigger.
 
@@ -98,7 +98,7 @@ The cost section in `muse.md` reflects whatever ended up in `cost-log.jsonl` aft
 
 ## Don'ts
 
-- Don't fail when partial data is missing — emit the section with `(no data)` and move on. A feature aborted mid-Phase 1 still benefits from a reflect.
+- Don't fail when partial data is missing — emit the section with `(no data)` and move on. A feature aborted mid-Phase 1 still benefits from a retrospective.
 - Don't auto-commit the muse.md. Let the user edit lessons / suggestions, then commit themselves.
-- Don't re-trigger /mumei:shelve from here. reflect is read-only with respect to the feature lifecycle.
+- Don't re-trigger /mumei:shelve from here. muse is read-only with respect to the feature lifecycle.
 - Don't overwrite an existing muse.md without confirmation. If `feature_dir/muse.md` exists, suggest a timestamped sibling instead.

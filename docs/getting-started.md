@@ -46,7 +46,7 @@ code is worth the friction.
 When you start a new feature with `/mumei:compose`, the vehicle picker now
 surfaces quantitative bounds (`> 3 files OR > 100 lines` for spec, the
 inverse for plan) in each option's description so calibration is
-explicit. If a gather scratch was attached, an additional
+explicit. If a glean scratch was attached, an additional
 confirmation step appears first — mumei reads the scratch's AC count
 and Goal section, recommends a vehicle, and asks whether to proceed
 with the recommendation or fall through to the standard picker. Final
@@ -125,7 +125,7 @@ mumei is judged by what it prevents, not by what it does.
 
 ## Workflow
 
-### 1. Setup and (optionally) gather
+### 1. Setup and (optionally) glean
 
 ```text
 /mumei:kindle                       # one-time per project
@@ -245,7 +245,7 @@ your-project/
     ├── config.json   # project-wide config: golden_paths (tracked, hand-editable)
     ├── specs/        # per /mumei:compose: requirements.md, design.md, tasks.md, state.json, spec-reviews/, reviews/
     ├── archive/      # per /mumei:shelve: moved under <YYYY-MM>/<feature>/
-    └── scratch/      # per /mumei:glean; tracked intentionally so gather history is shared
+    └── scratch/      # per /mumei:glean; tracked intentionally so glean history is shared
 ```
 
 ## Spec & tasks format

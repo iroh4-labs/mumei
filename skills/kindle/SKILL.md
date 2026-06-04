@@ -72,7 +72,7 @@ add_gitignore_line() {
 add_gitignore_line ".claude/agent-memory-local/"
 ```
 
-Note: `.mumei/scratch/` is **NOT** added to the project-root `.gitignore` — it is intentionally tracked so gather history (the source of design decisions) is shared with teammates.
+Note: `.mumei/scratch/` is **NOT** added to the project-root `.gitignore` — it is intentionally tracked so glean history (the source of design decisions) is shared with teammates.
 
 ### Step 3 — Propose CLAUDE.md additions
 
@@ -85,7 +85,7 @@ This project uses [mumei](https://github.com/.../mumei) for spec-driven developm
 
 ### Workflow
 
-1. `/mumei:glean <topic>` — structured gathering before specing
+1. `/mumei:glean <topic>` — structured gleaning before specing
 2. `/mumei:compose <feature>` — generate requirements / design / tasks (each auto-reviewed by an independent spec-reviewer agent; single user approval gate at the end)
 3. Implement Wave by Wave; commit after each Wave completes
 4. `/mumei:compose` re-invocation triggers the 4-stage review when all tasks are `[x]`
@@ -174,13 +174,13 @@ if (( ${#missing[@]} > 0 )); then
 fi
 ```
 
-Surface the warning verbatim to the user. Do NOT block arrange on missing
+Surface the warning verbatim to the user. Do NOT block kindle on missing
 binaries — let the user decide when to install. The hard fail happens
 later, at review time.
 
 ### Step 8 — Suggest first feature
 
-> Setup complete. To create your first feature, run `/mumei:glean <topic>` for an interactive gathering, or `/mumei:compose <feature-slug>` if you already know what you want.
+> Setup complete. To create your first feature, run `/mumei:glean <topic>` for an interactive gleaning, or `/mumei:compose <feature-slug>` if you already know what you want.
 
 ## Idempotency
 
@@ -196,4 +196,4 @@ This skill is safe to re-run. It will:
 - Don't write to `~/.claude/CLAUDE.md` (user-global). It is read-only context.
 - Don't overwrite existing `.gitignore` patterns; append only.
 - Don't create a default `.mumei/specs/REQ-1-example/` — leave the spec dir empty until the user creates a real feature.
-- Don't run more than once silently. If `.mumei/` already exists, ask "re-arrange?" before doing anything.
+- Don't run more than once silently. If `.mumei/` already exists, ask "re-kindle?" before doing anything.

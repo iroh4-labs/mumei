@@ -1,11 +1,11 @@
 ---
 name: glean
-description: This skill should be used BEFORE any feature design. It runs structured gathering with the user — asking 5 high-leverage questions per round, up to 3 rounds, to extract Goal / Scope / Constraints / Edges / Done. Output is saved to .mumei/scratch/<topic>.md and used as input for /mumei:compose. Triggers include "I want to add X", "we need a feature for Y", "let's brainstorm Z", or any vague feature request.
+description: This skill should be used BEFORE any feature design. It runs structured gleaning with the user — asking 5 high-leverage questions per round, up to 3 rounds, to extract Goal / Scope / Constraints / Edges / Done. Output is saved to .mumei/scratch/<topic>.md and used as input for /mumei:compose. Triggers include "I want to add X", "we need a feature for Y", "let's brainstorm Z", or any vague feature request.
 allowed-tools: [Read, Write, Edit, Glob, Grep, AskUserQuestion]
 ---
 
 <!--
-Role: Pre-spec gathering partner for /mumei:compose
+Role: Pre-spec gleaning partner for /mumei:compose
 Input: free-form feature request from the user
 Output: .mumei/scratch/<topic>.md (structured, consumed by /mumei:compose)
 Principle: Questions must be high-leverage. Cap at 5 per round x 3 rounds. No silent assumptions.
@@ -13,7 +13,7 @@ Principle: Questions must be high-leverage. Cap at 5 per round x 3 rounds. No si
 
 # Glean
 
-Run a structured gathering session with the user before they invoke `/mumei:compose`. The output is a scratch file at `.mumei/scratch/<topic>.md` that captures the user's intent in a form `/mumei:compose` can consume cleanly.
+Run a structured gleaning session with the user before they invoke `/mumei:compose`. The output is a scratch file at `.mumei/scratch/<topic>.md` that captures the user's intent in a form `/mumei:compose` can consume cleanly.
 
 ## When to use
 
@@ -95,7 +95,7 @@ Stop and write the scratch file when ANY of these is true:
 
 ## Language conventions
 
-The gather output follows the same language policy as `/mumei:compose`:
+The glean output follows the same language policy as `/mumei:compose`:
 
 - **Section headings stay in English** (`## Goal (JTBD)`, `## Scope`, `## User Stories (draft)`, `## Acceptance Criteria (EARS, draft)`, `## Rejected Alternatives`, `## Open Questions`, `## Confidence Distribution`, `## Interview Record`).
 - **Body content follows the user's conversation language.** Japanese conversation → Japanese prose. English conversation → English prose. Match the user's most recent substantive message when in doubt.
