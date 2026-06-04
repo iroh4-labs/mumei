@@ -192,13 +192,13 @@ setup() {
 
 @test "scratch_source getter returns the recorded path even when the slug diverges" {
   # Feature key carries a -2 collision suffix; the scratch basename is the
-  # original 'foo'. retire must still co-move .mumei/scratch/foo.md.
+  # original 'foo'. shelve must still co-move .mumei/scratch/foo.md.
   mumei_state_init "REQ-9-foo-2" "foo-2" "REQ-9" ".mumei/scratch/foo.md"
   run mumei_state_scratch_source "REQ-9-foo-2"
   [ "$output" = ".mumei/scratch/foo.md" ]
 }
 
-@test "scratch_source getter is empty for legacy features (retire falls back to slug-match)" {
+@test "scratch_source getter is empty for legacy features (shelve falls back to slug-match)" {
   mumei_state_init "REQ-9-foo" "foo" "REQ-9"
   run mumei_state_scratch_source "REQ-9-foo"
   [ -z "$output" ]

@@ -55,8 +55,8 @@ if [[ -z "$PLAN_FILE_PATH" ]] && [[ -z "$PLAN_BODY" ]]; then
 fi
 
 # Determine slug. The opt-in gate above guarantees .mumei/current exists,
-# so we can read it unconditionally; the file may still be empty (post-arrange,
-# pre-proceed), in which case we fall through to the basename derivation below.
+# so we can read it unconditionally; the file may still be empty (post-kindle,
+# pre-compose), in which case we fall through to the basename derivation below.
 SLUG="$(head -n1 .mumei/current | tr -d '[:space:]')"
 if [[ -z "$SLUG" ]] && [[ -n "$PLAN_FILE_PATH" ]]; then
   # Derive from planFilePath basename, dropping .md

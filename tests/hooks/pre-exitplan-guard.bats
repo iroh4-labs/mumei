@@ -65,7 +65,7 @@ _plan_input() {
   [ ! -e ".mumei" ]
 }
 
-# ─── opt-in present, empty (post-arrange, pre-proceed) ────────────────
+# ─── opt-in present, empty (post-kindle, pre-compose) ────────────────
 
 @test "opt-in via empty .mumei/current → bootstrap from planFilePath basename" {
   # Matches the state /mumei:kindle leaves behind: empty .mumei/current.
