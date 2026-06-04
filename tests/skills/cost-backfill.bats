@@ -124,15 +124,6 @@ _make_subagent() {
   [ ! -f "${feature_dir}/cost-log.jsonl" ]
 }
 
-# Helper: stamp a path's mtime to N seconds before now (BSD/GNU touch).
-_backdate() {
-  local path="$1" secs_ago="$2" epoch stamp
-  epoch=$(($(date +%s) - secs_ago))
-  stamp="$(date -u -r "$epoch" '+%Y%m%d%H%M.%S' 2>/dev/null ||
-    date -u -d "@${epoch}" '+%Y%m%d%H%M.%S' 2>/dev/null)"
-  touch -t "$stamp" "$path"
-}
-
 @test "REQ-30.2: backfill anchors the record with the sidecar launch diff_hash + consumes it" {
   _setup_fake_home
   feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
@@ -173,61 +164,15 @@ _backdate() {
   [ "$(jq -r 'has("diff_hash")' <<<"$rec")" = "false" ]
 }
 
-@test "REQ-30.3: age-based sweep removes a stale orphan sidecar (default 24h)" {
+@test "REQ-30.3: an unconsumed orphan sidecar is left in place (no time-based sweep)" {
   _setup_fake_home
   feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
   mkdir -p ".mumei/in-flight-agents"
-  # Orphan with no matching subagent jsonl → only the sweep can remove it.
-  printf 'REQ-99-test\nOLDHASH\n' >".mumei/in-flight-agents/stale-orphan"
-  _backdate ".mumei/in-flight-agents/stale-orphan" $((48 * 3600))
+  # Orphan with no matching subagent jsonl → never consumed by the walk.
+  # consume-only: it stays (harmless tiny gitignored file), never auto-deleted.
+  printf 'REQ-99-test\nOLDHASH\n' >".mumei/in-flight-agents/orphan"
 
   run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
   [ "$status" -eq 0 ]
-  [ ! -f ".mumei/in-flight-agents/stale-orphan" ]
-}
-
-@test "REQ-30.3: MUMEI_INFLIGHT_SWEEP_HOURS override lowers the cutoff + emits a swept count" {
-  _setup_fake_home
-  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
-  mkdir -p ".mumei/in-flight-agents"
-  printf 'REQ-99-test\nHASH\n' >".mumei/in-flight-agents/two-hr-orphan"
-  _backdate ".mumei/in-flight-agents/two-hr-orphan" $((2 * 3600))
-
-  # Default 24h would keep a 2h-old sidecar; override to 1h sweeps it.
-  run --separate-stderr env MUMEI_INFLIGHT_SWEEP_HOURS=1 \
-    bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
-  [ "$status" -eq 0 ]
-  [ ! -f ".mumei/in-flight-agents/two-hr-orphan" ]
-  [[ "$stderr" == *"swept 1 orphan"* ]]
-}
-
-@test "REQ-30.3: non-numeric MUMEI_INFLIGHT_SWEEP_HOURS degrades to 24 (no break, no mass-sweep)" {
-  _setup_fake_home
-  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
-  mkdir -p ".mumei/in-flight-agents"
-  # A 2h-old sidecar: under the safe 24h default it must SURVIVE; a broken
-  # knob must not error the run or strip live anchors.
-  printf 'REQ-99-test\nHASH\n' >".mumei/in-flight-agents/live"
-  _backdate ".mumei/in-flight-agents/live" $((2 * 3600))
-
-  run --separate-stderr env MUMEI_INFLIGHT_SWEEP_HOURS=24h \
-    bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
-  [ "$status" -eq 0 ]
-  [[ "$stderr" == *"invalid MUMEI_INFLIGHT_SWEEP_HOURS=24h"* ]]
-  [[ "$stderr" != *"value too great"* ]]
-  [ -f ".mumei/in-flight-agents/live" ]
-}
-
-@test "REQ-30.3: MUMEI_INFLIGHT_SWEEP_HOURS=0 is rejected (no longer mass-sweeps live sidecars)" {
-  _setup_fake_home
-  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
-  mkdir -p ".mumei/in-flight-agents"
-  printf 'REQ-99-test\nHASH\n' >".mumei/in-flight-agents/live"
-  _backdate ".mumei/in-flight-agents/live" $((2 * 3600))
-
-  run --separate-stderr env MUMEI_INFLIGHT_SWEEP_HOURS=0 \
-    bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
-  [ "$status" -eq 0 ]
-  [[ "$stderr" == *"invalid MUMEI_INFLIGHT_SWEEP_HOURS=0"* ]]
-  [ -f ".mumei/in-flight-agents/live" ]
+  [ -f ".mumei/in-flight-agents/orphan" ]
 }

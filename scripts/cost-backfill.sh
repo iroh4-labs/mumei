@@ -17,8 +17,7 @@
 # failure paths) carries a launch-time diff_hash on line 2, fold it into the
 # reconstructed record so the push-gate trace (mumei_review_trace_ok) is
 # satisfiable even though the eager SubagentStop hook lost the jsonl flush
-# race. A consumed sidecar is removed; sidecars older than
-# MUMEI_INFLIGHT_SWEEP_HOURS (default 24) are swept before the walk.
+# race. A sidecar is removed once its record is written (consume).
 #
 # Usage: bash scripts/cost-backfill.sh <feature_dir>
 #
@@ -149,38 +148,14 @@ candidates=0
 mtime_min=0
 mtime_max=0
 
-# In-flight sidecar dir (REQ-30.2/3). Derived from feature_dir so it resolves
+# In-flight sidecar dir (REQ-30.2). Derived from feature_dir so it resolves
 # regardless of cwd (backfill is also invoked by /mumei:muse from a subdir).
-# .mumei/specs/<f> or .mumei/plans/<f> → .mumei/in-flight-agents.
+# .mumei/specs/<f> or .mumei/plans/<f> → .mumei/in-flight-agents. A sidecar is
+# removed when its record is written (consume, below). Rare orphans from a
+# crashed session are tiny (<100B) gitignored files left in place — no
+# time-based sweep (it cannot tell a stale orphan from a live anchor in a
+# multi-day session, and orphan accumulation is negligible).
 inflight_dir="$(dirname "$(dirname "$feature_dir")")/in-flight-agents"
-
-# Age-based sweep (REQ-30.3): drop orphan sidecars older than the threshold so
-# a session that died before either the eager hook or this backfill could
-# consume them does not accumulate. Default 24h; overridable (positive integer
-# hours). A non-numeric value would error the arithmetic, and 0 / negative
-# would push the cutoff to now-or-future and mass-sweep LIVE sidecars — so
-# validate and degrade to 24 rather than trust the knob blindly.
-: "${MUMEI_INFLIGHT_SWEEP_HOURS:=24}"
-if ! [[ "$MUMEI_INFLIGHT_SWEEP_HOURS" =~ ^[1-9][0-9]*$ ]]; then
-  printf '[mumei] cost-backfill: invalid MUMEI_INFLIGHT_SWEEP_HOURS=%s, using 24\n' \
-    "$MUMEI_INFLIGHT_SWEEP_HOURS" >&2
-  MUMEI_INFLIGHT_SWEEP_HOURS=24
-fi
-if [[ -d "$inflight_dir" ]]; then
-  sweep_cutoff=$(($(date +%s) - MUMEI_INFLIGHT_SWEEP_HOURS * 3600))
-  swept=0
-  while IFS= read -r -d '' sc; do
-    if scm="$(stat -f %m "$sc" 2>/dev/null || stat -c %Y "$sc" 2>/dev/null)"; then
-      if [[ "$scm" -lt "$sweep_cutoff" ]]; then
-        if rm -f "$sc" 2>/dev/null; then swept=$((swept + 1)); fi
-      fi
-    fi
-  done < <(find "$inflight_dir" -maxdepth 1 -type f -print0 2>/dev/null)
-  if [[ "$swept" -gt 0 ]]; then
-    printf '[mumei] cost-backfill: swept %d orphan sidecar(s) older than %dh\n' \
-      "$swept" "$MUMEI_INFLIGHT_SWEEP_HOURS" >&2
-  fi
-fi
 
 # `find -print0 / read -d ''` keeps the loop safe on paths with spaces.
 while IFS= read -r -d '' meta_path; do
