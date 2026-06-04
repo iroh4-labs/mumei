@@ -67,10 +67,12 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 ## Workflow
 
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/flow_en_dark.svg">
-    <img src="./assets/flow_en.svg" alt="mumei workflow" width="720" />
-  </picture>
+  <a href="./assets/flow_en.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./assets/flow_en_dark.svg">
+      <img src="./assets/flow_en.svg" alt="mumei workflow" width="380" />
+    </picture>
+  </a>
 </div>
 
 > The diagram shows the **spec** / **plan** vehicles. For a one-shot review

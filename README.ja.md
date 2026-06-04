@@ -44,10 +44,12 @@ mumei は自前のマーケットプレイスを同梱しています。Claude C
 ## ワークフロー
 
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/flow_ja_dark.svg">
-    <img src="./assets/flow_ja.svg" alt="mumei ワークフロー" width="720" />
-  </picture>
+  <a href="./assets/flow_ja.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./assets/flow_ja_dark.svg">
+      <img src="./assets/flow_ja.svg" alt="mumei ワークフロー" width="380" />
+    </picture>
+  </a>
 </div>
 
 > 図は **spec** / **plan** の 2 つの方式を示しています。どちらの方式も経由しない単発レビューは、`/mumei:review` が同じレビューエンジンを現在の差分に対して走らせます（`.mumei` 不要、副作用なし）。詳細は [コマンド](#コマンド) を参照。
