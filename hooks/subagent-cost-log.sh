@@ -238,7 +238,7 @@ fi
 # Record written — consume the sidecar now that its launch diff_hash has
 # been folded into the record. The failure / skip paths above intentionally
 # leave it in place for the backfill safety net.
-[[ -n "${SIDECAR:-}" ]] && rm -f "$SIDECAR" 2>/dev/null || true
+if [[ -n "${SIDECAR:-}" ]]; then rm -f "$SIDECAR" 2>/dev/null || true; fi
 
 _mumei_clog_stat "noop" "ok"
 exit 0

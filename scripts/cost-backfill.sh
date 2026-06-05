@@ -257,7 +257,7 @@ while IFS= read -r -d '' meta_path; do
   printf '%s\n' "$record" >>"$cost_log" 2>/dev/null || continue
   appended=$((appended + 1))
   # Consume the sidecar now that its launch diff_hash (if any) is recorded.
-  [[ -f "$sidecar" ]] && rm -f "$sidecar" 2>/dev/null || true
+  if [[ -f "$sidecar" ]]; then rm -f "$sidecar" 2>/dev/null || true; fi
 done < <(find "$project_root" -type f -name '*.meta.json' -path '*/subagents/*' -print0 2>/dev/null)
 
 if [[ "$appended" -eq 0 ]]; then
