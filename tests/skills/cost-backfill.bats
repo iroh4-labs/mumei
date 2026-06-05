@@ -123,3 +123,73 @@ _make_subagent() {
   # Refuse-to-backfill must NOT collapse to all-of-history.
   [ ! -f "${feature_dir}/cost-log.jsonl" ]
 }
+
+@test "REQ-30.2: backfill anchors the record with the sidecar launch diff_hash + consumes it" {
+  _setup_fake_home
+  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
+  _make_subagent agent-aaa mumei:spec-compliance-reviewer 1778000000
+  mkdir -p ".mumei/in-flight-agents"
+  # extracted agent_id from agent-agent-aaa.meta.json is "agent-aaa".
+  printf 'REQ-99-test\nDEADBEEFHASH\n' >".mumei/in-flight-agents/agent-aaa"
+
+  run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
+  [ "$status" -eq 0 ]
+  rec="$(cat "${feature_dir}/cost-log.jsonl")"
+  [ "$(jq -r '.diff_hash' <<<"$rec")" = "DEADBEEFHASH" ]
+  # Sidecar consumed after use (also proves a fresh sidecar is not swept).
+  [ ! -f ".mumei/in-flight-agents/agent-aaa" ]
+}
+
+@test "REQ-30.2: no sidecar → record written without diff_hash (no stop-time recompute)" {
+  _setup_fake_home
+  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
+  _make_subagent agent-aaa mumei:security-reviewer 1778000000
+
+  run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
+  [ "$status" -eq 0 ]
+  rec="$(cat "${feature_dir}/cost-log.jsonl")"
+  [ "$(jq -r 'has("diff_hash")' <<<"$rec")" = "false" ]
+}
+
+@test "REQ-30.2: a sidecar from ANOTHER feature is not used to anchor or consumed (Codex P1)" {
+  _setup_fake_home
+  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
+  _make_subagent agent-aaa mumei:security-reviewer 1778000000
+  mkdir -p ".mumei/in-flight-agents"
+  # The sidecar's launch feature (line 1) is a DIFFERENT feature. Its hash must
+  # NOT anchor REQ-99-test's record, and it must be left for REQ-77-other's
+  # own backfill — otherwise feature B's reviewer run could spoof A's trace.
+  printf 'REQ-77-other\nFOREIGNHASH\n' >".mumei/in-flight-agents/agent-aaa"
+
+  run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
+  [ "$status" -eq 0 ]
+  rec="$(cat "${feature_dir}/cost-log.jsonl")"
+  [ "$(jq -r 'has("diff_hash")' <<<"$rec")" = "false" ]
+  [ -f ".mumei/in-flight-agents/agent-aaa" ]
+}
+
+@test "REQ-30.2: sidecar with empty launch hash → record stays unanchored" {
+  _setup_fake_home
+  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
+  _make_subagent agent-aaa mumei:adversarial-reviewer 1778000000
+  mkdir -p ".mumei/in-flight-agents"
+  printf 'REQ-99-test\n\n' >".mumei/in-flight-agents/agent-aaa"
+
+  run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
+  [ "$status" -eq 0 ]
+  rec="$(cat "${feature_dir}/cost-log.jsonl")"
+  [ "$(jq -r 'has("diff_hash")' <<<"$rec")" = "false" ]
+}
+
+@test "REQ-30.3: an unconsumed orphan sidecar is left in place (no time-based sweep)" {
+  _setup_fake_home
+  feature_dir="$(_make_feature REQ-99-test 2026-05-01T00:00:00Z 2026-12-31T00:00:00Z)"
+  mkdir -p ".mumei/in-flight-agents"
+  # Orphan with no matching subagent jsonl → never consumed by the walk.
+  # consume-only: it stays (harmless tiny gitignored file), never auto-deleted.
+  printf 'REQ-99-test\nOLDHASH\n' >".mumei/in-flight-agents/orphan"
+
+  run --separate-stderr bash "${CLAUDE_PLUGIN_ROOT}/scripts/cost-backfill.sh" "$feature_dir"
+  [ "$status" -eq 0 ]
+  [ -f ".mumei/in-flight-agents/orphan" ]
+}

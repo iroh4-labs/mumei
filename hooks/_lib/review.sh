@@ -520,14 +520,20 @@ mumei_review_should_short_circuit() {
 # The push-guard (R2 / L-R2) calls this before letting a non-MAJOR_ISSUES
 # verdict clear `git push`.
 #
-# Presence model (deliberately coarse): cost-log records are written by
-# the SubagentStop hook, which attributes each record to the launch-time
-# feature via the in-flight sidecar and which the orchestrator cannot
-# produce without actually launching the reviewer subagent. This checks
-# that EACH baseline reviewer (adversarial + security + spec-compliance —
-# every feature's first review launches all three on both vehicles) has
-# at least one `phase:"after"` record for THIS feature. That robustly
-# blocks a hand-written PASS for which a baseline reviewer never ran.
+# Diff-anchored model: cost-log records are written by the SubagentStop hook
+# (or reconstructed by the Stop-time backfill, scripts/cost-backfill.sh), each
+# attributed to the launch-time feature via the in-flight sidecar and carrying
+# the launch-time diff_hash — neither of which the orchestrator can produce
+# without actually launching the reviewer subagent. This requires that EACH
+# baseline reviewer (adversarial + security + spec-compliance — every feature's
+# first review launches all three on both vehicles) has a `phase:"after"`
+# record whose diff_hash MATCHES the gating review's diff_hash (see the
+# per-reviewer match in the jq pass below), AND that the gating review itself
+# carries a diff_hash the current tree still hashes to (freshness, checked
+# above). A reviewer whose latest after-record carries an earlier diff_hash —
+# a focused iter that skipped it, or a re-edit since the verdict — counts as
+# missing. That robustly blocks a hand-written PASS, or a PASS whose baseline
+# reviewers never ran against the pushed diff.
 #
 # What it intentionally does NOT do (and why): it does not verify per-
 # iteration freshness — e.g. an iter-1 MAJOR_ISSUES re-issued as an iter-2

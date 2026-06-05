@@ -11,6 +11,14 @@
 # state.json.created_at and updated_at, sum the assistant entries'
 # usage and append a record to feature_dir/cost-log.jsonl.
 #
+# Diff-anchor (REQ-30.2): when an in-flight sidecar
+# (<.mumei>/in-flight-agents/<agent_id>, written by
+# subagent-cost-log-start.sh and preserved by subagent-cost-log.sh on its
+# failure paths) carries a launch-time diff_hash on line 2, fold it into the
+# reconstructed record so the push-gate trace (mumei_review_trace_ok) is
+# satisfiable even though the eager SubagentStop hook lost the jsonl flush
+# race. A sidecar is removed once its record is written (consume).
+#
 # Usage: bash scripts/cost-backfill.sh <feature_dir>
 #
 # Always exits 0 — backfill is best-effort. Reasons that prevent
@@ -140,6 +148,19 @@ candidates=0
 mtime_min=0
 mtime_max=0
 
+# In-flight sidecar dir (REQ-30.2). Derived from feature_dir so it resolves
+# regardless of cwd (backfill is also invoked by /mumei:muse from a subdir).
+# .mumei/specs/<f> or .mumei/plans/<f> → .mumei/in-flight-agents. A sidecar is
+# removed when its record is written (consume, below). Rare orphans from a
+# crashed session are tiny (<100B) gitignored files left in place — no
+# time-based sweep (it cannot tell a stale orphan from a live anchor in a
+# multi-day session, and orphan accumulation is negligible).
+# For an ARCHIVED feature_dir (/mumei:muse) this resolves to the wrong dir, but
+# anchoring is moot post-archive: the push gate (mumei_review_trace_ok) only
+# runs on the active feature and muse never reads diff_hash, so the missing
+# anchor and the unconsumed orphan there have no effect.
+inflight_dir="$(dirname "$(dirname "$feature_dir")")/in-flight-agents"
+
 # `find -print0 / read -d ''` keeps the loop safe on paths with spaces.
 while IFS= read -r -d '' meta_path; do
   candidates=$((candidates + 1))
@@ -170,6 +191,37 @@ while IFS= read -r -d '' meta_path; do
   fi
 
   agent_short="${agent_type#mumei:}"
+
+  # Diff-anchor (REQ-30.2): recover the launch-time diff_hash from the
+  # in-flight sidecar keyed by this subagent's agent_id (the meta filename is
+  # agent-<id>.meta.json). Line 1 is the launch feature, line 2 the launch
+  # hash. Only use (and consume) a sidecar whose launch feature matches the
+  # feature being backfilled: a subagent for ANOTHER feature can fall inside
+  # this feature's mtime window, and trusting its hash would let feature B's
+  # reviewer run masquerade as feature A's execution trace if the diffs hash
+  # equal. Empty / absent / cross-feature → record stays unanchored (no
+  # stop-time recompute).
+  agent_id="$(basename "$meta_path")"
+  agent_id="${agent_id#agent-}"
+  agent_id="${agent_id%.meta.json}"
+  sidecar="${inflight_dir}/${agent_id}"
+  launch_dh=""
+  sidecar_mine=0
+  if [[ -f "$sidecar" ]]; then
+    # Read both sidecar lines with Bash builtins — no sed/tr fork per subagent.
+    sc_feature=""
+    {
+      read -r sc_feature || true
+      read -r launch_dh || true
+    } <"$sidecar"
+    sc_feature="${sc_feature//[[:space:]]/}"
+    if [[ "$sc_feature" == "$feature_basename" ]]; then
+      sidecar_mine=1
+      launch_dh="${launch_dh//[[:space:]]/}"
+    else
+      launch_dh=""
+    fi
+  fi
 
   usage_json="$(
     jq -s '
@@ -204,8 +256,10 @@ while IFS= read -r -d '' meta_path; do
       --arg ts "$ts_iso" \
       --arg feature "$feature_basename" \
       --arg agent "$agent_short" \
+      --arg dh "$launch_dh" \
       --argjson usage "$usage_json" \
       '{ts: $ts, feature: $feature, wave: null, iteration: null, agent: $agent, phase: "after"}
+       + (if $dh != "" then {diff_hash: $dh} else {} end)
        + ($usage
           | with_entries(select(.key as $k
               | ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
@@ -220,6 +274,9 @@ while IFS= read -r -d '' meta_path; do
   [[ -d "$(dirname "$cost_log")" ]] || continue
   printf '%s\n' "$record" >>"$cost_log" 2>/dev/null || continue
   appended=$((appended + 1))
+  # Consume the sidecar now that its launch diff_hash (if any) is recorded —
+  # only ours; a cross-feature sidecar is left for its own feature's backfill.
+  if [[ "$sidecar_mine" -eq 1 ]]; then rm -f "$sidecar" 2>/dev/null || true; fi
 done < <(find "$project_root" -type f -name '*.meta.json' -path '*/subagents/*' -print0 2>/dev/null)
 
 if [[ "$appended" -eq 0 ]]; then
