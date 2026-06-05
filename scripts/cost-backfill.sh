@@ -208,10 +208,18 @@ while IFS= read -r -d '' meta_path; do
   launch_dh=""
   sidecar_mine=0
   if [[ -f "$sidecar" ]]; then
-    sc_feature="$(sed -n 1p "$sidecar" 2>/dev/null | tr -d '[:space:]' || true)"
+    # Read both sidecar lines with Bash builtins — no sed/tr fork per subagent.
+    sc_feature=""
+    {
+      read -r sc_feature || true
+      read -r launch_dh || true
+    } <"$sidecar"
+    sc_feature="${sc_feature//[[:space:]]/}"
     if [[ "$sc_feature" == "$feature_basename" ]]; then
       sidecar_mine=1
-      launch_dh="$(sed -n 2p "$sidecar" 2>/dev/null | tr -d '[:space:]' || true)"
+      launch_dh="${launch_dh//[[:space:]]/}"
+    else
+      launch_dh=""
     fi
   fi
 
