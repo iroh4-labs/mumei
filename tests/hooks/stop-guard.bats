@@ -278,6 +278,63 @@ EOF
   [ -z "$stderr" ]
 }
 
+# ─── R3 one-shot: nag at most once per session (issue #129 part 2) ───
+
+@test "R3 with session_id blocks once and records shelve_nag_session" {
+  _init_feature_with_tasks "implement" "yes"
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  mumei_state_set "REQ-1-foo" '.phase' '"done"'
+  _run_hook '{"stop_hook_active":false,"session_id":"sess-AAA"}'
+  [ "$status" -eq 0 ]
+  decision="$(printf '%s' "$output" | jq -r '.decision')"
+  [ "$decision" = "block" ]
+  # The session is recorded so the next stop in the same session stays silent.
+  recorded="$(jq -r '.shelve_nag_session' .mumei/specs/REQ-1-foo/state.json)"
+  [ "$recorded" = "sess-AAA" ]
+}
+
+@test "R3 stays silent on a second stop within the same session" {
+  _init_feature_with_tasks "implement" "yes"
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  mumei_state_set "REQ-1-foo" '.phase' '"done"'
+  # First stop: blocks and records the session.
+  _run_hook '{"stop_hook_active":false,"session_id":"sess-AAA"}'
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r '.decision')" = "block" ]
+  # Second stop, same session: suppressed (no block, no output).
+  _run_hook '{"stop_hook_active":false,"session_id":"sess-AAA"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  [ -z "$stderr" ]
+}
+
+@test "R3 re-arms the nag for a new session_id" {
+  _init_feature_with_tasks "implement" "yes"
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  mumei_state_set "REQ-1-foo" '.phase' '"done"'
+  # A prior session already saw the nag.
+  mumei_state_set "REQ-1-foo" '.shelve_nag_session' '"sess-OLD"'
+  # A different session must be nagged again, and the marker updated.
+  _run_hook '{"stop_hook_active":false,"session_id":"sess-NEW"}'
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r '.decision')" = "block" ]
+  recorded="$(jq -r '.shelve_nag_session' .mumei/specs/REQ-1-foo/state.json)"
+  [ "$recorded" = "sess-NEW" ]
+}
+
+@test "R3 without session_id falls back to always-block (no marker written)" {
+  _init_feature_with_tasks "implement" "yes"
+  source "$CLAUDE_PLUGIN_ROOT/hooks/_lib/state.sh"
+  mumei_state_set "REQ-1-foo" '.phase' '"done"'
+  _run_hook '{"stop_hook_active":false}'
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r '.decision')" = "block" ]
+  # No session to scope the one-shot → marker stays absent, so every stop
+  # keeps blocking (original behavior preserved).
+  recorded="$(jq -r '.shelve_nag_session // "absent"' .mumei/specs/REQ-1-foo/state.json)"
+  [ "$recorded" = "absent" ]
+}
+
 # ─── MUMEI_BYPASS escape hatch ───────────────────────────────
 
 @test "MUMEI_BYPASS=1 short-circuits even when review is missing" {

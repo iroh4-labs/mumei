@@ -3,6 +3,7 @@
 # Rules covered:
 #   R1: session ending with every spec-vehicle task complete but no review run -> block
 #   R3: spec-vehicle phase=done while .mumei/current still active -> block to prompt /mumei:shelve
+#       (nags at most once per session_id; see the phase=done block for why)
 #   L-R1 (plan vehicle): pending_review=true with no PASS review JSON or no detector_report -> block
 #
 # Design principles:
@@ -31,6 +32,11 @@ STOP_HOOK_ACTIVE="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false')"
 if [[ "$STOP_HOOK_ACTIVE" == "true" ]]; then
   exit 0
 fi
+
+# session_id (when the client provides it) scopes the one-shot shelve nag in
+# the R3 branch below. Absent on older clients / in tests, where SESSION_ID is
+# empty and R3 falls back to its original always-block behavior.
+SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)"
 
 KEY="$(mumei_current_feature 2>/dev/null || true)"
 if [[ -z "$KEY" ]]; then
@@ -116,6 +122,20 @@ PHASE="$(mumei_state_phase "$FEATURE")"
 if [[ "$PHASE" == "done" ]]; then
   CURRENT="$(mumei_current_feature 2>/dev/null || true)"
   if [[ "$CURRENT" == "$FEATURE" ]]; then
+    # Nag at most once per session. The shelve reminder is a one-shot prompt,
+    # not a hard gate: once we have told the user in this session, stay silent
+    # so legitimate in-flight landing work (pushing the PR, waiting on CI or a
+    # user decision) is not re-blocked at every natural stop. A fresh session
+    # re-arms the reminder in case it was forgotten. When SESSION_ID is empty
+    # (older client / tests) we fall back to the original always-block path.
+    if [[ -n "$SESSION_ID" ]]; then
+      NAGGED_SESSION="$(mumei_state_get "$FEATURE" '.shelve_nag_session' 2>/dev/null || true)"
+      if [[ "$NAGGED_SESSION" == "$SESSION_ID" ]]; then
+        exit 0
+      fi
+      mumei_state_set "$FEATURE" '.shelve_nag_session' \
+        "$(jq -Rn --arg s "$SESSION_ID" '$s')" 2>/dev/null || true
+    fi
     REASON="Feature ${FEATURE} reached phase=done but is still active in .mumei/current. Run /mumei:shelve ${FEATURE} to move the spec, or clear .mumei/current."
     CONTEXT="The shelve skill (/mumei:shelve) is user-invocable only; the orchestrator cannot run it. Either invoke /mumei:shelve to move the spec to .mumei/archive/<YYYY-MM>/, or clear .mumei/current to dismiss this gate."
     jq -n --arg r "$REASON" --arg c "$CONTEXT" '{

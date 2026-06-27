@@ -88,6 +88,10 @@
       "description": "Path to the .mumei/scratch/<topic>.md this feature was created from, recorded at init. /mumei:shelve co-moves this exact file into the archive even when the feature slug diverges from the scratch basename. Optional: omitted when no scratch was attached; legacy features predate the field.",
       "type": "string"
     },
+    "shelve_nag_session": {
+      "description": "Spec vehicle only. The hook session_id of the most recent R3 shelve nag (hooks/stop-guard.sh). Set when phase=done and the feature is still active in .mumei/current; the nag is then suppressed for the rest of that session so in-flight PR landing is not re-blocked at every stop. A new session_id re-arms the reminder. Absent until the first nag.",
+      "type": "string"
+    },
     "pending_review": {
       "description": "Plan vehicle only. Set true by post-task-event.sh when the last TaskCompleted matches task_created_count; cleared by /mumei:peruse on PASS.",
       "type": "boolean"
