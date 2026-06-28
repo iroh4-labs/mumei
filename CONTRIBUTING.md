@@ -178,11 +178,12 @@ are generated from the subject line alone, and bot-style attribution adds noise.
 ## Pull request workflow
 
 `main` is protected (required status checks, required conversation
-resolution, and `enforce_admins: true`), so **every change must go
-through a pull request** — direct pushes are blocked for everyone,
-including the maintainer. The CI checks below run on the diff before
-merge. External contributors fork; the maintainer creates a topic
-branch in this repo.
+resolution, linear history, no force-push). **External contributors must
+go through a pull request** — fork, branch, and open a PR; the CI checks
+below run on the diff before merge. The maintainer is a repo admin
+(`enforce_admins: false`) and may push light changes (docs, small fixes)
+directly to `main`, but should still open a PR for substantial features
+so the full CI suite and AI review run before landing.
 
 1. **Branch first, then plan.** Fork or branch from `main`
    (`git checkout -b feat/your-feature`; the branch-name prefix should
