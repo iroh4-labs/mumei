@@ -35,6 +35,7 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       # All gating runs as a step (not a job-level `if`). A job-level if that
       # dereferences github.event.pull_request.* skips the entire job on non-PR
@@ -338,7 +339,7 @@ jobs:
           semgrep_install_status=ok
           python -m pip install --quiet --require-hashes -r .github/requirements/semgrep-review/requirements.txt || semgrep_install_status="install failed"
           osv_install_status=ok
-          if curl -fsSL -o /tmp/osv-scanner "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"; then
+          if curl --retry 2 --max-time 60 --retry-delay 2 -fsSL -o /tmp/osv-scanner "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"; then
             echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c - || {
               echo "::error::osv-scanner ${OSV_VERSION} SHA-256 mismatch (release may have been retagged) — aborting (supply chain integrity)" >&2
               exit 1
