@@ -101,8 +101,11 @@ updates:
       # import time. Without this, Dependabot proposes 82.x, pip-compile cannot
       # satisfy it against the `setuptools<81` constraint, and the whole update
       # job fails (#186) — which is what happened the moment the constraint was
-      # added. Bump only when semgrep's dependency stops needing pkg_resources.
+      # added. Scoped to >=81 rather than a blanket ignore so 80.x security
+      # patches still flow. Drop it when semgrep's dependency stops importing
+      # pkg_resources.
       - dependency-name: "setuptools"
+        versions: [">=81"]
 
   - package-ecosystem: "pip"
     directory: "/.github/requirements/validate"
