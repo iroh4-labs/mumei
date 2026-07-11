@@ -7,6 +7,14 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Tokyo"
+    # A newly published version is a version nobody has looked at yet. Without a
+    # cooldown, Dependabot proposes it the moment it exists, which is exactly the
+    # window a compromised release wants — and Dependabot is the mechanism that
+    # rotates the SHA pins `mutable-tag-guard` otherwise holds still. Waiting a
+    # few days lets the ecosystem notice a bad release before we are asked to pin
+    # it. Surfaced by the Stage 0 semgrep's first-ever real run (#183).
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -39,6 +47,14 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Tokyo"
+    # A newly published version is a version nobody has looked at yet. Without a
+    # cooldown, Dependabot proposes it the moment it exists, which is exactly the
+    # window a compromised release wants — and Dependabot is the mechanism that
+    # rotates the SHA pins `mutable-tag-guard` otherwise holds still. Waiting a
+    # few days lets the ecosystem notice a bad release before we are asked to pin
+    # it. Surfaced by the Stage 0 semgrep's first-ever real run (#183).
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -53,6 +69,14 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Tokyo"
+    # A newly published version is a version nobody has looked at yet. Without a
+    # cooldown, Dependabot proposes it the moment it exists, which is exactly the
+    # window a compromised release wants — and Dependabot is the mechanism that
+    # rotates the SHA pins `mutable-tag-guard` otherwise holds still. Waiting a
+    # few days lets the ecosystem notice a bad release before we are asked to pin
+    # it. Surfaced by the Stage 0 semgrep's first-ever real run (#183).
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -80,6 +104,14 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Tokyo"
+    # A newly published version is a version nobody has looked at yet. Without a
+    # cooldown, Dependabot proposes it the moment it exists, which is exactly the
+    # window a compromised release wants — and Dependabot is the mechanism that
+    # rotates the SHA pins `mutable-tag-guard` otherwise holds still. Waiting a
+    # few days lets the ecosystem notice a bad release before we are asked to pin
+    # it. Surfaced by the Stage 0 semgrep's first-ever real run (#183).
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     labels:

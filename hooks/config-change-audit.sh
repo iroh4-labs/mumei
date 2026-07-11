@@ -43,6 +43,25 @@ if [[ -n "$SETTINGS_PATH" && -f "$SETTINGS_PATH" ]]; then
   fi
 fi
 
+# --- X7: ConfigChange — a settings write turned MUMEI_BYPASS on (advisory) ---
+# S3 refuses the obvious write (Edit/Write, or a Bash command naming both the
+# settings file and the variable). It cannot refuse a write it does not read — a
+# python one-liner, a heredoc written to a script and then run. This fires on the
+# resulting state change instead of on the command, so the route taken does not
+# matter. It is the backstop, and it is why S3 is allowed to be imperfect.
+#
+# Advisory, not a block: the operator is entitled to set the escape hatch. What
+# they are not entitled to is having it set for them, quietly. So it is recorded
+# in the audit log and said out loud.
+if [[ -n "$SETTINGS_PATH" && -f "$SETTINGS_PATH" ]] &&
+  jq -e '.env.MUMEI_BYPASS? // empty | tostring | . == "1"' "$SETTINGS_PATH" >/dev/null 2>&1; then
+  BYPASS_LINE="$(jq -n -c --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg src "$CONFIG_SOURCE" --arg path "$SETTINGS_PATH" \
+    '{ts: $ts, event: "bypass-enabled-via-settings", config_source: $src, path: $path}' 2>/dev/null || true)"
+  [[ -n "$BYPASS_LINE" ]] && mumei_audit_log_append "config-change" "$BYPASS_LINE"
+  printf '[mumei] X7: %s now sets MUMEI_BYPASS=1 — from the next session every mumei gate is disabled. If you did not do this, someone with write access to your settings did.\n' \
+    "$SETTINGS_PATH" >&2
+fi
+
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 JSON_LINE="$(jq -n -c \
   --arg ts "$TS" \

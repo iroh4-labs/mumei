@@ -105,7 +105,15 @@ jobs:
             echo "::notice::could not fetch base ${BASE_REF}; proceeding without AGENTS.md guidance"
             exit 0
           }
-          git show "origin/${BASE_REF}:AGENTS.md" >/tmp/agents.md 2>/dev/null || : >/tmp/agents.md
+          git show "origin/${BASE_REF}:AGENTS.md" >/tmp/agents.raw 2>/dev/null || : >/tmp/agents.raw
+          # AGENTS.md embeds the universal rubric verbatim between the BEGIN/END
+          # markers (scripts/lint-review-rubric.sh keeps the four carriers in byte
+          # parity). The prompt already carries that rubric on its own, so shipping
+          # it twice spent ~11 KB of a budget the diff needs — and on PR #185 the
+          # diff was cut before the hook implementations it existed to review. The
+          # prompt is not the place to pay for that parity.
+          awk '/BEGIN universal-review-rubric/{skip=1} /END universal-review-rubric/{skip=0; next} !skip' \
+            /tmp/agents.raw >/tmp/agents.md 2>/dev/null || cp /tmp/agents.raw /tmp/agents.md
 
       - name: Materialize inlined rubric
         if: steps.gate.outputs.skip != 'true'
@@ -493,7 +501,8 @@ jobs:
           # action as a single environment string (`prompt:` -> INPUT_PROMPT),
           # and execve caps ONE string at MAX_ARG_STRLEN = 32 * PAGE_SIZE.
           # Measured on an ubuntu-latest runner (PAGE_SIZE=4096): 127 KiB spawns,
-          # 128 KiB and up fail with E2BIG. Past the limit the step does not run a
+          # 128 KiB and up fail with E2BIG — so the wall is at 131072 bytes and the
+          # budget below keeps 11 KB clear of it. Past the limit the step does not run a
           # shorter review — it fails to start. So the budget is on the WHOLE
           # assembled prompt, and the diff gets whatever is left after the fixed
           # parts.
@@ -501,9 +510,9 @@ jobs:
           # Not theoretical: the rubric plus AGENTS.md are ~31 KB before anything
           # else, and PR #182's diff was 98 KB. 110 KB leaves ~17 KB of headroom
           # under the measured cliff.
-          PROMPT_MAX_BYTES: "110000"
+          PROMPT_MAX_BYTES: "120000"
           AGENTS_MAX_BYTES: "24000"
-          BODY_MAX_BYTES: "16000"
+          BODY_MAX_BYTES: "10000"
         run: |
           set -u
           if ! gh pr diff "$PR_NUMBER" --repo "$REPO" >/tmp/pr.diff; then
@@ -606,6 +615,15 @@ jobs:
             [ -n "$diff_note" ] && { echo "$diff_note"; echo ""; }
             cat /tmp/pr.diff
           } >/tmp/prompt.txt
+
+          # head -c cuts at an arbitrary byte, so a truncated diff does not end in a
+          # newline — and then the GITHUB_ENV heredoc's closing delimiter lands
+          # glued to the last line and the whole block is rejected ("Matching
+          # delimiter not found"). Only reachable once truncation actually fires,
+          # which is exactly why it has to be handled here rather than noticed
+          # later. Same reason head -c can split a multibyte glyph: the tail of a
+          # truncated diff is bytes, not text.
+          [ -n "$(tail -c1 /tmp/prompt.txt)" ] && printf '\n' >>/tmp/prompt.txt
 
           prompt_bytes="$(wc -c </tmp/prompt.txt | tr -d ' ')"
           echo "prompt: ${prompt_bytes} bytes (prefix ${prefix_bytes}, diff $(wc -c </tmp/pr.diff | tr -d ' '))"
