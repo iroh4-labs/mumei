@@ -8,7 +8,7 @@ this repository.
 
 By participating, you agree to abide by the [Code of Conduct](./CODE_OF_CONDUCT.md)
 (Contributor Covenant v2.1). Report incidents through the channels listed in that
-document or via [GitHub Security Advisories](https://github.com/hir4ta/mumei/security/advisories/new)
+document or via [GitHub Security Advisories](https://github.com/iroh4-labs/mumei/security/advisories/new)
 for security-sensitive matters.
 
 ## Local development
@@ -17,7 +17,7 @@ mumei is a Claude Code plugin. The fastest way to iterate is to load it directly
 from your local clone with the `--plugin-dir` flag:
 
 ```bash
-git clone https://github.com/hir4ta/mumei.git
+git clone https://github.com/iroh4-labs/mumei.git
 cd mumei
 claude --plugin-dir "$(pwd)"
 ```
@@ -331,9 +331,9 @@ for repository social preview):
 1. Prepare a 1280×640 PNG. Keep it minimal: project name, one-line tagline,
    and (optionally) the nameless-butler motif. Avoid screenshots that age fast.
 2. Go to **Settings → General → Social preview** of the repo
-   (`https://github.com/hir4ta/mumei/settings`).
+   (`https://github.com/iroh4-labs/mumei/settings`).
 3. Click **Upload an image** and select the PNG.
-4. Verify on the repo home page (`https://github.com/hir4ta/mumei`) — the
+4. Verify on the repo home page (`https://github.com/iroh4-labs/mumei`) — the
    image now appears at the top of the page when shared externally.
 
 Replace the image when the design language or scope of the project changes
@@ -382,13 +382,13 @@ each rule mitigates.
 ## Reporting bugs
 
 Use the **Bug report** template under
-[Issues → New issue](https://github.com/hir4ta/mumei/issues/new/choose). The form
+[Issues → New issue](https://github.com/iroh4-labs/mumei/issues/new/choose). The form
 collects mumei-specific reproduction information (affected component, Claude Code
 version, mumei version, `bash` / `semgrep` / `osv-scanner` versions, the relevant
 `.mumei/specs/<feature>/state.json` and `tasks.md`, and a minimal repro).
 
 For security vulnerabilities, do **not** open a public issue. Use
-[GitHub Security Advisories](https://github.com/hir4ta/mumei/security/advisories/new)
+[GitHub Security Advisories](https://github.com/iroh4-labs/mumei/security/advisories/new)
 instead — see [SECURITY.md](./SECURITY.md).
 
 ## Questions

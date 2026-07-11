@@ -1,7 +1,7 @@
 name: review-reusable
 
 # Harness-engineered reusable review workflow (REQ-24). Consuming repos invoke
-# this via `uses: hir4ta/mumei/.github/workflows/review-reusable.yml@<ref>` and
+# this via `uses: iroh4-labs/mumei/.github/workflows/review-reusable.yml@<ref>` and
 # supply the CLAUDE_CODE_OAUTH_TOKEN secret. The rubric (universal taxonomy +
 # precision discipline + harness instructions) is INLINED below inside a
 # heredoc between the BEGIN/END universal-review-rubric markers so adopters
