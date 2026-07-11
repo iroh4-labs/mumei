@@ -102,22 +102,40 @@ users can model them rather than discovering them later.
   maintainer account can sign and publish a malicious release that
   passes every in-tree check. Out-of-band detection (community
   vigilance, scorecard divergence) is the only signal.
-- **R3 — Single-maintainer review.** mumei has no two-party-review
-  requirement: the required approval comes from a code owner, and on a
-  single-maintainer project that owner is the same person who reviews
-  everything. Branch protection makes the approval a server-side gate
-  (an AI session's commits cannot approve themselves), but it does not
-  manufacture a second pair of human eyes. SLSA L4's two-party review
-  is therefore approximated, not achieved.
+- **R3 — No server-side merge gate on `main`.** `main` requires its
+  status checks and a resolved conversation, but it does not require an
+  approving review. That is not an oversight waiting to be ticked: on a
+  single-identity project the gate cannot exist. GitHub does not let the
+  author of a pull request approve it, and mumei has exactly one
+  identity — the maintainer, who is also the code owner, also the repo
+  admin, and also the account whose `gh` credentials any AI session on
+  the maintainer's machine inherits. Requiring one approval would either
+  be bypassed as admin (by the human and, with the same credentials, by
+  the agent) or would deadlock the repository. There is no middle
+  setting.
 
-  Why the approval is load-bearing rather than defence-in-depth: the
-  required status checks run scripts that live in the repository
-  (`scripts/lint-all.sh`, `tests/`). A token scoped to `Contents: write`
-  — no `Workflows`, no `Administration` — cannot touch
-  `.github/workflows/**`, but it can rewrite `scripts/lint-all.sh` to
-  `exit 0`, and the required `lint` check then reports green. No in-tree
-  check can close that, because every in-tree check is in the tree. Only
-  a human looking at the diff can.
+  The precondition for a real merge gate is therefore an identity, not a
+  checkbox: the agent commits under a separate machine account holding a
+  fine-grained PAT (`Contents: write` + `Pull requests: write`, no
+  `Workflows`, no `Administration`), which makes the maintainer a
+  non-author reviewer whose approval GitHub can enforce. Until such an
+  account exists, mumei accepts this risk deliberately.
+
+  What that costs is worth stating precisely, because it is the hole no
+  in-tree check can close. The required status checks run scripts that
+  live in the repository (`scripts/lint-all.sh`, `tests/`). A
+  `Contents: write` token cannot touch `.github/workflows/**`, but it can
+  rewrite `scripts/lint-all.sh` to `exit 0`, and the required `lint`
+  check then reports green. Every in-tree check is in the tree. Only a
+  human reading the diff catches that — and here, nothing forces the
+  human to read it.
+
+  What survives regardless are the measurement gates (see R6): they
+  recompute from git objects rather than believing a file, so they hold
+  without any identity separation. And the highest-severity path — a tag
+  push publishing a signed tarball to plugin users — is gated
+  independently by the `release` environment's required reviewer, which
+  does not depend on who authored the commit.
 - **R4 — Bash analysis gap.** CodeQL does not analyze shell
   scripts. `shellcheck` (CI + pre-commit) and `semgrep` (review
   Stage 0) are the only static checks against bash code. Bash-
