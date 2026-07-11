@@ -149,6 +149,18 @@ repos:
         language: system
         pass_filenames: false
         files: ^(hooks/hooks\.json|hooks/(pre-exitplan-guard|post-task-event)\.sh|skills/peruse/SKILL\.md|scripts/lint-plan-vehicle-hooks\.sh)$
+      - id: lint-agent-namespace
+        name: lint-agent-namespace (#178 recurrence gate)
+        entry: bash scripts/lint-agent-namespace.sh
+        language: system
+        pass_filenames: false
+        files: ^(hooks/hooks\.json|agents/[^/]*\.md|skills/.*/SKILL\.md|\.claude-plugin/plugin\.json|scripts/lint-agent-namespace\.sh)$
+      - id: lint-distribution-shape
+        name: lint-distribution-shape (plugin tarball contents)
+        entry: bash scripts/lint-distribution-shape.sh
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: jq-empty-manifests
         name: jq empty (plugin.json + hooks.json)
         entry: bash -c 'jq empty .claude-plugin/plugin.json && jq empty hooks/hooks.json'

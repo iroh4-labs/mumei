@@ -61,7 +61,10 @@ The implemented controls map onto the surfaces above:
 - **Mutable-tag rewrite**: every third-party `uses:` is pinned to a
   40-char SHA with the tag retained as a comment. The
   `mutable-tag-guard` job in `pr.yml` enforces this on every PR
-  that touches `.github/workflows/`.
+  that touches `.github/workflows/`. A SHA pin proves the code cannot
+  rotate underneath us; it says nothing about whose code it is, so the
+  same job also holds an owner allowlist — `attacker/exfil@<40 hex>` is
+  perfectly pinned and is rejected on provenance.
 - **`pull_request_target` introduction**: blocked by the
   `pr-target-guard` job in `pr.yml`, which rejects any PR adding
   the trigger to a non-allowlisted workflow.
@@ -99,13 +102,40 @@ users can model them rather than discovering them later.
   maintainer account can sign and publish a malicious release that
   passes every in-tree check. Out-of-band detection (community
   vigilance, scorecard divergence) is the only signal.
-- **R3 — Single-maintainer review.** mumei has no two-party-review
-  requirement, and `main` has no enforced branch protection at the
-  server level (the project's development rule requires PR review,
-  but it is not technically blocking). A typo or malicious commit by
-  the maintainer who bypasses the convention can land directly. SLSA
-  L4's two-party review is approximated by CI gates and the controls
-  listed above, not actually enforced.
+- **R3 — No server-side merge gate on `main`.** `main` requires its
+  status checks and a resolved conversation, but it does not require an
+  approving review. That is not an oversight waiting to be ticked: on a
+  single-identity project the gate cannot exist. GitHub does not let the
+  author of a pull request approve it, and mumei has exactly one
+  identity — the maintainer, who is also the code owner, also the repo
+  admin, and also the account whose `gh` credentials any AI session on
+  the maintainer's machine inherits. Requiring one approval would either
+  be bypassed as admin (by the human and, with the same credentials, by
+  the agent) or would deadlock the repository. There is no middle
+  setting.
+
+  The precondition for a real merge gate is therefore an identity, not a
+  checkbox: the agent commits under a separate machine account holding a
+  fine-grained PAT (`Contents: write` + `Pull requests: write`, no
+  `Workflows`, no `Administration`), which makes the maintainer a
+  non-author reviewer whose approval GitHub can enforce. Until such an
+  account exists, mumei accepts this risk deliberately.
+
+  What that costs is worth stating precisely, because it is the hole no
+  in-tree check can close. The required status checks run scripts that
+  live in the repository (`scripts/lint-all.sh`, `tests/`). A
+  `Contents: write` token cannot touch `.github/workflows/**`, but it can
+  rewrite `scripts/lint-all.sh` to `exit 0`, and the required `lint`
+  check then reports green. Every in-tree check is in the tree. Only a
+  human reading the diff catches that — and here, nothing forces the
+  human to read it.
+
+  What survives regardless are the measurement gates (see R6): they
+  recompute from git objects rather than believing a file, so they hold
+  without any identity separation. And the highest-severity path — a tag
+  push publishing a signed tarball to plugin users — is gated
+  independently by the `release` environment's required reviewer, which
+  does not depend on who authored the commit.
 - **R4 — Bash analysis gap.** CodeQL does not analyze shell
   scripts. `shellcheck` (CI + pre-commit) and `semgrep` (review
   Stage 0) are the only static checks against bash code. Bash-
@@ -116,6 +146,27 @@ users can model them rather than discovering them later.
   install. A user who runs `/plugin install` without then opening
   the project in a mumei-enabled session never benefits from the
   review pipeline at all.
+- **R6 — Attestation artifacts are auditable, not preventive.**
+  `state.json`, task checkboxes, review verdicts and `cost-log.jsonl`
+  are claims the harness makes about its own progress, and every gate
+  that reads one is trusting a file an agent with shell access could
+  have produced. Rules S1/S2 (Edit/Write and Bash routes) and M1/M2
+  make writing one a deliberate, logged act rather than an accidental
+  one; they do not make it impossible, because the Bash guard reads the
+  command it is handed and a command can conceal its write target. The
+  gates that survive this are the ones that re-measure: the clean-`HEAD`
+  worktree test run, the tool gates, the Stage 0 detectors, the golden
+  freeze, `lint-distribution-shape.sh` and `lint-gate-weakening.sh`.
+- **R7 — An agent sharing the operator's credentials.** mumei's
+  preventive guarantees assume the agent runs where the human's
+  credentials do not. An agent with access to an authenticated `gh` does
+  not bypass the required-approval gate — it satisfies it, because to
+  GitHub an approval made with the human's credentials is the human's
+  approval. Absent an identity boundary (separate bot account,
+  fine-grained PAT limited to `Contents: write` + `Pull requests: write`,
+  HTTPS remote, no SSH keys in the agent's environment), mumei degrades
+  from prevention to auditability for everything except the measurement
+  gates named in R6.
 
 ## License
 

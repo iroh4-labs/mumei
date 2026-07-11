@@ -14,6 +14,13 @@ physically refuse the ones that break a rule. The agent's intent is treated as
 untrusted input — standards are _enforced_, never merely suggested in a prompt
 the agent can choose to ignore.
 
+Enforcement is not one thing, though, and mumei says so on the tin: the gates
+that _re-measure_ (tests re-run from a clean `HEAD`, real scanners, the real
+`git archive`) hold against an agent that wants past them; the files mumei writes
+about its own progress are an audit trail, not a wall. Which is which, and what
+that means for how you deploy it, is spelled out in
+[What holds, and what does not](#what-holds-and-what-does-not).
+
 _The butler with no name: it serves quietly, takes no credit, and holds the line
 — "I'm afraid that won't do."_
 
@@ -104,7 +111,8 @@ Prerequisites: `semgrep` + `osv-scanner` for the review-phase detectors. See [do
 The three pillars above, in detail:
 
 - **Harness, not prompts** — every phase / Wave / commit / push gate is enforced at the tool-call boundary; the agent can't prompt its way around it.
-- **Protected state** — `.mumei/` state and review verdicts are off-limits to the agent's Edit/Write; only the harness writes them, so a runaway agent can't corrupt them.
+- **Protected state** — `.mumei/` state, review verdicts and the reviewer-execution trace are off-limits to the agent, on the Edit/Write route and on the obvious Bash routes alike (rules S1/S2, M1/M2); only the harness writes them. See [What holds, and what does not](#what-holds-and-what-does-not) for how far that actually goes.
+- **Test-integrity detection** — the one thing a passing build cannot tell you is whether the build was made to pass. mumei re-runs the tests as `HEAD` defines them, freezes blind-authored property tests, and reports the diff that deletes a test, suppresses a type error, or drops a file out of the shipped tarball.
 - **Gates that don't false-block** — CVE / secret / type-error / failing-test pin the verdict to `MAJOR_ISSUES`; noisy SAST is run through an adjudication gate and blocks only when confirmed, so a false positive never false-merge-blocks. Absent tools are warn-skipped, not fatal.
 - **Tamper-proof verification** — at commit, tests re-run against a clean `HEAD` worktree, so uncommitted rigging (a doctored `conftest.py`, monkeypatched reporter, edited bytecode) can't fake a pass.
 - **Tests the agent can't game** — invariant properties are written blind, from the spec and signature alone without seeing the implementation, then frozen, so the test can't be tuned to a flawed implementation. Opt-in per AC.
@@ -115,6 +123,65 @@ The three pillars above, in detail:
 - **Nameless-butler stance** — mumei serves quietly and takes no credit: zero side effects until you opt in (no `.mumei/current` → every Hook is a no-op), no unsolicited speech, fact-form verdicts, no telemetry.
 
 > Mechanics — hook IDs, the detector tiers, the blind property-author / review-hardening / residual-exposition pillars, the cross-feature finding-ledger, and curator-gated reviewer memory — live in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
+
+## What holds, and what does not
+
+mumei's gates come in two strengths. The line between them is not local-versus-CI.
+It is whether **the gate measures the answer itself, or believes a file mumei
+wrote**.
+
+### Gates that re-measure (strong)
+
+These never take the agent's word for anything.
+
+- **Tests re-run from `HEAD`.** At commit, mumei builds a clean worktree and runs
+  the tests there. A doctored `conftest.py` or a monkeypatched reporter sitting in
+  your working tree has no effect. Golden files are restored from `HEAD` first.
+  Tool gates and the Stage 0 detectors execute real binaries.
+- **The tarball and the diff are read, not reported.** `lint-distribution-shape`
+  runs the real `git archive` and compares its contents against the real file
+  list. `lint-gate-weakening` reads the diff itself, looking for a deleted test or
+  a suppressed type error.
+- **Faking one means committing the rig.** To defeat any of the above you have to
+  commit the thing that does it, and that lands in the diff, where a person sees
+  it.
+
+### The GitHub-side gate (strong, but you have to turn it on)
+
+Branch protection — a required approval from a non-author code owner,
+`enforce_admins`, `require_last_push_approval` — is the one control an agent
+holding your shell cannot reach.
+
+It is not defence-in-depth. It is **load-bearing**. The required status checks
+just run scripts that live in the repository (`scripts/lint-all.sh`, `tests/`). A
+token scoped to `Contents: write` can rewrite a lint to `exit 0`, and the required
+check goes green. Nothing inside the tree can close that hole, because everything
+inside the tree is in the tree. Only a human reading the diff can.
+
+### The files mumei writes about itself (weak)
+
+`state.json`, task checkboxes, review verdicts, `cost-log.jsonl`. These are not
+measurements. They are **mumei's own claims about its progress**.
+
+The hooks deny the Edit/Write route and the common Bash write routes to all of
+them (rules S1/S2, M1/M2). That turns forging one from an accident into an
+obviously strange act. It does not close the door: the Bash guard reads the
+command string it is handed, and a command can hide where it writes.
+
+So treat these as **a record, not a wall**.
+
+### The precondition you cannot code around
+
+mumei's preventive guarantees assume **the agent runs somewhere your credentials
+do not**.
+
+An agent on your machine, with your authenticated `gh`, does not bypass the
+approval gate. It **satisfies** it — because to GitHub, an approval made with your
+credentials is your approval.
+
+Without that separation, mumei degrades from preventing to recording. What
+survives the degradation is the re-measuring gates above. That is why we do not
+trade them away.
 
 ## Design grounded in research
 

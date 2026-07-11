@@ -1291,3 +1291,36 @@ reviewer 領域 (Stage 0 detector / adjudication gate / metadata 隔離 / fail-o
 | claim | ラベル | ソース | 検証 |
 |---|---|---|---|
 | Opus 4.8: SWE-bench Verified 88.6% (4.7 は 87.6%)、SWE-bench Pro 69.2%、1M 入力/128K 出力、$5/$25。自分のコード欠陥見逃しが前世代の約 1/4。数百の並列 subagent | 事実 | [Anthropic](https://www.anthropic.com/news/claude-opus-4-8) / [Vellum](https://www.vellum.ai/blog/claude-opus-4-8-benchmarks-explained) | WebFetch / WebSearch |
+
+## Part 14: Hook matcher semantics for plugin-namespaced agents (2026-07, measured)
+
+Part 13 recorded that `agent_type` arrives plugin-namespaced. The missing half:
+`hooks.json` matchers are compared against that same namespaced string, so a
+bare matcher silently never fires.
+
+Measured 2026-07-11 by loading mumei with `--plugin-dir` into an isolated
+project whose `settings.json` registered four `SubagentStop` entries, then
+spawning `mumei:memory-curator`:
+
+| matcher | fired |
+|---|---|
+| (none) | yes — payload showed `agent_type: "mumei:memory-curator"` |
+| `^(memory-curator)$` | **no** |
+| `^(mumei:)?(memory-curator)$` | yes |
+| `.*-reviewer\|.*-validator\|memory-curator` | yes |
+
+Two consequences, both facts from the run above:
+
+- **Matching is a substring search, not a full match.** The bare alternation
+  `memory-curator` matched `mumei:memory-curator`, which a full-match engine
+  would reject. Therefore `^` / `$` anchors are real anchors: an anchored bare
+  matcher cannot reach a namespaced agent, and anchoring a matcher for
+  "precision" is what breaks it.
+- **`subagent_type` does not accept a bare name either.** `Task(subagent_type:
+  "memory-curator")` fails with `Agent type 'memory-curator' not found.
+  Available agents: ... mumei:memory-curator ...`. The plugin namespace is
+  mandatory at the spawn site, not merely at the matcher.
+
+The failure mode of both is silence: the matcher misses without an error, and
+a failed spawn leaves the orchestrator free to improvise the subagent's output.
+`scripts/lint-agent-namespace.sh` is the standing gate.

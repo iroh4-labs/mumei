@@ -132,10 +132,10 @@ prefix (REQ-27.12) applies. Launch in parallel:
   (REQ-27.3).
 
 ```text
-Task(subagent_type: "security-reviewer", prompt: "<mumei_reviewer_prompt output> ...")
-Task(subagent_type: "adversarial-reviewer", prompt: "...")
+Task(subagent_type: "mumei:security-reviewer", prompt: "<mumei_reviewer_prompt output> ...")
+Task(subagent_type: "mumei:adversarial-reviewer", prompt: "...")
 # only if spec_arg:
-Task(subagent_type: "spec-compliance-reviewer", prompt: "... scope_source=${spec_arg}")
+Task(subagent_type: "mumei:spec-compliance-reviewer", prompt: "... scope_source=${spec_arg}")
 ```
 
 ### Step 4 — Per-finding adjudication gate
@@ -149,7 +149,7 @@ candidate finding, use `mumei_review_finding_needs_gate` to decide:
   rule as Phase 5 Stage 4).
 
 ```text
-Task(subagent_type: "issue-validator", prompt: "<finding> ...")
+Task(subagent_type: "mumei:issue-validator", prompt: "<finding> ...")
 ```
 
 Keep `decision == "valid"` / `valid_by_assertion`; drop `invalid`; surface

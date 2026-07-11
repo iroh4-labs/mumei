@@ -86,6 +86,21 @@ tasks:
     cmds:
       - bash scripts/lint-plan-vehicle-hooks.sh
 
+  lint:agent-namespace:
+    desc: "hooks.json matchers + skills spawn sites use the mumei: runtime prefix"
+    cmds:
+      - bash scripts/lint-agent-namespace.sh
+
+  lint:distribution-shape:
+    desc: "no tracked file silently drops out of the git archive plugin tarball"
+    cmds:
+      - bash scripts/lint-distribution-shape.sh
+
+  lint:gate-weakening:
+    desc: "diff makes the build green by suppressing a gate (base ref defaults to origin/main)"
+    cmds:
+      - bash scripts/lint-gate-weakening.sh {{.CLI_ARGS}}
+
   lint:tasks:
     desc: "tasks.md format invariants (advisory; mainly used by hooks)"
     cmds:

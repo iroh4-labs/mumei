@@ -5,12 +5,22 @@
 # even 1.111.x → 1.111.y patch bumps shift the AI reviewer's grounding
 # fingerprint, so policy is "all bumps are manual" (see dependabot.yml).
 #
-# Regenerate the locked requirements.txt on Python 3.14 (matches the
-# `actions/setup-python` version pinned in review-reusable.yml):
-#   python3.14 -m venv .tmp/pip-compile-venv
+# Regenerate the locked requirements.txt on Python 3.11 (matches the
+# `actions/setup-python` version pinned in review-reusable.yml). 3.11 is the
+# newest interpreter semgrep 1.111.0 declares in its classifiers; its
+# Requires-Python (>=3.9) has no upper bound, so a newer Python installs fine
+# and then dies at import time.
+#   python3.11 -m venv .tmp/pip-compile-venv
 #   .tmp/pip-compile-venv/bin/pip install pip-tools
 #   .tmp/pip-compile-venv/bin/pip-compile \
 #     --generate-hashes --strip-extras --allow-unsafe \
 #     --output-file=.github/requirements/semgrep-review/requirements.txt \
 #     .github/requirements/semgrep-review/requirements.in
 semgrep==1.111.0
+
+# semgrep pulls opentelemetry-instrumentation, which imports `pkg_resources`.
+# setuptools removed pkg_resources in 81.0, so an unconstrained resolve pins a
+# setuptools that makes semgrep fail to start. This is not a style preference:
+# it is the difference between the Stage 0 detector running and reporting zero
+# findings because it never ran.
+setuptools<81
