@@ -300,6 +300,30 @@ jobs:
             scripts/*.sh
 
   # ─────────────────────────────────────────
+  # Report a diff that makes the build green by suppressing a gate rather than
+  # fixing the code (continue-on-error / --no-verify / --exit-zero / type- and
+  # lint-suppression comments / deleted tests / deleted workflows).
+  #
+  # Do NOT add this job to the required-checks list. A required check that is
+  # red cannot be turned green by a human approval, so making it required would
+  # convert "a human must look at this" into "this can never merge". The design
+  # is the opposite: the job goes red, and the non-author human approving the PR
+  # is the path forward. Its red X is a signal to that human, not a gate.
+  # ─────────────────────────────────────────
+  gate-weakening:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # merge-base needs the history
+
+      - name: Detect gate weakening in this PR
+        run: bash scripts/lint-gate-weakening.sh "origin/${{ github.event.pull_request.base.ref }}"
+
+  # ─────────────────────────────────────────
   # bats による hook / _lib の単体テスト。
   # macos-latest と ubuntu-latest の matrix で BSD/GNU 差を検出する。
   # bats のバージョンは pin して両 OS 間の挙動差を抑える。

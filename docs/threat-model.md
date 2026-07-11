@@ -61,7 +61,10 @@ The implemented controls map onto the surfaces above:
 - **Mutable-tag rewrite**: every third-party `uses:` is pinned to a
   40-char SHA with the tag retained as a comment. The
   `mutable-tag-guard` job in `pr.yml` enforces this on every PR
-  that touches `.github/workflows/`.
+  that touches `.github/workflows/`. A SHA pin proves the code cannot
+  rotate underneath us; it says nothing about whose code it is, so the
+  same job also holds an owner allowlist — `attacker/exfil@<40 hex>` is
+  perfectly pinned and is rejected on provenance.
 - **`pull_request_target` introduction**: blocked by the
   `pr-target-guard` job in `pr.yml`, which rejects any PR adding
   the trigger to a non-allowlisted workflow.
@@ -100,12 +103,21 @@ users can model them rather than discovering them later.
   passes every in-tree check. Out-of-band detection (community
   vigilance, scorecard divergence) is the only signal.
 - **R3 — Single-maintainer review.** mumei has no two-party-review
-  requirement, and `main` has no enforced branch protection at the
-  server level (the project's development rule requires PR review,
-  but it is not technically blocking). A typo or malicious commit by
-  the maintainer who bypasses the convention can land directly. SLSA
-  L4's two-party review is approximated by CI gates and the controls
-  listed above, not actually enforced.
+  requirement: the required approval comes from a code owner, and on a
+  single-maintainer project that owner is the same person who reviews
+  everything. Branch protection makes the approval a server-side gate
+  (an AI session's commits cannot approve themselves), but it does not
+  manufacture a second pair of human eyes. SLSA L4's two-party review
+  is therefore approximated, not achieved.
+
+  Why the approval is load-bearing rather than defence-in-depth: the
+  required status checks run scripts that live in the repository
+  (`scripts/lint-all.sh`, `tests/`). A token scoped to `Contents: write`
+  — no `Workflows`, no `Administration` — cannot touch
+  `.github/workflows/**`, but it can rewrite `scripts/lint-all.sh` to
+  `exit 0`, and the required `lint` check then reports green. No in-tree
+  check can close that, because every in-tree check is in the tree. Only
+  a human looking at the diff can.
 - **R4 — Bash analysis gap.** CodeQL does not analyze shell
   scripts. `shellcheck` (CI + pre-commit) and `semgrep` (review
   Stage 0) are the only static checks against bash code. Bash-
@@ -116,6 +128,27 @@ users can model them rather than discovering them later.
   install. A user who runs `/plugin install` without then opening
   the project in a mumei-enabled session never benefits from the
   review pipeline at all.
+- **R6 — Attestation artifacts are auditable, not preventive.**
+  `state.json`, task checkboxes, review verdicts and `cost-log.jsonl`
+  are claims the harness makes about its own progress, and every gate
+  that reads one is trusting a file an agent with shell access could
+  have produced. Rules S1/S2 (Edit/Write and Bash routes) and M1/M2
+  make writing one a deliberate, logged act rather than an accidental
+  one; they do not make it impossible, because the Bash guard reads the
+  command it is handed and a command can conceal its write target. The
+  gates that survive this are the ones that re-measure: the clean-`HEAD`
+  worktree test run, the tool gates, the Stage 0 detectors, the golden
+  freeze, `lint-distribution-shape.sh` and `lint-gate-weakening.sh`.
+- **R7 — An agent sharing the operator's credentials.** mumei's
+  preventive guarantees assume the agent runs where the human's
+  credentials do not. An agent with access to an authenticated `gh` does
+  not bypass the required-approval gate — it satisfies it, because to
+  GitHub an approval made with the human's credentials is the human's
+  approval. Absent an identity boundary (separate bot account,
+  fine-grained PAT limited to `Contents: write` + `Pull requests: write`,
+  HTTPS remote, no SSH keys in the agent's environment), mumei degrades
+  from prevention to auditability for everything except the measurement
+  gates named in R6.
 
 ## License
 
