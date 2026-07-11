@@ -80,7 +80,9 @@ if [[ "${MUMEI_BYPASS:-0}" == "1" ]]; then
 fi
 ```
 
-Do not log the bypass. The bypass is a feature we prefer unused; do not add operational overhead around it.
+Do not log the bypass — with exactly one exception, `hooks/session-start-bypass-notice.sh` (X6), which announces at session start that the bypass is active and therefore must NOT source `anchor.sh` before doing so.
+
+The silence was written for an operator who sets `MUMEI_BYPASS` themselves. It does not survive the other way the variable arrives: `env` in `.claude/settings.json` / `settings.local.json` reaches hook processes (measured), and `settings.local.json` is gitignored, so an agent can disable every gate with one line that appears in no diff. A harness that is off must say it is off. Everywhere else, the bypass stays silent: no telemetry, no audit trail, no per-hook logging.
 
 ## Loading libraries
 

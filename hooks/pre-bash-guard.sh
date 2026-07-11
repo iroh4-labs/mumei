@@ -7,6 +7,10 @@
 #       (checks both .mumei/specs/<key>/reviews/ and .mumei/plans/<key>/reviews/)
 #   W2: git commit while the current Wave still has unchecked [ ] tasks -> deny
 #       (spec vehicle only — plan vehicle has no Wave concept)
+#   S2: Bash-route write to mumei harness state (state.json / cost-log.jsonl /
+#       reviews / config.json once it exists) -> deny
+#   S4: Bash-route write that puts MUMEI_BYPASS into .claude/settings*.json -> deny
+#   M2: Bash-route write to a reviewer's MEMORY.md -> deny
 #   G2: Bash-route write to a golden path (redirect / rm / mv / cp dest / tee /
 #       truncate / sed -i) -> deny (project-wide, best-effort; the clean-HEAD
 #       worktree measurement is the real wall)
@@ -337,6 +341,23 @@ while IFS= read -r _tok; do
     fi
     jq -n --arg r "This command writes to mumei harness state ('${_tok}'). state.json / cost-log.jsonl / reviews / config.json are written by mumei's own hooks and orchestrator helpers, not by hand." \
       --arg c "cost-log.jsonl is an execution trace: it records that a reviewer subagent actually ran, so hand-writing it defeats the push gate that reads it — launch the reviewer instead. To change golden_paths or tool_gates, use mumei_config_add_golden_path. Set MUMEI_BYPASS=1 only for emergency manual repair." \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
+    exit 0
+  fi
+
+  # --- S4: deny a Bash-route write that switches MUMEI_BYPASS on via settings ---
+  # The Edit/Write counterpart is S3 in pre-edit-guard.sh; same reasoning, same
+  # ceiling. Both halves of the test have to hold: the command writes to a Claude
+  # Code settings file AND the command text carries MUMEI_BYPASS. Editing settings
+  # is normal; writing the master key into them is not.
+  if [[ "$_tok_rel" =~ ^\.claude/settings(\.local)?\.json$ ]] && [[ "$COMMAND" == *MUMEI_BYPASS* ]]; then
+    if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+      # shellcheck disable=SC1091
+      source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+      mumei_hook_stats_record "S4" "deny" "Bash" "MUMEI_BYPASS injection into Claude Code settings denied"
+    fi
+    jq -n --arg r "This command writes MUMEI_BYPASS into ${_tok}. Settings 'env' reaches hook processes, so it disables every mumei gate for every future session — and the file is gitignored, so nobody would see it in a diff." \
+      --arg c "MUMEI_BYPASS is the operator's escape hatch, not the agent's: a human sets it in the environment of a session they start deliberately. If a gate is wrong, say so and let them decide." \
       '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
     exit 0
   fi

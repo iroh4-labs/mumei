@@ -88,6 +88,22 @@ model differences, not divergent criteria).
   your `review.yml` will see a red `review` check until the change lands on
   the default branch. This is by-design GitHub behaviour, not a configuration
   bug.
+- **If anyone but you can push a branch to this repository, `on: pull_request` is
+  the wrong trigger for a workflow holding a secret.** GitHub runs a
+  `pull_request` workflow from the **pull request's own copy** of the workflow
+  file, and same-repo pull requests receive repository secrets. So a collaborator
+  — or a compromised contributor account — can open a PR that edits your
+  `review.yml` to print `${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}` and read it out
+  of the run log. This is a property of the trigger, not of mumei: nothing inside
+  the reusable workflow can prevent it, because the caller is your file.
+
+  mumei's own repository accepts this, deliberately: it has exactly one identity
+  with push access, and that identity can already push to `main`. A repository
+  with real collaborators is a different situation. There, drive the reviewer
+  from a `workflow_run` trigger (the definition then comes from your default
+  branch and a PR cannot modify it), or accept the risk knowingly. The reusable
+  workflow currently requires `pull_request`; `workflow_run` support is tracked
+  in [#179](https://github.com/iroh4-labs/mumei/issues/179).
 - **The reviewer has no shell and no file tools.** It sees the diff, the PR
   title and body, the rubric, your base-branch `AGENTS.md` and the grounding
   scan — all assembled into its prompt by the workflow — and it can post

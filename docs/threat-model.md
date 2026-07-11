@@ -176,6 +176,27 @@ users can model them rather than discovering them later.
   install. A user who runs `/plugin install` without then opening
   the project in a mumei-enabled session never benefits from the
   review pipeline at all.
+- **R8 — The escape hatch is reachable from inside the session.**
+  `MUMEI_BYPASS=1` short-circuits every hook, silently and by design —
+  it is meant to look like the hook never fired. That design assumed a
+  human sets it. But `env` in `.claude/settings.json` /
+  `settings.local.json` reaches hook processes (measured), and
+  `settings.local.json` is gitignored, so an agent that writes one line
+  there disables the entire harness for every future session, and the
+  change appears in no diff for anyone to see. Three things narrow this,
+  none of them close it:
+  - **S3 / S4** refuse the obvious write — an Edit/Write or a Bash
+    command that puts `MUMEI_BYPASS` into a settings file. Content-scoped,
+    so ordinary settings edits are untouched. Tier 2: a write routed
+    through a script the guard does not read still lands.
+  - **X7** fires on the resulting *state* rather than the command, so the
+    route taken does not matter; it warns and writes an audit-log entry.
+  - **X6** announces at session start that the bypass is active — the one
+    hook that does not short-circuit on it. A harness that is off says so.
+
+  What remains is that an operator who ignores the announcement gets no
+  enforcement and knows it. That is the correct residual: the escape hatch
+  is meant to exist.
 - **R6 — Attestation artifacts are auditable, not preventive.**
   `state.json`, task checkboxes, review verdicts and `cost-log.jsonl`
   are claims the harness makes about its own progress, and every gate

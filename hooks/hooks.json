@@ -133,6 +133,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-bypass-notice.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostCompact": [

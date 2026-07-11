@@ -52,6 +52,38 @@ if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ "$FILE_PATH" == "$CLAUDE_PROJECT_DIR
   FILE_PATH="${FILE_PATH#"${CLAUDE_PROJECT_DIR}"/}"
 fi
 
+# --- S3: deny an Edit/Write that switches MUMEI_BYPASS on via Claude Code settings ---
+# `env` in .claude/settings.json / settings.local.json reaches hook processes —
+# measured. So one line there turns every mumei gate off, for good, and
+# settings.local.json is gitignored, so the write never appears in a diff for a
+# human to see. That is the master key, and it is the one file whose LLM-driven
+# edit must name the reason it is being made.
+#
+# The check is on CONTENT, not on the path: editing your own settings is a normal
+# thing to do and blocking it wholesale would be user-hostile. Only an edit that
+# introduces the string MUMEI_BYPASS is refused.
+#
+# Honest ceiling: this is Tier 2. A write routed through a script the guard does
+# not read (python, a heredoc in a file it then runs) still lands. What it buys
+# is that flipping the master key stops being a one-liner and starts being a
+# deliberate, conspicuous act — and X6 announces the result at the next session
+# start regardless of how the value got there.
+CANON_SETTINGS="$(mumei_state_canonicalize_path "$FILE_PATH")"
+if [[ "$CANON_SETTINGS" =~ /\.claude/settings(\.local)?\.json$ ]]; then
+  EDIT_PAYLOAD="$(printf '%s' "$INPUT" | jq -r '[.tool_input.content? // empty, .tool_input.new_string? // empty, (.tool_input.edits? // [] | .[].new_string? // empty)] | join("\n")' 2>/dev/null || true)"
+  if [[ "$EDIT_PAYLOAD" == *MUMEI_BYPASS* ]]; then
+    if [[ -f "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh" ]]; then
+      # shellcheck disable=SC1091
+      source "${PLUGIN_ROOT}/hooks/_lib/hook-stats.sh"
+      mumei_hook_stats_record "S3" "deny" "${TOOL_NAME:-Edit}" "MUMEI_BYPASS injection into Claude Code settings denied"
+    fi
+    jq -n --arg r "Writing MUMEI_BYPASS into ${FILE_PATH} is denied. Settings 'env' reaches hook processes, so this single line disables every mumei gate for every future session — and the file is gitignored, so nobody would see it in a diff." \
+      --arg c "MUMEI_BYPASS is the operator's escape hatch, not the agent's: it is set in the environment of a session a human starts deliberately (MUMEI_BYPASS=1 claude). If a gate is blocking you and you believe it is wrong, say so and let the human decide. Turning the gate off yourself is the one move that cannot be reviewed." \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r, additionalContext: $c}}'
+    exit 0
+  fi
+fi
+
 # --- M1: deny direct write to reviewer MEMORY.md (vehicle/feature independent) ---
 # Memory entries flow through memory-curator + the orchestrator's atomic
 # helpers in hooks/_lib/memory.sh. M1 is placed BEFORE the FEATURE check and
