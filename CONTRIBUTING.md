@@ -45,6 +45,11 @@ reference for both human and AI contributors. Read it before your first PR.
 | `task` >= 3.40       | task runner (Taskfile.yml entry point)          | `brew install go-task`                     |
 | `bats-core` >= 1.5.0 | test runner                                     | `brew install bats-core` / `npm i -g bats` |
 | `shellcheck`         | shell lint                                      | `brew install shellcheck`                  |
+| `shfmt`              | shell formatter (lint sweep + pre-commit)       | `brew install shfmt`                       |
+| `actionlint`         | GitHub Actions workflow lint                    | `brew install actionlint`                  |
+| `pre-commit`         | local commit gate (`pre-commit install`)        | `brew install pre-commit`                  |
+| `gh`                 | GitHub CLI (PR / CI watching tasks)             | `brew install gh`                          |
+| `python3` + PyYAML   | frontmatter lint                                | `python3 -m pip install pyyaml`            |
 | `semgrep`            | review-phase SAST detector (optional for tests) | `brew install semgrep`                     |
 | `osv-scanner`        | review-phase CVE detector (optional for tests)  | `brew install osv-scanner`                 |
 
@@ -216,9 +221,11 @@ so the full CI suite and AI review run before landing.
    first; the `--body` argument otherwise overrides the template prefill
    that the GitHub web UI would have inserted automatically.
 7. CI runs on the PR. The relevant workflows are `ci.yml` (`lint`,
-   `lint-extra`, `bats` on macOS / Ubuntu, `codeql`), `pr.yml`
-   (`mutable-tag-guard`, `pr-target-guard`), `gitleaks.yml`, and
-   `plugin-json-validate.yml`. Address failures before merge.
+   `lint-extra` — which includes the secret scans, `bats` on macOS /
+   Ubuntu, `codeql`), `pr.yml` (`mutable-tag-guard`, `pr-target-guard`),
+   `review.yml` (claude-code-action review; skipped on fork PRs), and
+   `plugin-json-validate.yml` (manifest-touching PRs only). Address
+   failures before merge.
 8. Monitor the PR after opening:
 
    - `task pr:watch` — wait for the latest CI run on this branch
@@ -229,8 +236,9 @@ so the full CI suite and AI review run before landing.
    does not require any particular reviewer — that is the repo owner's
    choice, not a contribution prerequisite.
 
-9. Self-merge via squash or rebase (linear history; merge commits should
-   be avoided). No required approval count.
+9. A maintainer merges via squash or rebase (linear history; merge
+   commits are disabled). No required approval count; external
+   contributors cannot self-merge.
 
 ## Spec-driven changes
 

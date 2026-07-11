@@ -169,6 +169,20 @@ the next section says plainly — never claims to replace human review.
 - **[docs/operations-playbook.md](./docs/operations-playbook.md)** — practical guidance for running mumei (proactive `/compact`, subagent cost, prompt cache, byte-exact tools, `MUMEI_BYPASS=1` discipline).
 - **[SECURITY.md](./SECURITY.md)** + **[docs/security-policy.md](./docs/security-policy.md)** + **[docs/threat-model.md](./docs/threat-model.md)** + **[PRIVACY.md](./PRIVACY.md)** — supply-chain verification, threat model, privacy.
 
+## Contributing
+
+Contributions are welcome — see **[CONTRIBUTING.md](./CONTRIBUTING.md)** for
+the full guide. The fast path:
+
+```bash
+git clone https://github.com/iroh4-labs/mumei.git && cd mumei
+task doctor     # verify required tooling
+task validate   # lint + tests — run before every push
+```
+
+Issues labeled [`good first issue`](https://github.com/iroh4-labs/mumei/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+are scoped for first-time contributors.
+
 ## License
 
 MIT
