@@ -301,8 +301,9 @@ jobs:
 
   # ─────────────────────────────────────────
   # Report a diff that makes the build green by suppressing a gate rather than
-  # fixing the code (continue-on-error / --no-verify / --exit-zero / type- and
-  # lint-suppression comments / deleted tests / deleted workflows).
+  # fixing the code. The signature list lives in scripts/lint-gate-weakening.sh
+  # and is deliberately not repeated here: spelling the tokens out in a scanned
+  # workflow would make this comment trip the very check it describes.
   #
   # Do NOT add this job to the required-checks list. A required check that is
   # red cannot be turned green by a human approval, so making it required would

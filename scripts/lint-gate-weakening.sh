@@ -43,10 +43,19 @@ findings=""
 # 1. Added lines that suppress a gate. Anchored on '+' (additions only) and
 #    excluding the +++ header. Each pattern is a construct whose only function
 #    is to stop a check from failing.
+#
+#    This script and its bats file are excluded from THIS scan: the signature
+#    table below and the fixtures that exercise it are made of the very strings
+#    being matched, so a detector that scanned them would flag every edit to
+#    itself, and a check that is always red is a check nobody reads. They are
+#    NOT excluded from the deleted-files scan (2) — removing the detector is
+#    exactly the move worth catching.
 while IFS= read -r hit; do
   [[ -n "$hit" ]] && findings+="$hit"$'\n'
 done < <(
-  git diff --unified=0 "${merge_base}...HEAD" -- . |
+  git diff --unified=0 "${merge_base}...HEAD" -- . \
+    ':!scripts/lint-gate-weakening.sh' \
+    ':!tests/scripts/lint-gate-weakening.bats' |
     awk '
       /^\+\+\+ / { file = substr($0, 7); next }
       /^\+/ {
