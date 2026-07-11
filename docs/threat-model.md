@@ -111,9 +111,16 @@ The implemented controls map onto the surfaces above:
 - **Release-time integrity**: tarballs are signed via Sigstore
   keyless signing, an SBOM (CycloneDX) is generated, and SLSA L3
   provenance is attached to every GitHub Release.
-- **Supply-chain currency**: Dependabot keeps third-party SHA pins
-  fresh weekly so the project does not stagnate on a vulnerable
-  pinned version.
+- **Supply-chain currency**: Dependabot proposes weekly bumps for the
+  GitHub Actions SHA pins and the hash-pinned pip locks, with a 7-day
+  cooldown so a freshly published (and freshly compromised) release is
+  not the one it pins. The pip half of that was **not true** until
+  2026-07-11: the `requirements.in` files hard-pinned their direct
+  dependencies with `==`, which is the one thing Dependabot's pip-compile
+  bump path cannot resolve against, so every pip update job had been
+  failing since at least 2026-06-29 while this document claimed
+  otherwise (#186). The exact versions now live in the lock, where they
+  belong; the `.in` files declare the dependency, not the version.
 - **plugin.json schema gate**: `plugin-json-validate.yml` strict-
   validates the manifest on every PR that touches it.
 

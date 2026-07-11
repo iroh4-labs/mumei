@@ -10,5 +10,13 @@
 #     --generate-hashes --strip-extras --allow-unsafe \
 #     --output-file=.github/requirements/validate/requirements.txt \
 #     .github/requirements/validate/requirements.in
-jsonschema==4.23.0
-requests==2.34.2
+# Deliberately UNPINNED here. pip-compile writes the exact version (with hashes)
+# into requirements.txt, which is the lock; pinning the same version again in
+# this file is not belt-and-braces, it is a wall Dependabot cannot climb: it
+# bumps by running `pip-compile -P <dep>==<new>` against this file, and a `==`
+# here makes that resolution impossible. It did — every pip update job has been
+# failing since at least 2026-06-29 (#186), so these locks were not being
+# maintained at all while `docs/threat-model.md` claimed Dependabot kept them
+# fresh. The exact version lives in the lock, where it belongs.
+jsonschema
+requests

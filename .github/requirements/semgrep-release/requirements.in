@@ -12,4 +12,8 @@
 #     --generate-hashes --strip-extras --allow-unsafe \
 #     --output-file=.github/requirements/semgrep-release/requirements.txt \
 #     .github/requirements/semgrep-release/requirements.in
-semgrep==1.167.0
+# Unpinned on purpose — see the validate lock's requirements.in for why a `==`
+# here breaks Dependabot's pip-compile bump path (#186). Unlike the review pin,
+# this one is meant to track current stable, so Dependabot bumping the lock is
+# exactly the intent.
+semgrep
