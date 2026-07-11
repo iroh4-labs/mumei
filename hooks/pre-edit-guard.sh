@@ -63,6 +63,11 @@ fi
 # thing to do and blocking it wholesale would be user-hostile. Only an edit that
 # introduces the string MUMEI_BYPASS is refused.
 #
+# The path test matches the canonical path's tail, so the USER-GLOBAL
+# ~/.claude/settings.json is covered as well as the project's. Claude Code merges
+# `env` from both, and the global one is the worse of the two: outside the
+# repository entirely, and it disables mumei in every project on the machine.
+#
 # Honest ceiling: this is Tier 2. A write routed through a script the guard does
 # not read (python, a heredoc in a file it then runs) still lands. What it buys
 # is that flipping the master key stops being a one-liner and starts being a

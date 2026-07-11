@@ -19,15 +19,18 @@ setup() {
   mkdir -p .claude .mumei
 }
 
-_run_edit_hook() {
+# The payload goes through a file, not through a nested single-quoted string:
+# these tests feed the hook shell commands, and a command containing a single
+# quote would otherwise break the harness rather than the hook.
+_run_hook_with() {
+  local hook="$1" payload="$2"
+  printf '%s' "$payload" >"${MUMEI_TEST_TMPDIR}/.in.json"
   run --separate-stderr bash -c \
-    "printf '%s' '$1' | bash '${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-guard.sh'"
+    "bash '${CLAUDE_PLUGIN_ROOT}/hooks/${hook}' < '${MUMEI_TEST_TMPDIR}/.in.json'"
 }
 
-_run_bash_hook() {
-  run --separate-stderr bash -c \
-    "printf '%s' '$1' | bash '${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash-guard.sh'"
-}
+_run_edit_hook() { _run_hook_with pre-edit-guard.sh "$1"; }
+_run_bash_hook() { _run_hook_with pre-bash-guard.sh "$1"; }
 
 # An empty stdout means the hook made no decision, which is an allow.
 _decision() {
@@ -114,4 +117,25 @@ _decision() {
     "printf '%s' '{\"config_source\":\"local_settings\",\"changed_fields\":[\"model\"]}' | CLAUDE_PROJECT_DIR='${MUMEI_TEST_TMPDIR}' bash '${CLAUDE_PLUGIN_ROOT}/hooks/config-change-audit.sh'"
   [ "$status" -eq 0 ]
   [[ "$stderr" != *"X7"* ]]
+}
+
+@test "S3: the USER-GLOBAL ~/.claude/settings.json is covered too" {
+  # Claude Code merges env from the global settings file into hook processes as
+  # well, and that file is outside the repository — more invisible than the
+  # gitignored project one, and it disables mumei in every project on the machine.
+  _run_edit_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${HOME}/.claude/settings.json\",\"content\":\"{\\\"env\\\":{\\\"MUMEI_BYPASS\\\":\\\"1\\\"}}\"}}"
+  [ "$status" -eq 0 ]
+  [ "$(_decision)" = "deny" ]
+}
+
+@test "S4: a Bash write of MUMEI_BYPASS to the USER-GLOBAL settings is denied" {
+  _run_bash_hook "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo '{\\\"env\\\":{\\\"MUMEI_BYPASS\\\":\\\"1\\\"}}' > ${HOME}/.claude/settings.json\"}}"
+  [ "$status" -eq 0 ]
+  [ "$(_decision)" = "deny" ]
+}
+
+@test "S4: an out-of-repo file that merely mentions MUMEI_BYPASS is not denied" {
+  _run_bash_hook '{"tool_name":"Bash","tool_input":{"command":"echo MUMEI_BYPASS > /tmp/notes.txt"}}'
+  [ "$status" -eq 0 ]
+  [ "$(_decision)" = "allow" ]
 }

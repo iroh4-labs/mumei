@@ -186,9 +186,12 @@ users can model them rather than discovering them later.
   change appears in no diff for anyone to see. Three things narrow this,
   none of them close it:
   - **S3 / S4** refuse the obvious write — an Edit/Write or a Bash
-    command that puts `MUMEI_BYPASS` into a settings file. Content-scoped,
-    so ordinary settings edits are untouched. Tier 2: a write routed
-    through a script the guard does not read still lands.
+    command that puts `MUMEI_BYPASS` into a settings file, project-local
+    or user-global (Claude Code merges `env` from both; the global file is
+    the worse of the two, since it is outside the repository and disables
+    mumei in every project on the machine). Content-scoped, so ordinary
+    settings edits are untouched. Tier 2: a write routed through a script
+    the guard does not read still lands.
   - **X7** fires on the resulting *state* rather than the command, so the
     route taken does not matter; it warns and writes an audit-log entry.
   - **X6** announces at session start that the bypass is active — the one
