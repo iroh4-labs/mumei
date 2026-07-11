@@ -60,12 +60,6 @@ jobs:
             echo "::error::review-reusable.yml must be called from a pull_request workflow (got event=${EVENT_NAME:-unset})" >&2
             exit 1
           fi
-          if [ "${HAS_TOKEN:-}" != "true" ]; then
-            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not configured — review skipped (set the repo secret to enable)"
-            echo "skip=true" >>"$GITHUB_OUTPUT"
-            echo "skip_reason=no-token" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
           if [ "${IS_FORK:-}" = "true" ]; then
             echo "::notice::Fork PR — review skipped (no secrets, prompt-injection risk)"
             echo "skip=true" >>"$GITHUB_OUTPUT"
@@ -76,6 +70,15 @@ jobs:
             echo "::notice::Dependabot PR — review skipped (no secrets on pull_request)"
             echo "skip=true" >>"$GITHUB_OUTPUT"
             echo "skip_reason=dependabot" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Fork / dependabot are checked first: those events never carry
+          # secrets, so an empty token there is expected and must keep its
+          # event-specific skip_reason (adopter audit trail), not no-token.
+          if [ "${HAS_TOKEN:-}" != "true" ]; then
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not configured — review skipped (set the repo secret to enable)"
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+            echo "skip_reason=no-token" >>"$GITHUB_OUTPUT"
             exit 0
           fi
           echo "skip=false" >>"$GITHUB_OUTPUT"
