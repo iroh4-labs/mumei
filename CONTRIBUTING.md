@@ -28,7 +28,9 @@ on the next tool invocation (Hook reload may need `/reload-plugins` in some
 versions of Claude Code).
 
 The repository is split into **distributable artifacts** (English-only, shipped to
-plugin users) and **dev-only files** (Japanese, gitignored). The full boundary
+plugin users) and **dev-side files** (tracked team assets: `CLAUDE.md`,
+`.claude/` rules / skills / agents in English, plus the `docs/` dev records —
+pre-existing Japanese content with new entries in English). The full boundary
 rules, language conventions, bash/jq conventions, and review rubric are documented
 in [AGENTS.md](./AGENTS.md) — tracked and English, it is the canonical conventions
 reference for both human and AI contributors. Read it before your first PR.
@@ -235,18 +237,19 @@ so the full CI suite and AI review run before landing.
 Larger changes (new Hook rules, new agents, schema breaks, new detectors) are
 expected to follow the mumei spec workflow itself: `/mumei:compose <feature>` to
 generate `requirements.md` / `design.md` / `tasks.md`, then implement Wave by
-Wave. The artifacts live under `.mumei/specs/<feature>/`. This is gitignored, so
-the spec stays local; share intent through the PR description and link to the
-relevant `decisions.md` entry under `docs/` if applicable.
+Wave. The artifacts live under `.mumei/specs/<feature>/` (spec documents are
+tracked; only `state.json` and `.mumei/current` are per-developer state). Share
+intent through the PR description and link to the relevant
+`docs/mumei-decisions.md` entry if applicable.
 
 ## Releases
 
 Releases are maintainer-only. External contributors do not need to
-reproduce a release locally; the procedure lives in a private skill
-that is not part of the distributed plugin (the entire `.claude/` tree
-is gitignored).
+reproduce a release locally; the procedure lives in
+[.claude/skills/release/SKILL.md](./.claude/skills/release/SKILL.md)
+(tracked, but not part of the distributed plugin payload).
 
-For maintainers, the procedure (in `.claude/skills/release/SKILL.md`)
+For maintainers, the procedure
 takes either no argument, a SemVer bump keyword
 (`patch` / `minor` / `major`), or an explicit version (`0.4.2`). It
 creates one commit that wraps any uncommitted work, pushes to `main`,
