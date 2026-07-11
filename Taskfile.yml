@@ -86,6 +86,11 @@ tasks:
     cmds:
       - bash scripts/lint-plan-vehicle-hooks.sh
 
+  lint:agent-namespace:
+    desc: "hooks.json matchers + skills spawn sites use the mumei: runtime prefix"
+    cmds:
+      - bash scripts/lint-agent-namespace.sh
+
   lint:tasks:
     desc: "tasks.md format invariants (advisory; mainly used by hooks)"
     cmds:

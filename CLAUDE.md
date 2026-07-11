@@ -113,9 +113,10 @@ Everything is reachable through `Taskfile.yml` (`task --list` to discover).
 
 - **Lint sweep**: `task lint` (= `bash scripts/lint-all.sh`): shellcheck +
   `bash -n` + shfmt + `jq empty` + frontmatter + hook-ID consistency + docs
-  drift + plan-vehicle hooks.json + bash-prefix. CI parity.
+  drift + plan-vehicle hooks.json + agent namespace + bash-prefix. CI parity.
 - **Individual lints**: `task lint:hook-ids` / `lint:docs-drift` /
-  `lint:frontmatter` / `lint:bash-prefix` / `lint:plan-vehicle` / `lint:tasks`.
+  `lint:frontmatter` / `lint:bash-prefix` / `lint:plan-vehicle` /
+  `lint:agent-namespace` / `lint:tasks`.
 - **bats**: `task test:bats` (= `bats -r tests/`); `task test` is equivalent.
 - **Pre-push full check**: `task validate` (lint + test). Run before `git push`.
 - **CI replay**: `task ci:replay` mirrors PR-time CI locally.

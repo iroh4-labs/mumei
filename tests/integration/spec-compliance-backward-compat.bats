@@ -75,8 +75,10 @@ load '../test_helper'
 }
 
 @test "skills/peruse SKILL.md Step 6 launches spec-compliance-reviewer" {
-  # Phrase: 'Task(subagent_type: "spec-compliance-reviewer", ...)'
-  grep -qE 'subagent_type:[[:space:]]*"spec-compliance-reviewer"' \
+  # Phrase: 'Task(subagent_type: "mumei:spec-compliance-reviewer", ...)'.
+  # The prefix is load-bearing: a bare name does not resolve at runtime
+  # ("Agent type 'spec-compliance-reviewer' not found") — issue #178.
+  grep -qE 'subagent_type:[[:space:]]*"mumei:spec-compliance-reviewer"' \
     "$CLAUDE_PLUGIN_ROOT/skills/peruse/SKILL.md"
 }
 
