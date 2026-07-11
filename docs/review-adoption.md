@@ -88,6 +88,29 @@ model differences, not divergent criteria).
   your `review.yml` will see a red `review` check until the change lands on
   the default branch. This is by-design GitHub behaviour, not a configuration
   bug.
+- **The reviewer has no shell and no file tools.** It sees the diff, the PR
+  title and body, the rubric, your base-branch `AGENTS.md` and the grounding
+  scan — all assembled into its prompt by the workflow — and it can post
+  comments. That is the whole of it. The job holds your
+  `CLAUDE_CODE_OAUTH_TOKEN` and reads a diff written by whoever opened the PR;
+  a reviewer with a shell could be talked into printing the one into the other.
+  Your `.claude/settings.json` is not loaded either — settings carry hooks, and
+  under `pull_request` that file comes from the PR. See
+  [docs/threat-model.md](./threat-model.md).
+- **semgrep grounding is opt-in and says so when it is off.** The scan installs
+  from `.github/requirements/semgrep-review/requirements.txt` **in your
+  repository**, hash-pinned. Without that file the review still runs, and the
+  prompt and the audit record both state that semgrep was NOT RUN — never that
+  it found nothing. To enable it, copy the lock from mumei:
+
+  ```bash
+  mkdir -p .github/requirements/semgrep-review
+  curl -fsSL -o .github/requirements/semgrep-review/requirements.txt \
+    https://raw.githubusercontent.com/iroh4-labs/mumei/<TAG>/.github/requirements/semgrep-review/requirements.txt
+  ```
+
+  Once the lock is present, an install or scan failure fails the job: a detector
+  that did not run must not be read as a detector that found nothing.
 - **Cost**: the OAuth token uses your Claude Max subscription quota; there is
   no per-call API billing from this workflow. The model defaults to
   `claude-opus-4-8` and can be overridden via the workflow input.

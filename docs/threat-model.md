@@ -71,6 +71,36 @@ The implemented controls map onto the surfaces above:
 - **Workflow permissions creep**: every workflow declares minimal
   `permissions:` at top level; CI is read-only; release jobs gate on
   the `release` GitHub Environment with required reviewers.
+- **Reviewer cannot read the secret it runs under**: the review job
+  passes `CLAUDE_CODE_OAUTH_TOKEN` to `claude-code-action`, which puts
+  it in the Claude process's environment and cannot do otherwise (the
+  SDK authenticates with it). The reviewer also reads a diff written by
+  whoever opened the PR — a prompt-injection surface by construction. So
+  the reviewer is given no shell and no file tools. A model can only
+  exfiltrate what it knows, and without a shell it never learns the token
+  (`env` and `$CLAUDE_CODE_OAUTH_TOKEN` both need one;
+  `Read(/proc/self/environ)` would be the same door). The diff is
+  assembled into the prompt by the workflow instead of being fetched by
+  the model, and what remains is the MCP tooling the action needs to post
+  its review.
+
+  The mechanism is `disallowedTools`, not `allowedTools`, and the
+  distinction is load-bearing: `allowedTools` pre-approves rather than
+  restricts (a Read succeeded with an allowlist that did not name it), and
+  `claude-code-action` merges its own entries into it — a run of this
+  workflow logged `Read`, `Grep`, `Glob`, `LS` and four `Bash(git …)` rules
+  in the allowlist it assembled. Deny beats allow, so every capability the
+  action injects is named explicitly in the denylist. Anything relying on
+  the allowlist being ours alone would be relying on something untrue.
+- **PR-supplied settings are not loaded**: `claude-code-action` reads
+  settings from `user`, `project` and `local` sources by default, and
+  `project` means `.claude/settings.json` **in the checked-out pull
+  request**. Settings carry hooks, so a PR could ship a hook and have it
+  executed inside a job holding the token — no model cooperation, no tool
+  call to deny. The review passes `--setting-sources user`, and the
+  runner has no user settings. The reviewer's other trusted input,
+  `AGENTS.md`, is read from the base branch for the same reason: it enters
+  the prompt as guidance to obey, so a PR must not be able to write it.
 - **Secret scanning at multiple stages**: pre-commit (gitleaks +
   trufflehog locally) → `ci.yml` gitleaks on every PR → weekly full
   history rescan via `gitleaks.yml`. Pre-flight scans rerun
