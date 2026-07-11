@@ -55,7 +55,7 @@ When a new field or new API appears, additionally fetch for spec confirmation:
 - `https://code.claude.com/docs/en/commands`
 - the feature's dedicated page (e.g. `agent-view`, `model-config`)
 
-Label anything that could not be verified as **unverified** (never present guesses as fact; per `.claude/rules/research-discipline.md`).
+Label anything that could not be verified as **unverified** (never present guesses as fact; per the Research discipline section in `CLAUDE.md`).
 
 ## Step 3. Organize all features (no mumei filter)
 
@@ -78,7 +78,7 @@ Read the following files before judging:
 
 - `CLAUDE.md`
 - `docs/mumei-decisions.md` — primary source; grounds for prior rejections
-- `.claude/rules/mumei-architecture.md`
+- `ARCHITECTURE.md`
 - `hooks/hooks.json`
 - `.claude-plugin/plugin.json`
 
