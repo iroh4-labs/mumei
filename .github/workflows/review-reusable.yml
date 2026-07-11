@@ -614,10 +614,15 @@ jobs:
       # Deny beats allow — also measured: with Read in both lists, and with
       # `Bash(git add:*)` allowed while `Bash` was denied, both were unavailable
       # to the model. So the denylist is the wall, and every capability the action
-      # injects has to be named in it explicitly. `--tools` (which replaces the
-      # built-in set outright) is passed as a second wall, but the action strips
-      # extraArgs from its logs, so whether it reaches the CLI is not observable
-      # from a run — it is not what this relies on.
+      # injects has to be named in it explicitly.
+      #
+      # `--tools "TodoWrite"` (which replaces the built-in set outright, rather
+      # than denying from it) was tried here and reverted. It propagates, and it
+      # is too blunt: three consecutive runs produced no review at all, only the
+      # action's placeholder ("I'll analyze this and get back to you"), with zero
+      # permission denials. The action's system prompt is written around the
+      # built-in tools, and a session with none of them derails rather than
+      # narrows. Denying the dangerous ones leaves the flow intact.
       #
       # What survives is the action's own MCP surface: the two comment tools it
       # needs to publish a review, plus `mcp__github_ci__*`. Denying the CI tools
@@ -650,7 +655,6 @@ jobs:
           prompt: ${{ env.PROMPT }}
           claude_args: |
             --model ${{ inputs.model }}
-            --tools "TodoWrite"
             --setting-sources user
             --allowedTools "mcp__github_inline_comment__create_inline_comment"
             --disallowedTools "Bash,Read,Write,Edit,NotebookEdit,Glob,Grep,LS,WebFetch,WebSearch,Task,SlashCommand,BashOutput,KillShell"
