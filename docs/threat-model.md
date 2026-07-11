@@ -76,12 +76,22 @@ The implemented controls map onto the surfaces above:
   it in the Claude process's environment and cannot do otherwise (the
   SDK authenticates with it). The reviewer also reads a diff written by
   whoever opened the PR — a prompt-injection surface by construction. So
-  the reviewer is given no shell and no filesystem tools: one MCP tool
-  for inline comments, nothing else. A model can only exfiltrate what it
-  knows, and without a shell it never learns the token (`env` and
-  `$CLAUDE_CODE_OAUTH_TOKEN` both need one; `Read(/proc/self/environ)`
-  would be the same door, so Read is denied too). The diff is assembled
-  into the prompt by the workflow instead of being fetched by the model.
+  the reviewer is given no shell and no file tools: `--tools "TodoWrite"`
+  replaces the built-in set, leaving one MCP tool for inline comments and
+  nothing else. A model can only exfiltrate what it knows, and without a
+  shell it never learns the token (`env` and `$CLAUDE_CODE_OAUTH_TOKEN`
+  both need one; `Read(/proc/self/environ)` would be the same door). The
+  diff is assembled into the prompt by the workflow instead of being
+  fetched by the model.
+- **PR-supplied settings are not loaded**: `claude-code-action` reads
+  settings from `user`, `project` and `local` sources by default, and
+  `project` means `.claude/settings.json` **in the checked-out pull
+  request**. Settings carry hooks, so a PR could ship a hook and have it
+  executed inside a job holding the token — no model cooperation, no tool
+  call to deny. The review passes `--setting-sources user`, and the
+  runner has no user settings. The reviewer's other trusted input,
+  `AGENTS.md`, is read from the base branch for the same reason: it enters
+  the prompt as guidance to obey, so a PR must not be able to write it.
 - **Secret scanning at multiple stages**: pre-commit (gitleaks +
   trufflehog locally) → `ci.yml` gitleaks on every PR → weekly full
   history rescan via `gitleaks.yml`. Pre-flight scans rerun
