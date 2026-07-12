@@ -131,6 +131,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^(\.github/review-rubric\.md|AGENTS\.md|\.github/workflows/review-reusable\.yml|scripts/lint-review-rubric\.sh)$
+      - id: lint-workflow-lock-paths
+        name: lint-workflow-lock-paths (#197)
+        entry: bash scripts/lint-workflow-lock-paths.sh
+        language: system
+        pass_filenames: false
+        files: ^(\.github/workflows/[^/]*\.ya?ml|\.github-deps/.*|scripts/lint-workflow-lock-paths\.sh)$
       - id: lint-bash-prefix
         name: lint-bash-prefix (mumei_ / _mumei_)
         entry: bash scripts/lint-bash-prefix.sh

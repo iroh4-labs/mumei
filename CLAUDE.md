@@ -115,10 +115,11 @@ Everything is reachable through `Taskfile.yml` (`task --list` to discover).
 - **Lint sweep**: `task lint` (= `bash scripts/lint-all.sh`): shellcheck +
   `bash -n` + shfmt + `jq empty` + frontmatter + hook-ID consistency + docs
   drift + plan-vehicle hooks.json + agent namespace + distribution shape +
-  bash-prefix. CI parity.
+  workflow lock paths + bash-prefix. CI parity.
 - **Individual lints**: `task lint:hook-ids` / `lint:docs-drift` /
   `lint:frontmatter` / `lint:bash-prefix` / `lint:plan-vehicle` /
-  `lint:agent-namespace` / `lint:distribution-shape` / `lint:tasks`.
+  `lint:agent-namespace` / `lint:distribution-shape` /
+  `lint:workflow-lock-paths` / `lint:tasks`.
 - **Diff-scoped lint**: `task lint:gate-weakening` (not part of `task lint` —
   it needs a base ref). CI runs it per PR as its own job. Keep it OUT of the
   required checks: a red required check cannot be cleared by a human approval,

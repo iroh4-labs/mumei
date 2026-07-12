@@ -48,6 +48,7 @@ _mumei_run "distribution shape (git archive contents)" bash "$here/lint-distribu
 _mumei_run "Hook ID consistency" bash "$here/lint-hook-ids.sh"
 _mumei_run "docs ↔ filesystem drift" bash "$here/lint-docs-drift.sh"
 _mumei_run "review rubric parity" bash "$here/lint-review-rubric.sh"
+_mumei_run "workflow lock paths" bash "$here/lint-workflow-lock-paths.sh"
 
 printf '\n'
 if [[ "$fail" == "0" ]]; then
