@@ -241,7 +241,7 @@ for _ in $(seq 1 15); do
 done
 
 if [[ -n "$release_run_id" ]]; then
-  echo "Release workflow: https://github.com/iroh4-labs/mumei/actions/runs/${release_run_id}"
+  echo "Release workflow: https://github.com/iroha924/mumei/actions/runs/${release_run_id}"
   gh run watch "$release_run_id" --exit-status \
     || { echo "× release.yml failed. The tag is pushed, but assets / signatures may be
 incomplete. Inspect with gh run view ${release_run_id} --log-failed."; }
@@ -290,7 +290,7 @@ Recovery steps:
    ```bash
    gh api graphql -f query="
      query {
-       repository(owner: \"iroh4-labs\", name: \"mumei\") {
+       repository(owner: \"iroha924\", name: \"mumei\") {
          pullRequest(number: ${pr_number}) {
            reviewThreads(first: 50) {
              nodes { id isResolved path line comments(first:5){nodes{author{login} body}} }

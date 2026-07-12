@@ -61,7 +61,7 @@ jobs:
           # perfectly pinned. The owner allowlist is the second half: a new
           # third-party action requires a deliberate edit to this list, which
           # lands in the diff and needs review.
-          ALLOWED_OWNERS="actions anchore anthropics crate-ci DavidAnson github gitleaks go-task google iroh4-labs ossf sigstore slsa-framework trufflesecurity"
+          ALLOWED_OWNERS="actions anchore anthropics crate-ci DavidAnson github gitleaks go-task google iroha924 ossf sigstore slsa-framework trufflesecurity"
           uses_line='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+'
           local_action="${uses_line}\\."
           valid_sha="${uses_line}[^/[:space:]]+/[^@[:space:]]+@[a-f0-9]{40}([[:space:]]+#.*)?[[:space:]]*$"

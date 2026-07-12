@@ -79,15 +79,26 @@ workflow:
 ```bash
 cosign verify-blob \
   --bundle "mumei-${TAG}.tar.gz.cosign.bundle" \
-  --certificate-identity-regexp '^https://github.com/iroh4-labs/mumei/\.github/workflows/release-reusable\.yml@refs/tags/' \
+  --certificate-identity-regexp '^https://github.com/iroha924/mumei/\.github/workflows/release-reusable\.yml@refs/tags/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   "mumei-${TAG}.tar.gz"
 # Expect: Verified OK
 ```
 
-For tags v0.10.1 and earlier, the signing identity records the
-repository path at signing time: use
-`^https://github.com/hir4ta/mumei/…` in the regexp instead.
+The certificate records the repository path **as it was at signing time**, and
+this repository has been renamed twice. Use the identity that matches the tag,
+not the one that matches today:
+
+| tag | `--certificate-identity-regexp` |
+| --- | --- |
+| `v0.11.1` and later | `^https://github.com/iroha924/mumei/…` |
+| `v0.10.2` … `v0.11.0` | `^https://github.com/iroh4-labs/mumei/…` |
+| `v0.10.1` and earlier | `^https://github.com/hir4ta/mumei/…` |
+
+Verifying an old tag against today's name fails with
+`no matching CertificateIdentity found` — that is the check working, not a bad
+signature. The boundaries above were read back out of the published bundles, not
+recalled.
 
 If `cosign` is not installed: `brew install cosign` (macOS) or
 [release binary](https://github.com/sigstore/cosign/releases).
@@ -100,14 +111,20 @@ the official SLSA generator. Inspect it with `slsa-verifier`:
 ```bash
 slsa-verifier verify-artifact \
   --provenance-path mumei-${TAG}.intoto.jsonl \
-  --source-uri github.com/iroh4-labs/mumei \
+  --source-uri github.com/iroha924/mumei \
   --source-tag "${TAG}" \
   "mumei-${TAG}.tar.gz"
 # Expect: PASSED: SLSA verification passed
 ```
 
-For tags v0.10.1 and earlier, the provenance records the source URI at
-build time: pass `--source-uri github.com/hir4ta/mumei` instead.
+The provenance records the source URI **as it was at build time**, so it follows
+the same three-way split as the signing identity above:
+
+| tag | `--source-uri` |
+| --- | --- |
+| `v0.11.1` and later | `github.com/iroha924/mumei` |
+| `v0.10.2` … `v0.11.0` | `github.com/iroh4-labs/mumei` |
+| `v0.10.1` and earlier | `github.com/hir4ta/mumei` |
 
 If `slsa-verifier` is not installed: `go install
 github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest`

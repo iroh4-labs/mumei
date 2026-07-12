@@ -190,7 +190,20 @@ users can model them rather than discovering them later.
   install. A user who runs `/plugin install` without then opening
   the project in a mumei-enabled session never benefits from the
   review pipeline at all.
-- **R8 — The escape hatch is reachable from inside the session.**
+- **R8 — The old account name is now unowned.** This repository has been
+  renamed twice (`hir4ta` → `iroh4-labs` → `iroha924`). GitHub redirects
+  the old paths, but only until someone else registers the freed name —
+  at which point the redirect dies and `iroh4-labs/mumei` becomes
+  whatever they put there. That matters because
+  `docs/review-adoption.md` shows adopters
+  `uses: <owner>/mumei/.github/workflows/review-reusable.yml@<TAG>`, and a
+  workflow pinned by **tag** to a squatted name would run someone else's
+  code in a job holding their `CLAUDE_CODE_OAUTH_TOKEN`. A 40-char SHA
+  pin survives this (the content is fixed); a tag does not. The
+  mitigation is to hold the retired names in placeholder accounts, and
+  the honest statement is that mumei cannot enforce that from inside the
+  repository — it is an account-registration fact, not a code one.
+- **R9 — The escape hatch is reachable from inside the session.**
   `MUMEI_BYPASS=1` short-circuits every hook, silently and by design —
   it is meant to look like the hook never fired. That design assumed a
   human sets it. But `env` in `.claude/settings.json` /

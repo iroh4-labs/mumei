@@ -1,13 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "mumei",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Quality Enforcement Layer for Claude Code — Hook-gated SDD (spec & plan vehicles), Wave commits, and grounded multi-agent code review.",
   "author": {
     "name": "Shunichi Hirata"
   },
-  "homepage": "https://github.com/iroh4-labs/mumei",
-  "repository": "https://github.com/iroh4-labs/mumei",
+  "homepage": "https://github.com/iroha924/mumei",
+  "repository": "https://github.com/iroha924/mumei",
   "license": "MIT",
   "keywords": [
     "harness",

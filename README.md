@@ -1,11 +1,11 @@
 # mumei
 
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![CI](https://github.com/iroh4-labs/mumei/actions/workflows/ci.yml/badge.svg)](https://github.com/iroh4-labs/mumei/actions/workflows/ci.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/iroh4-labs/mumei/badge)](https://scorecard.dev/viewer/?uri=github.com/iroh4-labs/mumei)
+[![CI](https://github.com/iroha924/mumei/actions/workflows/ci.yml/badge.svg)](https://github.com/iroha924/mumei/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/iroha924/mumei/badge)](https://scorecard.dev/viewer/?uri=github.com/iroha924/mumei)
 [![SLSA Level 3](https://img.shields.io/badge/SLSA-level_3-green?logo=slsa)](https://slsa.dev/spec/v1.0/levels#build-l3)
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
-[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/iroh4-labs/mumei/network/updates)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/iroha924/mumei/network/updates)
 
 **mumei is a quality-enforcement harness for Claude Code.**
 
@@ -105,7 +105,7 @@ Install from the community marketplace:
 Or track the latest (main) from the self-hosted marketplace:
 
 ```text
-/plugin marketplace add iroh4-labs/mumei
+/plugin marketplace add iroha924/mumei
 /plugin install mumei@mumei
 /reload-plugins
 ```
@@ -273,12 +273,12 @@ Contributions are welcome — see **[CONTRIBUTING.md](./CONTRIBUTING.md)** for
 the full guide. The fast path:
 
 ```bash
-git clone https://github.com/iroh4-labs/mumei.git && cd mumei
+git clone https://github.com/iroha924/mumei.git && cd mumei
 task doctor     # verify required tooling
 task validate   # lint + tests — run before every push
 ```
 
-Issues labeled [`good first issue`](https://github.com/iroh4-labs/mumei/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+Issues labeled [`good first issue`](https://github.com/iroha924/mumei/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 are scoped for first-time contributors.
 
 ## License

@@ -84,7 +84,7 @@ Verify a downloaded release:
 ```bash
 cosign verify-blob \
   --bundle "mumei-${TAG}.tar.gz.cosign.bundle" \
-  --certificate-identity-regexp '^https://github.com/iroh4-labs/mumei/\.github/workflows/release-reusable\.yml@refs/tags/' \
+  --certificate-identity-regexp '^https://github.com/iroha924/mumei/\.github/workflows/release-reusable\.yml@refs/tags/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   "mumei-${TAG}.tar.gz"
 # Expect: Verified OK

@@ -8,8 +8,8 @@ body:
       value: |
         Thanks for filing a bug report. Please fill out as many fields as you can.
         For **security vulnerabilities**, do NOT open a public issue — use
-        [GitHub Security Advisories](https://github.com/iroh4-labs/mumei/security/advisories/new)
-        instead (see [SECURITY.md](https://github.com/iroh4-labs/mumei/blob/main/SECURITY.md)).
+        [GitHub Security Advisories](https://github.com/iroha924/mumei/security/advisories/new)
+        instead (see [SECURITY.md](https://github.com/iroha924/mumei/blob/main/SECURITY.md)).
 
   - type: dropdown
     id: component

@@ -121,7 +121,7 @@ Create an issue with this structure via `gh issue create`:
 
 ```bash
 gh issue create \
-  --repo iroh4-labs/mumei \
+  --repo iroha924/mumei \
   --title "feat: explore Claude Code <range> features for mumei" \
   --label "enhancement,research" \
   --body-file <(cat <<'EOF'

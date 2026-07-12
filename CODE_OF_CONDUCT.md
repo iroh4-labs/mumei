@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-the maintainer via [GitHub Security Advisories (private)](https://github.com/iroh4-labs/mumei/security/advisories/new) or by mentioning @iroh4-labs in a public issue.
+the maintainer via [GitHub Security Advisories (private)](https://github.com/iroha924/mumei/security/advisories/new) or by mentioning @iroha924 in a public issue.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

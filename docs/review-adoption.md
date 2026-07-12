@@ -30,7 +30,7 @@ permissions:
   id-token: write
 jobs:
   claude:
-    uses: iroh4-labs/mumei/.github/workflows/review-reusable.yml@<TAG>
+    uses: iroha924/mumei/.github/workflows/review-reusable.yml@<TAG>
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
@@ -41,7 +41,7 @@ already named `review` — a caller workflow named `review` with a job named
 `review` shows up in the PR as `review / review / review`.
 
 Replace `<TAG>` with a mumei release tag. For stronger supply-chain integrity
-prefer a full commit SHA over a tag (`uses: iroh4-labs/mumei/.github/workflows/review-reusable.yml@<40-char-sha>`)
+prefer a full commit SHA over a tag (`uses: iroha924/mumei/.github/workflows/review-reusable.yml@<40-char-sha>`)
 — tags are mutable in principle, and a moved or compromised tag would run
 different workflow code with your repo's `pull-requests: write` /
 `id-token: write` permissions and your Claude OAuth secret. Pinning by SHA
@@ -65,7 +65,7 @@ model differences, not divergent criteria).
    `## Review guidelines` section natively.
 2. Create `.gemini/styleguide.md`. Gemini Code Assist reads this file.
 3. In both files, paste the block from
-   `https://raw.githubusercontent.com/iroh4-labs/mumei/<TAG>/.github/review-rubric.md`
+   `https://raw.githubusercontent.com/iroha924/mumei/<TAG>/.github/review-rubric.md`
    between its `<!-- BEGIN universal-review-rubric -->` and
    `<!-- END universal-review-rubric -->` markers. Keep the markers — they
    are how mumei's drift lint stays in sync across the three carriers if you
@@ -103,7 +103,7 @@ model differences, not divergent criteria).
   from a `workflow_run` trigger (the definition then comes from your default
   branch and a PR cannot modify it), or accept the risk knowingly. The reusable
   workflow currently requires `pull_request`; `workflow_run` support is tracked
-  in [#179](https://github.com/iroh4-labs/mumei/issues/179).
+  in [#179](https://github.com/iroha924/mumei/issues/179).
 - **The reviewer has no shell and no file tools.** It sees the diff, the PR
   title and body, the rubric, your base-branch `AGENTS.md` and the grounding
   scan — all assembled into its prompt by the workflow — and it can post
@@ -122,7 +122,7 @@ model differences, not divergent criteria).
   ```bash
   mkdir -p .github/requirements/semgrep-review
   curl -fsSL -o .github/requirements/semgrep-review/requirements.txt \
-    https://raw.githubusercontent.com/iroh4-labs/mumei/<TAG>/.github/requirements/semgrep-review/requirements.txt
+    https://raw.githubusercontent.com/iroha924/mumei/<TAG>/.github/requirements/semgrep-review/requirements.txt
   ```
 
   Once the lock is present, an install or scan failure fails the job: a detector
