@@ -22,6 +22,10 @@ _run_hook() {
 # Run the hook against a stub plugin root whose cost-backfill.sh records the
 # argument it was handed (and optionally fails). This is what lets us assert the
 # wiring without re-testing cost-backfill.sh itself.
+#
+# The stub root mirrors the handler's ENTIRE source set — today that is just
+# _lib/anchor.sh. If the handler ever sources another lib, copy it here too, or
+# these tests fail on a missing source rather than on the wiring they assert.
 # Args: [exit_code]
 _run_hook_with_stub_backfill() {
   local rc="${1:-0}"
