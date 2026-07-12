@@ -13,6 +13,10 @@
 
 set -u
 
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/safe-grep.sh"
+
 feature_dir="${1:-}"
 if [[ -z "$feature_dir" || ! -d "$feature_dir" ]]; then
   echo "generate-muse: invalid feature_dir: ${feature_dir}" >&2
@@ -43,7 +47,7 @@ fi
 # AC count: prefer requirements.md REQ-N.M lines, fall back to scratch.md.
 ac_count=0
 if [[ -f "${feature_dir}/requirements.md" ]]; then
-  ac_count="$(grep -cE '^- REQ-[0-9]+\.[0-9]+' "${feature_dir}/requirements.md" 2>/dev/null || echo 0)"
+  ac_count="$(mumei_safe_grep_count '^- REQ-[0-9]+\.[0-9]+' "${feature_dir}/requirements.md")"
 fi
 
 # Wave + task counts from tasks.md.
@@ -51,9 +55,9 @@ wave_count=0
 task_total=0
 task_done=0
 if [[ -f "${feature_dir}/tasks.md" ]]; then
-  wave_count="$(grep -cE '^## Wave [0-9]+:' "${feature_dir}/tasks.md" 2>/dev/null || echo 0)"
-  task_total="$(grep -cE '^- \[' "${feature_dir}/tasks.md" 2>/dev/null || echo 0)"
-  task_done="$(grep -cE '^- \[x\]' "${feature_dir}/tasks.md" 2>/dev/null || echo 0)"
+  wave_count="$(mumei_safe_grep_count '^## Wave [0-9]+:' "${feature_dir}/tasks.md")"
+  task_total="$(mumei_safe_grep_count '^- \[' "${feature_dir}/tasks.md")"
+  task_done="$(mumei_safe_grep_count '^- \[x\]' "${feature_dir}/tasks.md")"
 fi
 
 # Spec-reviewer iter counts (per spec doc).

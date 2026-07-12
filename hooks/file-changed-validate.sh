@@ -29,10 +29,17 @@ BASENAME="$(basename "$FILE_PATH" 2>/dev/null || true)"
 case "$BASENAME" in
 tasks.md)
   if [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/lint-tasks.sh" ]]; then
-    if ! bash "${CLAUDE_PLUGIN_ROOT}/scripts/lint-tasks.sh" \
-      <<<"$(jq -n --arg p "$FILE_PATH" '{tool_input: {file_path: $p}}')" >/dev/null 2>&1; then
-      printf '[mumei] file-changed warning: lint-tasks reports violations on %s (external edit)\n' \
-        "$FILE_PATH" >&2
+    # lint-tasks is advisory by contract: it ALWAYS exits 0 and reports
+    # violations as additionalContext on stdout. Keying off its exit status
+    # (and discarding its stdout) made this warning unreachable — read the
+    # violations it actually emits instead.
+    LINT_OUT="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/lint-tasks.sh" \
+      <<<"$(jq -n --arg p "$FILE_PATH" '{tool_input: {file_path: $p}}')" 2>/dev/null || true)"
+    VIOLATIONS="$(jq -r '.hookSpecificOutput.additionalContext // empty' \
+      <<<"$LINT_OUT" 2>/dev/null || true)"
+    if [[ -n "$VIOLATIONS" ]]; then
+      printf '[mumei] file-changed warning: lint-tasks reports violations on %s (external edit)\n%s\n' \
+        "$FILE_PATH" "$VIOLATIONS" >&2
     fi
   fi
   ;;

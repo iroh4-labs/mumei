@@ -12,6 +12,10 @@
 
 set -u
 
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}"
+# shellcheck disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/safe-grep.sh"
+
 log=".mumei/.curator-log.jsonl"
 
 case "${1:-}" in
@@ -62,7 +66,7 @@ _mumei_pad() {
   ' "$log" | sort
 } | _mumei_pad
 
-total="$(grep -c '' "$log" 2>/dev/null || echo 0)"
+total="$(mumei_safe_grep_count '' "$log")"
 echo
 echo "## totals"
 echo "  records: ${total}"

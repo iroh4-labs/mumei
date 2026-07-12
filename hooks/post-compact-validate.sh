@@ -38,7 +38,10 @@ if [[ ! -f "$STATE_PATH" ]]; then
   exit 0
 fi
 
-if ! jq empty "$STATE_PATH" >/dev/null 2>&1; then
+# `jq empty` accepts a 0-byte file (zero JSON values is not a parse error), so
+# a truncated write would pass this check as "valid". stop-guard already treats
+# an empty file as corrupt; match it here.
+if [[ ! -s "$STATE_PATH" ]] || ! jq empty "$STATE_PATH" >/dev/null 2>&1; then
   printf '[mumei] post-compact warning: state.json is not valid JSON at %s.\n' \
     "$STATE_PATH" >&2
   exit 0
