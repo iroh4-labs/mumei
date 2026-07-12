@@ -183,6 +183,59 @@ YAML
   [[ "$stderr" == *"deps/requirements.txt"* ]]
 }
 
+@test "a renamed lock file cannot hide from the matcher -> exit 1" {
+  _init_repo
+  # The matcher keys off the name `requirements.txt`. Rename ONE lock, point its
+  # workflow at the new name, and the matcher stops seeing it — quietly, because
+  # the OTHER lock keeps the match set non-empty and the gone-blind guard never
+  # fires. (With a single lock the guard would catch it, which is why the second
+  # lock is the whole point of this fixture.) Widening the regex would only move
+  # the blind spot; the directory-anchored orphan check is what closes it.
+  mkdir -p .github-deps/other
+  printf 'requests==2.34.2\n' >.github-deps/other/requirements.txt
+  git add -A
+  git mv .github-deps/validate/requirements.txt .github-deps/validate/constraints.txt
+  cat >.github/workflows/validate.yml <<'YAML'
+name: validate
+on: [pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          python3 -m pip install --require-hashes -r .github-deps/validate/constraints.txt
+          python3 -m pip install --require-hashes -r .github-deps/other/requirements.txt
+YAML
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *".github-deps/validate/constraints.txt"* ]]
+  [[ "$stderr" == *"no workflow references it"* ]]
+}
+
+@test "a lock nothing references at all is dead weight -> exit 1" {
+  _init_repo
+  mkdir -p .github-deps/unused
+  printf 'requests==2.34.2\n' >.github-deps/unused/requirements.txt
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *".github-deps/unused/requirements.txt"* ]]
+}
+
+@test "requirements.in is a source, not an installed lock -> exit 0" {
+  _init_repo
+  # The .in files are pip-compile inputs; no workflow installs them, and demanding
+  # a reference to them would fail every healthy repo.
+  printf 'jsonschema\n' >.github-deps/validate/requirements.in
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 0 ]
+}
+
 @test "a path named only in a comment is prose, not a reference -> exit 0" {
   _init_repo
   cat >>.github/workflows/validate.yml <<'YAML'

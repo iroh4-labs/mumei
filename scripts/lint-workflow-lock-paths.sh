@@ -89,6 +89,35 @@ if ((${#missing[@]} > 0)); then
   exit 1
 fi
 
+# The other direction: every lock we ship must be referenced by a workflow.
+#
+# Checking only "referenced => exists" leaves the matcher's own vocabulary
+# unguarded. Rename one lock to constraints.txt and update its workflow, and the
+# matcher — which keys off the name `requirements.txt` — simply stops seeing it:
+# the reference count drops from 3 to 2, the remaining two still match so the
+# gone-blind guard stays quiet, and a typo in the renamed path sails through.
+#
+# Any matcher hardcodes SOMETHING, so this cannot be solved by widening the regex
+# again; it just moves the blind spot. It is solved by changing what the check is
+# anchored to. Here the anchor is the DIRECTORY, not the filename: a lock that sits
+# in .github-deps/ and is referenced by nothing is either dead weight or a file the
+# matcher can no longer see — and both deserve a failure.
+orphans=()
+while IFS= read -r lock; do
+  [[ -z "$lock" ]] && continue
+  printf '%s\n' "$paths" | grep -qxF "$lock" || orphans+=("$lock")
+done < <(git ls-files '.github-deps/*' | grep -vE '\.in$')
+
+if ((${#orphans[@]} > 0)); then
+  echo "lint-workflow-lock-paths: lock is tracked but no workflow references it:" >&2
+  for lock in "${orphans[@]}"; do
+    echo "  ${lock}" >&2
+  done
+  echo "  either it is dead weight, or this lint can no longer see the reference" >&2
+  echo "  (a renamed lock file leaves the matcher looking for a name nobody uses)." >&2
+  exit 1
+fi
+
 count="$(printf '%s\n' "$paths" | wc -l | tr -d ' ')"
 echo "lint-workflow-lock-paths: ${count} workflow-referenced locks are tracked files"
 exit 0
