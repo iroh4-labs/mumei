@@ -81,6 +81,11 @@ tasks:
     cmds:
       - bash scripts/lint-review-rubric.sh
 
+  lint:workflow-lock-paths:
+    desc: "every dependency lock a workflow references is a tracked file"
+    cmds:
+      - bash scripts/lint-workflow-lock-paths.sh
+
   lint:plan-vehicle:
     desc: "plan-vehicle hooks.json registration check"
     cmds:
