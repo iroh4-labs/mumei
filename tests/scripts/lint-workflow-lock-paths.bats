@@ -140,6 +140,49 @@ YAML
   [[ "$stderr" == *"gone blind"* ]]
 }
 
+@test "a .yaml workflow is scanned too -> exit 1 (the extension must not blind it)" {
+  _init_repo
+  # GitHub Actions honours both extensions. Scanning only *.yml would skip this
+  # file's references — and because validate.yml still matches, the gone-blind
+  # guard would stay quiet. That is this lint's own bug, one layer up.
+  cat >.github/workflows/extra.yaml <<'YAML'
+name: extra
+on: [pull_request]
+jobs:
+  extra:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          python3 -m pip install --require-hashes -r .github-deps/typo/requirements.txt
+YAML
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *".github-deps/typo/requirements.txt"* ]]
+}
+
+@test "a single-segment lock path is checked, not skipped -> exit 1" {
+  _init_repo
+  # `deps/requirements.txt` has one directory segment. Requiring two would skip
+  # it in silence while the deeper paths kept the match set non-empty.
+  cat >.github/workflows/validate.yml <<'YAML'
+name: validate
+on: [pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          python3 -m pip install --require-hashes -r deps/requirements.txt
+YAML
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"deps/requirements.txt"* ]]
+}
+
 @test "a path named only in a comment is prose, not a reference -> exit 0" {
   _init_repo
   cat >>.github/workflows/validate.yml <<'YAML'

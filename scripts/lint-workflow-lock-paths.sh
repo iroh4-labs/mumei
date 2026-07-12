@@ -37,12 +37,28 @@ cd "$repo_root" || {
   exit 1
 }
 
+# Both extensions: GitHub Actions honours .yml AND .yaml, so scanning only .yml
+# would let a lock reference in a .yaml workflow escape unchecked — and because
+# the .yml files keep the match set non-empty, the gone-blind guard below would
+# not fire either. That is this lint's own bug, reopened at the file extension.
+# `find` rather than a glob: an unmatched `*.yaml` glob expands to the literal
+# string and would be grepped as a filename.
+workflows=()
+while IFS= read -r f; do
+  [[ -n "$f" ]] && workflows+=("$f")
+done < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null)
+
 # Non-comment lines only: a comment naming a path is prose, not a reference.
-# The path must contain a `/` — review-reusable.yml's Claude prompt says "pip
-# `requirements.txt` with hashes" as English, and a bare filename is not a path.
-paths="$(grep -hvE '^[[:space:]]*#' .github/workflows/*.yml 2>/dev/null |
-  grep -oE '[.a-zA-Z0-9_-]+(/[.a-zA-Z0-9_-]+)+/requirements\.txt' |
-  sort -u)"
+# The path must have at least one directory segment — review-reusable.yml's Claude
+# prompt says "pip `requirements.txt` with hashes" as English, and a bare filename
+# is not a path. One segment is enough (`deps/requirements.txt`); requiring two
+# would skip a shallower lock in silence.
+paths=""
+if ((${#workflows[@]} > 0)); then
+  paths="$(grep -hvE '^[[:space:]]*#' "${workflows[@]}" 2>/dev/null |
+    grep -oE '[.a-zA-Z0-9_-]+(/[.a-zA-Z0-9_-]+)*/requirements\.txt' |
+    sort -u)"
+fi
 
 # A lint that finds nothing to check must fail, not pass. If the workflows stop
 # matching (renamed lock file, restructured install step), silence here would
