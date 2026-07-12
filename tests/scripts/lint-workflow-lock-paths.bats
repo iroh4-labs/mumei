@@ -210,11 +210,11 @@ YAML
 
   _run_lint
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *".github-deps/validate/constraints.txt"* ]]
-  [[ "$stderr" == *"no workflow references it"* ]]
+  [[ "$stderr" == *".github-deps/validate"* ]]
+  [[ "$stderr" == *"no workflow installs from"* ]]
 }
 
-@test "a lock nothing references at all is dead weight -> exit 1" {
+@test "a lock directory nothing installs from is dead weight -> exit 1" {
   _init_repo
   mkdir -p .github-deps/unused
   printf 'requests==2.34.2\n' >.github-deps/unused/requirements.txt
@@ -222,26 +222,18 @@ YAML
 
   _run_lint
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *".github-deps/unused/requirements.txt"* ]]
+  [[ "$stderr" == *".github-deps/unused"* ]]
 }
 
-@test "a README beside the locks is documentation, not an unreferenced lock -> exit 0" {
+@test "non-lock files beside the locks are free -> exit 0 (no denylist to keep current)" {
   _init_repo
-  # schemas/README.md is the precedent: mumei documents a directory from inside it.
-  # A README explaining why these locks are not under .github/ is a thing someone
-  # will reasonably add, and it must not be mistaken for a lock nothing installs.
-  printf '# CI dependency locks\n' >.github-deps/README.md
-  git add -A
-
-  _run_lint
-  [ "$status" -eq 0 ]
-}
-
-@test "requirements.in is a source, not an installed lock -> exit 0" {
-  _init_repo
-  # The .in files are pip-compile inputs; no workflow installs them, and demanding
-  # a reference to them would fail every healthy repo.
+  # The unit checked is the directory, not the file, so nothing here needs to be
+  # excluded by name. A denylist of non-locks would always be one entry short, and
+  # an allowlist of lock names would hide a renamed lock in silence. Neither exists.
   printf 'jsonschema\n' >.github-deps/validate/requirements.in
+  printf '# CI dependency locks\n' >.github-deps/README.md
+  printf 'venv/\n' >.github-deps/.gitignore
+  printf 'x = 1\n' >.github-deps/validate/notes.toml
   git add -A
 
   _run_lint

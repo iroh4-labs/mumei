@@ -15,12 +15,13 @@
 # by hand.
 #
 # The check runs in BOTH directions, and it has to. Forwards: every lock a workflow
-# names must be a tracked file. Backwards: every lock tracked under .github-deps/
-# must be named by some workflow. The forward check alone leaves the matcher's own
-# vocabulary unguarded — rename a lock and it simply stops being seen, quietly,
-# because the other locks keep the match set non-empty. Any matcher hardcodes
-# something, so widening the regex only relocates the blind spot; the backward check
-# anchors on the DIRECTORY instead of the filename, and that is what terminates it.
+# names must be a tracked file. Backwards: every lock DIRECTORY under .github-deps/
+# must have at least one lock some workflow names. The forward check alone leaves the
+# matcher's own vocabulary unguarded — rename a lock and it simply stops being seen,
+# quietly, because the other locks keep the match set non-empty. Any matcher hardcodes
+# something, so widening the regex only relocates the blind spot. The backward check
+# anchors on the directory instead of the filename, which is what terminates it: no
+# list of what a lock is called, and no list of what it is not.
 #
 # Matching is otherwise syntax-agnostic: it collects paths from non-comment lines of
 # any workflow rather than keying off `-r` or `semgrep_lock=`, so a reference written
@@ -95,39 +96,39 @@ if ((${#missing[@]} > 0)); then
   exit 1
 fi
 
-# The other direction: every lock we ship must be referenced by a workflow.
+# The other direction: every lock directory we ship must be referenced by a workflow.
 #
-# Checking only "referenced => exists" leaves the matcher's own vocabulary
-# unguarded. Rename one lock to constraints.txt and update its workflow, and the
-# matcher — which keys off the name `requirements.txt` — simply stops seeing it:
-# the reference count drops from 3 to 2, the remaining two still match so the
-# gone-blind guard stays quiet, and a typo in the renamed path sails through.
+# Checking only "referenced => exists" leaves the matcher's own vocabulary unguarded.
+# Rename one lock to constraints.txt and point its workflow at the new name, and the
+# matcher — keyed on `requirements.txt` — simply stops seeing it: the reference count
+# falls from 3 to 2, the remaining two keep the gone-blind guard quiet, and a typo in
+# the renamed path sails through.
 #
-# Any matcher hardcodes SOMETHING, so this cannot be solved by widening the regex
-# again; it just moves the blind spot. It is solved by changing what the check is
-# anchored to. Here the anchor is the DIRECTORY, not the filename: a lock that sits
-# in .github-deps/ and is referenced by nothing is either dead weight or a file the
-# matcher can no longer see — and both deserve a failure.
+# The unit checked here is the DIRECTORY, not the file. Asking "is every tracked file
+# under .github-deps/ referenced?" forces a verdict on each file, and then every file
+# that is not a lock — README.md, .gitignore, a future .toml — has to be excluded by
+# name. That list is a denylist, it will always be one entry short, and each miss is a
+# false failure. Inverting it to an allowlist of lock filenames is worse: a miss there
+# is a SILENT one, which is the bug this whole file exists to prevent.
 #
-# Excluded from "is a lock": `.in` (pip-compile inputs, never installed) and `.md`
-# (a README explaining why this directory is not under `.github/` is a thing someone
-# will reasonably add — schemas/README.md is the precedent — and it must not read as
-# an unreferenced lock). This excludes NON-locks by extension rather than enumerating
-# what a lock is called, which is what keeps the rename hole shut: a lock is never
-# renamed to `.md`.
-orphans=()
-while IFS= read -r lock; do
-  [[ -z "$lock" ]] && continue
-  printf '%s\n' "$paths" | grep -qxF "$lock" || orphans+=("$lock")
-done < <(git ls-files '.github-deps/*' | grep -vE '\.(in|md)$')
+# So neither list. A lock directory is a directory that exists to be installed from, so
+# the invariant is: each one contributes at least one lock some workflow actually names.
+# Files inside it are free — put a README in, a .gitignore, anything. Rename the lock
+# and the directory's referenced-lock count drops to zero, and it fails. No enumeration
+# of what a lock is called, and none of what it is not.
+unreferenced=()
+while IFS= read -r dir; do
+  [[ -z "$dir" ]] && continue
+  printf '%s\n' "$paths" | grep -qE "^${dir}/" || unreferenced+=("$dir")
+done < <(git ls-files '.github-deps/*' | awk -F/ 'NF>2 {print $1 "/" $2}' | sort -u)
 
-if ((${#orphans[@]} > 0)); then
-  echo "lint-workflow-lock-paths: lock is tracked but no workflow references it:" >&2
-  for lock in "${orphans[@]}"; do
-    echo "  ${lock}" >&2
+if ((${#unreferenced[@]} > 0)); then
+  echo "lint-workflow-lock-paths: lock directory that no workflow installs from:" >&2
+  for dir in "${unreferenced[@]}"; do
+    echo "  ${dir}/" >&2
   done
   echo "  either it is dead weight, or this lint can no longer see the reference" >&2
-  echo "  (a renamed lock file leaves the matcher looking for a name nobody uses)." >&2
+  echo "  (a renamed lock leaves the matcher looking for a name nobody uses)." >&2
   exit 1
 fi
 
