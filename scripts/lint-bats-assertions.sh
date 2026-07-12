@@ -39,7 +39,33 @@ fi
 # comment does not make it any less bare, and it is exactly where a contributor
 # adds prose, so it must be caught too. Lines that continue into || or && are
 # control flow (or the fixed form) and are left alone.
-bad="$(grep -rnE '^[[:space:]]*\[\[ .*\]\][[:space:]]*(#.*)?$' tests/ --include='*.bats' || true)"
+#
+# Heredoc bodies are skipped. A test that writes a fixture .bats file needs to
+# put a bare [[ ]] inside a heredoc on purpose — tests/scripts/lint-bats-assertions.bats
+# does exactly that, to prove this linter catches one. Flagging it would make
+# the linter unable to be tested.
+#
+# BSD awk compatible: no gawk-only 3-arg match().
+# shellcheck disable=SC2016  # $0/$ below are awk fields, not shell expansions
+bad="$(find tests -name '*.bats' -print0 | xargs -0 awk '
+  # Heredoc terminator reached: stop skipping.
+  in_heredoc {
+    line = $0
+    sub(/^[ \t]+/, "", line)
+    if (line == delim) in_heredoc = 0
+    next
+  }
+  # Heredoc opener: <<EOF / <<-EOF / <<"EOF" / <<'"'"'EOF'"'"' (quoted or not).
+  /<<-?[ \t]*["'"'"']?[A-Za-z_][A-Za-z0-9_]*["'"'"']?[ \t]*$/ {
+    delim = $0
+    sub(/^.*<<-?[ \t]*/, "", delim)
+    gsub(/["'"'"']/, "", delim)
+    sub(/[ \t]+$/, "", delim)
+    in_heredoc = 1
+    next
+  }
+  /^[ \t]*\[\[ .*\]\][ \t]*(#.*)?$/ { printf "%s:%d:%s\n", FILENAME, FNR, $0 }
+' || true)"
 
 if [[ -n "$bad" ]]; then
   printf 'Bare [[ ]] assertions found in tests/ (they do NOT fail the test on macOS bash 3.2):\n\n' >&2
