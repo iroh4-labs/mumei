@@ -30,7 +30,16 @@
 
 set -u
 
-bad="$(grep -rnE '^[[:space:]]*\[\[ .*\]\][[:space:]]*$' tests/ --include='*.bats' || true)"
+if [[ ! -d tests ]]; then
+  printf 'lint-bats-assertions: tests/ not found (run from the repo root)\n' >&2
+  exit 1
+fi
+
+# A bare assertion is one where nothing follows the closing ]] — a trailing
+# comment does not make it any less bare, and it is exactly where a contributor
+# adds prose, so it must be caught too. Lines that continue into || or && are
+# control flow (or the fixed form) and are left alone.
+bad="$(grep -rnE '^[[:space:]]*\[\[ .*\]\][[:space:]]*(#.*)?$' tests/ --include='*.bats' || true)"
 
 if [[ -n "$bad" ]]; then
   printf 'Bare [[ ]] assertions found in tests/ (they do NOT fail the test on macOS bash 3.2):\n\n' >&2
