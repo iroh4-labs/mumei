@@ -122,12 +122,14 @@ The implemented controls map onto the surfaces above:
   non-`github-actions` ecosystem has no write scope, so once resolution
   succeeded Dependabot was refused at submission with `400 invalid or
   unauthorized changes` (#191). The versions now live in the lock rather
-  than the `.in`, and the locks live in `.github-deps/`. Until a pip bump
-  PR actually appears, treat the pip pins as manually maintained: no pip
-  lock has ever been updated by Dependabot in this repository, and only
-  the next scheduled run can show that it now can. A `dependabot-health`
-  job opens an issue when these runs fail, so the next regression will not
-  take six weeks to notice.
+  than the `.in`, and the locks live in `.github-deps/`. Both faults are
+  fixed, and the evidence is an outcome rather than a green check: the
+  first run after the move opened the pip bumps this repository had never
+  once produced (#195, #196). One exception by design — the
+  `semgrep-review` lock is frozen for grounding-signal stability and every
+  bump in it is ignored, so it is manually maintained and always will be.
+  A `dependabot-health` job opens an issue when these runs fail, so the
+  next regression will not take six weeks to notice.
 - **plugin.json schema gate**: `plugin-json-validate.yml` strict-
   validates the manifest on every PR that touches it.
 
