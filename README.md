@@ -7,13 +7,19 @@
 [![Sigstore signed](https://img.shields.io/badge/sigstore-signed-blue?logo=sigstore)](https://www.sigstore.dev)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/iroh4-labs/mumei/network/updates)
 
-**mumei is a quality-enforcement harness for Claude Code.** A passing build tells
-you the tests are green. It does not tell you whether the agent made them green
-by weakening them. mumei is built to answer that second question: it re-runs the
-tests as `HEAD` defines them, freezes the tests an agent must not tune, and reads
-the diff for the moves that turn a failing check into a passing one — a deleted
-test, a suppressed type error, a `continue-on-error`, a file quietly dropped from
-the shipped tarball.
+**mumei is a quality-enforcement harness for Claude Code.**
+
+The build is green. The tests pass.
+
+...but did they pass, or did the agent make them pass? CI cannot tell those
+apart. mumei can:
+
+- it re-runs the tests as `HEAD` defines them, not as your working tree does
+- it freezes the tests an agent is not allowed to tune
+- it reads the diff for the moves that trade a red check for a green one
+
+A deleted test. A suppressed type error. A `continue-on-error` that wasn't there
+yesterday. A file that quietly fell out of the shipped tarball.
 
 The checks live in Hooks at the OS boundary, so the agent's intent is treated as
 untrusted input: standards are _enforced_, not suggested in a prompt it can
@@ -51,11 +57,13 @@ moves the standards you care about off the prompt and onto the OS boundary.
 There, a Hook inspects the project-changing tool calls — edits, commits, pushes,
 plan transitions — and refuses the ones that break an invariant.
 
-Deterministic detectors, diverse review lenses and evidence-demanding
-adjudication are table stakes now; several good tools do them. **Nothing else
-checks whether the build was made to pass.** Official `/code-review` excludes
-test coverage by design. That gap is what mumei is for. Four things it
-_enforces_ rather than asks for:
+Deterministic detectors, diverse review lenses, evidence-demanding adjudication —
+table stakes now, and several good tools do them well.
+
+**Nothing else asks whether the build was _made_ to pass.** Official
+`/code-review` excludes test coverage by design. That gap is the job mumei took.
+
+Four things it _enforces_ rather than asks for:
 
 - **A harness, not a chat.** Phases, Waves, commits, pushes, and the entire
   review pipeline are driven deterministically by Hooks — the agent cannot
