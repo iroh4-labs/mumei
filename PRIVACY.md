@@ -18,21 +18,37 @@ When invoked, `semgrep` runs locally (no network). `osv-scanner` queries `https:
 
 mumei writes feature lifecycle state to `.mumei/` in the project root. All files are local; nothing is transmitted by mumei itself.
 
-| Path                                                    | Content                                                | Persistence                                                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `.mumei/current`                                        | active feature key (`<slug>` or `REQ-N-<slug>`)        | overwritten on feature switch                                                                     |
-| `.mumei/scratch/<slug>.md`                              | gather output (user-authored prose + AC drafts)        | until `/mumei:shelve` or manual delete                                                            |
-| `.mumei/specs/<feature>/{requirements,design,tasks}.md` | feature spec (orchestrator-drafted, user-edited)       | until `/mumei:shelve`                                                                             |
-| `.mumei/specs/<feature>/state.json`                     | phase, wave counter, timestamps                        | until `/mumei:shelve`                                                                             |
-| `.mumei/specs/<feature>/spec-reviews/*.json`            | reviewer audit log (prompt + verdict + findings)       | until `/mumei:shelve`                                                                             |
-| `.mumei/specs/<feature>/reviews/*.json`                 | review pipeline verdict + detector finding excerpts    | until `/mumei:shelve`                                                                             |
-| `.mumei/specs/<feature>/cost-log.jsonl`                 | per-subagent token usage + duration                    | until `/mumei:shelve`                                                                             |
-| `.mumei/plans/<slug>/`                                  | same shape as `specs/` for plan-vehicle features       | until `/mumei:shelve`                                                                             |
-| `.mumei/audit-log/<event>.jsonl`                        | hook event records (config-change, session-end, etc.)  | truncated to last 5000 lines when file exceeds 10 MB; older entries discarded (no rolled archive) |
-| `.mumei/.hook-stats.jsonl`                              | hook firing counters (hook id, decision, tool, reason) | same truncate-on-overflow rotation as audit-log                                                   |
-| `.mumei/archive/<YYYY-MM>/<feature>/`                   | archived features                                      | until manual delete                                                                               |
+| Path                                                    | Content                                                         | Persistence                                                                                       |
+| ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `.mumei/current`                                        | active feature key (`<slug>` or `REQ-N-<slug>`)                 | overwritten on feature switch                                                                     |
+| `.mumei/scratch/<slug>.md`                              | gather output (user-authored prose + AC drafts)                 | until `/mumei:shelve` or manual delete                                                            |
+| `.mumei/specs/<feature>/{requirements,design,tasks}.md` | feature spec (orchestrator-drafted, user-edited)                | until `/mumei:shelve`                                                                             |
+| `.mumei/specs/<feature>/state.json`                     | phase, wave counter, timestamps                                 | until `/mumei:shelve`                                                                             |
+| `.mumei/specs/<feature>/spec-reviews/*.json`            | reviewer audit log (prompt + verdict + findings)                | until `/mumei:shelve`                                                                             |
+| `.mumei/specs/<feature>/reviews/*.json`                 | review pipeline verdict + detector finding excerpts             | until `/mumei:shelve`                                                                             |
+| `.mumei/specs/<feature>/cost-log.jsonl`                 | per-subagent token usage + duration                             | until `/mumei:shelve`                                                                             |
+| `.mumei/specs/<feature>/verify-log.jsonl`               | test-run audit trail (command, exit code, source)               | until `/mumei:shelve`                                                                             |
+| `.mumei/specs/<feature>/reliability-log.jsonl`          | pass^k trial records per task                                   | until `/mumei:shelve`                                                                             |
+| `.mumei/plans/<slug>/`                                  | same shape as `specs/` for plan-vehicle features                | until `/mumei:shelve`                                                                             |
+| `.mumei/audit-log/<event>.jsonl`                        | hook event records (config-change, session-end, etc.)           | truncated to last 5000 lines when file exceeds 10 MB; older entries discarded (no rolled archive) |
+| `.mumei/.hook-stats.jsonl`                              | hook firing counters (hook id, decision, tool, reason)          | same truncate-on-overflow rotation as audit-log                                                   |
+| `.mumei/archive/<YYYY-MM>/<feature>/`                   | archived features                                               | until manual delete                                                                               |
+| `.mumei/config.json`                                    | golden paths + tool gates (project config)                      | until manual delete                                                                               |
+| `.mumei/finding-ledger.jsonl`                           | cross-feature finding fingerprints + false-positive annotations | until manual delete                                                                               |
+| `.mumei/.curator-log.jsonl`                             | memory-curator scores and ADD/UPDATE/SKIP decisions             | until manual delete                                                                               |
+| `.mumei/in-flight-agents/<agent_id>`                    | launch-time feature + diff hash for a running subagent          | deleted when the subagent's cost record is written                                                |
 
-mumei also writes `.claude/agent-memory-local/` (per-issue-validator decision cache, added to project-root `.gitignore` by `/mumei:kindle`).
+mumei also writes two directories under the project's `.claude/`:
+
+| Path                                        | Content                                                                           | Tracked in git?                                          |
+| ------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `.claude/agent-memory/<reviewer>/MEMORY.md` | notes a reviewer kept from reviewing this repository, curated by `memory-curator` | **Yes** — intentionally, so the team shares them         |
+| `.claude/agent-memory-local/`               | per-issue-validator decision cache                                                | No — `/mumei:kindle` adds it to the project `.gitignore` |
+
+The reviewer memory is derived from your code and is committed to your
+repository. That is deliberate (it is how a reviewer stops repeating a finding
+you already dismissed), but it is worth knowing before you push. Delete the
+directory, or add it to `.gitignore`, if you would rather it stayed local.
 
 ### Implications for git
 
