@@ -77,7 +77,7 @@ tasks:
       - bash scripts/lint-docs-drift.sh
 
   lint:rubric:
-    desc: "review rubric parity across review-rubric.md / AGENTS.md / .gemini/styleguide.md"
+    desc: "review rubric parity across review-rubric.md / AGENTS.md / review-reusable.yml"
     cmds:
       - bash scripts/lint-review-rubric.sh
 

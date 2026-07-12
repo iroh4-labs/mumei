@@ -1,10 +1,10 @@
 <!--
 Canonical, project-agnostic review rubric (REQ-24).
 The block between the BEGIN/END markers below is the SINGLE SOURCE OF TRUTH for
-the universal review guidelines. It is consumed three ways:
-  1. injected into the reusable review workflow's Claude prompt,
-  2. embedded verbatim in AGENTS.md `## Review guidelines` (read natively by Codex),
-  3. embedded verbatim in .gemini/styleguide.md (read by Gemini Code Assist).
+the universal review guidelines. It is consumed two ways:
+  1. injected into the reusable review workflow's Claude prompt — inlined in
+     .github/workflows/review-reusable.yml so adopters need no network fetch,
+  2. embedded verbatim in AGENTS.md `## Review guidelines` (read natively by Codex).
 scripts/lint-review-rubric.sh enforces byte-parity of the marked block across
 all three carriers. Edit the block HERE first, then propagate. The block uses
 `###` headings so it nests cleanly under any `##` section heading a carrier
@@ -15,8 +15,8 @@ repo's own AGENTS.md OUTSIDE this block.
 # Review rubric
 
 The block below is the portable, project-agnostic review rubric. Copy it
-verbatim (markers included) into a repo's `AGENTS.md` and `.gemini/styleguide.md`
-to put Codex, Gemini, and the Claude review workflow on the same viewpoint.
+verbatim (markers included) into a repo's `AGENTS.md` to put Codex and the
+Claude review workflow on the same viewpoint.
 
 ## Review guidelines
 

@@ -121,8 +121,9 @@ job; `bats -r tests/` runs on macOS + Ubuntu. Pre-commit
 Apply the universal rubric below, then the mumei-specific focus that
 follows it. The universal block is the project-agnostic source of truth
 (canonical copy in `.github/review-rubric.md`); `scripts/lint-review-rubric.sh`
-enforces byte-parity across this file, `.gemini/styleguide.md`, and the
-rubric file. Edit the rubric file first, then propagate.
+enforces byte-parity across this file, the rubric file, and the copy inlined
+in `.github/workflows/review-reusable.yml`. Edit the rubric file first, then
+propagate.
 
 <!-- BEGIN universal-review-rubric -->
 

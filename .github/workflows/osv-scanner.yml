@@ -3,7 +3,7 @@ name: osv-scanner
 # Cross-ecosystem vulnerability scanner from Google. Scans every
 # dependency manifest in the repo against the OSV database (npm,
 # pip, go, cargo, etc.). mumei is shell (no manifest); the scanned
-# manifests are the pip lock files under .github/requirements/. CodeQL
+# manifests are the pip lock files under .github-deps/. CodeQL
 # already runs from ci.yml; this workflow specifically targets known
 # CVEs in declared dependencies.
 
@@ -34,7 +34,7 @@ jobs:
       # `scan-args` here replaces the reusable workflow's default
       # (`-r ./`), so re-include `-r` explicitly to preserve recursive
       # scanning across nested manifests
-      # (.github/requirements/**/requirements.txt, etc.) — without `-r`
+      # (.github-deps/**/requirements.txt, etc.) — without `-r`
       # the scan would only look at the repo root and miss every
       # nested ecosystem manifest.
       scan-args: |-

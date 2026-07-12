@@ -1,0 +1,34 @@
+# Manifest validation deps used by plugin-json-validate.yml and the
+# jsonschema check in release-reusable.yml. Both call sites share this
+# lock to avoid drift between PR-time and tag-cut validation.
+#
+# Regenerate the locked requirements.txt on Python 3.14 (matches both the
+# `actions/setup-python` version pinned in the consuming workflows and the
+# interpreter Dependabot's updater image runs). Run it from INSIDE this
+# directory, with these flags — that is verbatim what Dependabot invokes, so
+# its bump PR rewrites only the dependency lines and not the header:
+#   cd .github-deps/validate
+#   python3.14 -m venv .tmp/pip-compile-venv
+#   .tmp/pip-compile-venv/bin/pip install pip-tools
+#   .tmp/pip-compile-venv/bin/pip-compile \
+#     --generate-hashes --no-emit-index-url --strip-extras \
+#     --output-file=requirements.txt requirements.in
+# No --allow-unsafe: this lock pins no unsafe package (setuptools / pip), so the
+# flag adds nothing and Dependabot's write path omits it.
+# Deliberately UNPINNED here. pip-compile writes the exact version (with hashes)
+# into requirements.txt, which is the lock; pinning the same version again in
+# this file is not belt-and-braces, it is a wall Dependabot cannot climb: it
+# bumps by running `pip-compile -P <dep>==<new>` against this file, and a `==`
+# here makes that resolution impossible. It did — every pip update job failed on
+# it from at least 2026-06-29 (#186). The exact version lives in the lock, where
+# it belongs.
+#
+# That was only the first of two walls. Unpinning fixed the resolution and the
+# job then failed one stage later, at submission: these locks used to live under
+# `.github/`, and Dependabot's backend grants the `workflows` write scope only to
+# the `github-actions` ecosystem, so a pip job proposing a change there is
+# refused with `400 The request contains invalid or unauthorized changes` (#191).
+# Hence `.github-deps/` rather than `.github/requirements/`. Do not move these
+# back under `.github/`.
+jsonschema
+requests
