@@ -19,6 +19,9 @@ set -u
 # shellcheck source=_lib/anchor.sh disable=SC1091
 source "${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$(realpath "$0")")")}/hooks/_lib/anchor.sh"
 
+# shellcheck source=_lib/safe-grep.sh disable=SC1091
+source "${PLUGIN_ROOT}/hooks/_lib/safe-grep.sh"
+
 INPUT="$(cat 2>/dev/null || true)"
 [[ -z "$INPUT" ]] && exit 0
 
@@ -58,7 +61,7 @@ case "$FEATURE_DIR" in
 .mumei/plans/*) WAVE_COUNT="n/a (plan vehicle)" ;;
 *)
   if [[ -f "${FEATURE_DIR}/tasks.md" ]]; then
-    WAVE_COUNT="$(grep -cE '^## Wave [0-9]+:' "${FEATURE_DIR}/tasks.md" 2>/dev/null || echo "?")"
+    WAVE_COUNT="$(mumei_safe_grep_count '^## Wave [0-9]+:' "${FEATURE_DIR}/tasks.md")"
   fi
   ;;
 esac

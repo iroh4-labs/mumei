@@ -156,7 +156,11 @@ fi
 TASK_IDS="$(mumei_tasks_list_ids "$FEATURE" 2>/dev/null || true)"
 TASK_COUNT=0
 if [[ -n "$TASK_IDS" ]]; then
-  TASK_COUNT="$(printf '%s\n' "$TASK_IDS" | grep -cv '^$' || echo 0)"
+  # Not mumei_safe_grep_count: this counts non-empty lines on a pipe (-v on
+  # stdin), and the helper only takes file arguments. grep -c prints "0" AND
+  # exits 1 on no match, so `|| echo 0` would yield a two-line "0\n0".
+  TASK_COUNT="$(printf '%s\n' "$TASK_IDS" | grep -cv '^$' || true)"
+  TASK_COUNT="${TASK_COUNT:-0}"
 fi
 
 # Sanity check: if tasks.md exists with substantial content (>1KB) but

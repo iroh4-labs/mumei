@@ -525,3 +525,21 @@ _curator_add_json() {
   [ "$status" -eq 0 ]
   grep -q 'new entry' "${dir}/MEMORY.md"
 }
+
+@test "LRU: a headerless file under both caps is a silent no-op" {
+  local dir="${MUMEI_TEST_TMPDIR}/.claude/agent-memory/r"
+  mkdir -p "$dir"
+  # Zero id headers and comfortably under both caps. entry_count is 0 here,
+  # and `grep -c` prints "0" while exiting 1 — so a `|| echo 0` fallback would
+  # make the count a two-line "0\n0" that ((...)) refuses to evaluate, turning
+  # this no-op into a bash syntax error plus a spurious eviction warning.
+  printf 'corrupted memory file with no id headers\n' >"${dir}/MEMORY.md"
+
+  run --separate-stderr bash -c "
+    source '$CLAUDE_PLUGIN_ROOT/hooks/_lib/memory.sh'
+    _mumei_memory_apply_lru_eviction '${dir}/MEMORY.md' 'r'
+  "
+  [ "$status" -eq 0 ]
+  [[ "$stderr" != *"syntax error"* ]]
+  [[ "$stderr" != *"eviction failed"* ]]
+}

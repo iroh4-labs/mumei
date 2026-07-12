@@ -11,6 +11,11 @@ if ! declare -F mumei_log_info >/dev/null 2>&1; then
   source "$(dirname "${BASH_SOURCE[0]}")/log.sh"
 fi
 
+if ! declare -F mumei_safe_grep_count >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/safe-grep.sh"
+fi
+
 # Save threshold, the 7 rubric axes, and the per-entry byte cap.
 # Update all three together if requirements change.
 readonly MUMEI_MEMORY_THRESHOLD=15
@@ -317,7 +322,7 @@ _mumei_memory_evict_oldest() {
   # be evicted by its own LRU pass on a corrupted file (pre-existing bytes
   # over cap with no id headers). The just-ADDead entry is the one we want
   # to preserve; the loop guard in the caller will then warn and stop.
-  entry_count="$(grep -c '^<!-- id: ' "$mfile" 2>/dev/null || echo 0)"
+  entry_count="$(mumei_safe_grep_count '^<!-- id: ' "$mfile")"
   if ((entry_count <= 1)); then
     return 1
   fi
@@ -375,7 +380,7 @@ _mumei_memory_apply_lru_eviction() {
   local entries bytes guard
   guard=0
   while :; do
-    entries="$(grep -c '^<!-- id: ' "$mfile" 2>/dev/null || echo 0)"
+    entries="$(mumei_safe_grep_count '^<!-- id: ' "$mfile")"
     bytes="$(wc -c <"$mfile" 2>/dev/null | tr -d ' ' || echo 0)"
     if ((entries <= MUMEI_MEMORY_MAX_ENTRIES)) && ((bytes <= MUMEI_MEMORY_MAX_BYTES)); then
       return 0

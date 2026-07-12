@@ -73,8 +73,14 @@ _mumei_extract_block() {
 _mumei_assert_markers() {
   local f="$1"
   local b_count e_count
-  b_count="$(grep -cF "$begin" "$f" 2>/dev/null || echo 0)"
-  e_count="$(grep -cF "$end" "$f" 2>/dev/null || echo 0)"
+  # Not mumei_safe_grep_count: the markers are fixed strings carrying regex
+  # metacharacters, so they need -F and the helper is -E only. grep -c prints
+  # "0" AND exits 1 on no match, so `|| echo 0` would yield a two-line "0\n0"
+  # and echo that straight back in the error message.
+  b_count="$(grep -cF "$begin" "$f" 2>/dev/null || true)"
+  b_count="${b_count:-0}"
+  e_count="$(grep -cF "$end" "$f" 2>/dev/null || true)"
+  e_count="${e_count:-0}"
   if [ "$b_count" != "1" ] || [ "$e_count" != "1" ]; then
     echo "lint-review-rubric: malformed markers in $f (BEGIN=${b_count} END=${e_count}, want 1/1)" >&2
     return 1
