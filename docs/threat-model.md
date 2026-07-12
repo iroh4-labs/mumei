@@ -114,20 +114,20 @@ The implemented controls map onto the surfaces above:
 - **Supply-chain currency**: Dependabot proposes weekly bumps for the
   GitHub Actions SHA pins and the hash-pinned pip locks, with a 7-day
   cooldown so a freshly published (and freshly compromised) release is
-  not the one it pins. The pip half of that was **not true** until
-  2026-07-11: the `requirements.in` files hard-pinned their direct
-  dependencies with `==`, which is the one thing Dependabot's pip-compile
-  bump path cannot resolve against, so every pip update job had been
-  failing since at least 2026-06-29 while this document claimed
-  otherwise (#186). The exact versions now live in the lock, where they
-  belong; the `.in` files declare the dependency, not the version.
-  **Still not fixed**: the resolution now succeeds and Dependabot is then
-  refused when it submits the change (`400 invalid or unauthorized
-  changes`). Not one pip lock has ever been updated by Dependabot in this
-  repository — the 40 PRs it has opened are all GitHub Actions or npm.
-  Treat the pip pins as manually maintained until #186 closes. A
-  `dependabot-health` job now opens an issue when these runs fail, so the
-  next regression will not take six weeks to notice.
+  not the one it pins. The pip half of that was **not true** for months,
+  and this document asserted it anyway. Two distinct faults, in series:
+  the `requirements.in` files hard-pinned their direct dependencies with
+  `==`, which is the one input Dependabot's pip-compile bump path cannot
+  resolve against (#186); and the locks lived under `.github/`, where a
+  non-`github-actions` ecosystem has no write scope, so once resolution
+  succeeded Dependabot was refused at submission with `400 invalid or
+  unauthorized changes` (#191). The versions now live in the lock rather
+  than the `.in`, and the locks live in `.github-deps/`. Until a pip bump
+  PR actually appears, treat the pip pins as manually maintained: no pip
+  lock has ever been updated by Dependabot in this repository, and only
+  the next scheduled run can show that it now can. A `dependabot-health`
+  job opens an issue when these runs fail, so the next regression will not
+  take six weeks to notice.
 - **plugin.json schema gate**: `plugin-json-validate.yml` strict-
   validates the manifest on every PR that touches it.
 

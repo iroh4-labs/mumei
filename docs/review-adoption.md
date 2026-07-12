@@ -65,23 +65,22 @@ workflow at the pinned ref), runs the grounding scanners on your code,
 assembles the multi-perspective prompt, invokes Claude, and posts inline
 comments.
 
-## Optional — share the rubric with Codex and Gemini
+## Optional — share the rubric with Codex
 
-If you also use OpenAI Codex Code Review or Google Gemini Code Assist on the
-same repository, copy the universal rubric block into the files those bots
-read, so all three reviewers share one viewpoint (diversity then comes from
-model differences, not divergent criteria).
+If you also use OpenAI Codex Code Review on the same repository, copy the
+universal rubric block into the file it reads, so both reviewers share one
+viewpoint (diversity then comes from model differences, not divergent
+criteria).
 
 1. Create or open `AGENTS.md` at the repo root. Codex reads its
    `## Review guidelines` section natively.
-2. Create `.gemini/styleguide.md`. Gemini Code Assist reads this file.
-3. In both files, paste the block from
+2. Paste into it the block from
    `https://raw.githubusercontent.com/iroha924/mumei/<TAG>/.github/review-rubric.md`
    between its `<!-- BEGIN universal-review-rubric -->` and
    `<!-- END universal-review-rubric -->` markers. Keep the markers — they
-   are how mumei's drift lint stays in sync across the three carriers if you
+   are how mumei's drift lint stays in sync across the carriers if you
    choose to run it in your repo too.
-4. Repo-specific guidance (your project's conventions, bash rules, framework
+3. Repo-specific guidance (your project's conventions, bash rules, framework
    idioms, etc.) goes OUTSIDE the marked block, in the same file.
 
 ## Operational notes
@@ -125,15 +124,15 @@ model differences, not divergent criteria).
   under `pull_request` that file comes from the PR. See
   [docs/threat-model.md](./threat-model.md).
 - **semgrep grounding is opt-in and says so when it is off.** The scan installs
-  from `.github/requirements/semgrep-review/requirements.txt` **in your
+  from `.github-deps/semgrep-review/requirements.txt` **in your
   repository**, hash-pinned. Without that file the review still runs, and the
   prompt and the audit record both state that semgrep was NOT RUN — never that
   it found nothing. To enable it, copy the lock from mumei:
 
   ```bash
-  mkdir -p .github/requirements/semgrep-review
-  curl -fsSL -o .github/requirements/semgrep-review/requirements.txt \
-    https://raw.githubusercontent.com/iroha924/mumei/<TAG>/.github/requirements/semgrep-review/requirements.txt
+  mkdir -p .github-deps/semgrep-review
+  curl -fsSL -o .github-deps/semgrep-review/requirements.txt \
+    https://raw.githubusercontent.com/iroha924/mumei/<TAG>/.github-deps/semgrep-review/requirements.txt
   ```
 
   Once the lock is present, an install or scan failure fails the job: a detector
@@ -148,13 +147,13 @@ model differences, not divergent criteria).
 
 ## How this is different from each bot alone
 
-Codex and Gemini Code Assist are strong single-pass reviewers. mumei's
-reusable workflow adds — for the Claude reviewer specifically — explicit
-four-perspective passes, deterministic-signal grounding fed as input, a
-bias-neutralisation instruction in the prompt, and an honest-ceiling
-statement. Running all three on the same shared rubric gives you a
-model-diverse ensemble (Anthropic / OpenAI / Google) with one viewpoint and
-three decorrelated engines; you, the maintainer, are the meta-reviewer.
+Codex Code Review is a strong single-pass reviewer. mumei's reusable workflow
+adds — for the Claude reviewer specifically — explicit four-perspective passes,
+deterministic-signal grounding fed as input, a bias-neutralisation instruction
+in the prompt, and an honest-ceiling statement. Running both on the same shared
+rubric gives you a model-diverse ensemble (Anthropic / OpenAI) with one
+viewpoint and two decorrelated engines; you, the maintainer, are the
+meta-reviewer.
 
 The design rationale and the seeded-bug measurement methodology live in the
 maintainer's decision log; open an issue if you need the details for your

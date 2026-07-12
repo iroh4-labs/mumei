@@ -7,8 +7,8 @@ name: review-reusable
 # heredoc between the BEGIN/END universal-review-rubric markers so adopters
 # never depend on a runtime network fetch (eliminates ref-resolution issues
 # across caller/called workflow contexts and the truncated-200 integrity gap).
-# scripts/lint-review-rubric.sh treats this file as one of four byte-parity
-# carriers alongside .github/review-rubric.md, AGENTS.md, and .gemini/styleguide.md.
+# scripts/lint-review-rubric.sh treats this file as one of three byte-parity
+# carriers alongside .github/review-rubric.md and AGENTS.md.
 
 on:
   workflow_call:
@@ -107,7 +107,7 @@ jobs:
           }
           git show "origin/${BASE_REF}:AGENTS.md" >/tmp/agents.raw 2>/dev/null || : >/tmp/agents.raw
           # AGENTS.md embeds the universal rubric verbatim between the BEGIN/END
-          # markers (scripts/lint-review-rubric.sh keeps the four carriers in byte
+          # markers (scripts/lint-review-rubric.sh keeps the three carriers in byte
           # parity). The prompt already carries that rubric on its own, so shipping
           # it twice spent ~11 KB of a budget the diff needs — and on PR #185 the
           # diff was cut before the hook implementations it existed to review. The
@@ -348,7 +348,7 @@ jobs:
           sed -i 's/^          //' /tmp/rubric-block.md
 
       # Pin Python to match the pip-compile environment for
-      # .github/requirements/semgrep-review/requirements.txt; runner's
+      # .github-deps/semgrep-review/requirements.txt; runner's
       # system python3 (3.12) would otherwise drift from the lock's
       # resolution context (3.14). `if:` mirrors the install step so we
       # don't pay the setup cost when the review gate skips.
@@ -391,7 +391,7 @@ jobs:
           # NOT RUN, and every downstream surface says so: an unavailable
           # detector must never read as a clean one. Present lock => install
           # failure is fatal (that IS a dead detector).
-          semgrep_lock=".github/requirements/semgrep-review/requirements.txt"
+          semgrep_lock=".github-deps/semgrep-review/requirements.txt"
           if [ -f "$semgrep_lock" ]; then
             python -m pip install --quiet --require-hashes -r "$semgrep_lock" || {
               echo "::error::semgrep install failed — aborting rather than reporting a dead detector as 0 findings" >&2

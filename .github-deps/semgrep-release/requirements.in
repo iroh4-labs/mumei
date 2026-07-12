@@ -1,0 +1,21 @@
+# Release-time supply-chain scan (release-reusable.yml `semgrep` step).
+# Pinned to current stable to maximise rule coverage at tag-cut time.
+# Drift from semgrep-review/requirements.in is intentional (see
+# release-reusable.yml comment for the asymmetric-pin policy).
+#
+# Regenerate the locked requirements.txt on Python 3.14 (matches both the
+# `actions/setup-python` version pinned in the consuming workflows and the
+# interpreter Dependabot's updater image runs). Run it from INSIDE this
+# directory, with these flags — verbatim what Dependabot invokes, so its bump PR
+# rewrites only the dependency lines and not the header:
+#   cd .github-deps/semgrep-release
+#   python3.14 -m venv .tmp/pip-compile-venv
+#   .tmp/pip-compile-venv/bin/pip install pip-tools
+#   .tmp/pip-compile-venv/bin/pip-compile \
+#     --generate-hashes --no-emit-index-url --strip-extras \
+#     --output-file=requirements.txt requirements.in
+# Unpinned on purpose — see the validate lock's requirements.in for why a `==`
+# here breaks Dependabot's pip-compile bump path (#186), and why this directory
+# is not under `.github/` (#191). Unlike the review pin, this one is meant to
+# track current stable, so Dependabot bumping the lock is exactly the intent.
+semgrep

@@ -2,9 +2,9 @@
 # lint-review-rubric.sh — enforce byte-parity of the universal review rubric
 # block (REQ-24) across its carriers. The block lives between
 # `<!-- BEGIN universal-review-rubric -->` and `<!-- END universal-review-rubric -->`.
-# Canonical source is .github/review-rubric.md; AGENTS.md and .gemini/styleguide.md
-# embed an identical block so Codex / Gemini / the Claude review workflow share
-# one viewpoint. The block is also INLINED in review-reusable.yml so adopters
+# Canonical source is .github/review-rubric.md; AGENTS.md embeds an identical
+# block so Codex and the Claude review workflow share one viewpoint. The block
+# is also INLINED in review-reusable.yml so adopters
 # do not depend on a runtime network fetch — that copy must stay in parity too.
 # set -u, no set -e (explicit handling).
 set -u
@@ -18,7 +18,6 @@ cd "$repo_root" || {
 files=(
   ".github/review-rubric.md"
   "AGENTS.md"
-  ".gemini/styleguide.md"
   ".github/workflows/review-reusable.yml"
 )
 

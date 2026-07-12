@@ -12,10 +12,10 @@ GHSA-7gcm-g887-7qv7: DoS via google.protobuf.json_format.ParseDict()
 on attacker-controlled deeply-nested Any messages (RecursionError).
 
 Path: protobuf==4.25.9 is a transitive dependency of semgrep==1.111.0
-(see .github/requirements/semgrep-review/requirements.txt), pulled in
+(see .github-deps/semgrep-review/requirements.txt), pulled in
 via opentelemetry-proto==1.25.0 which hard-pins protobuf<5. semgrep
 1.111.0 is frozen for review-pipeline grounding-signal stability
-(.github/requirements/semgrep-review/requirements.in); bumping to a
+(.github-deps/semgrep-review/requirements.in); bumping to a
 semgrep release that ships protobuf>=5.29.6 would break that freeze.
 
 Exploit path in mumei: none. The review pipeline runs semgrep against

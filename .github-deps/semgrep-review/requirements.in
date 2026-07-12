@@ -10,12 +10,18 @@
 # newest interpreter semgrep 1.111.0 declares in its classifiers; its
 # Requires-Python (>=3.9) has no upper bound, so a newer Python installs fine
 # and then dies at import time.
+# Run it from INSIDE this directory:
+#   cd .github-deps/semgrep-review
 #   python3.11 -m venv .tmp/pip-compile-venv
 #   .tmp/pip-compile-venv/bin/pip install pip-tools
 #   .tmp/pip-compile-venv/bin/pip-compile \
-#     --generate-hashes --strip-extras --allow-unsafe \
-#     --output-file=.github/requirements/semgrep-review/requirements.txt \
-#     .github/requirements/semgrep-review/requirements.in
+#     --generate-hashes --no-emit-index-url --strip-extras --allow-unsafe \
+#     --output-file=requirements.txt requirements.in
+# --allow-unsafe is required HERE and only here: it is what admits the pinned
+# `setuptools` below into the lock at all. Dependabot's write path omits the
+# flag, but it never writes this lock — every bump in it is ignored (see
+# dependabot.yml) — so the asymmetry is inert. This directory is deliberately
+# not under `.github/`; see the validate lock's requirements.in (#191).
 semgrep==1.111.0
 
 # semgrep pulls opentelemetry-instrumentation, which imports `pkg_resources`.

@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
 
       # Pin Python so the hash-locked install matches the version pip-compile
-      # used to resolve the dependency graph (.github/requirements/*/
+      # used to resolve the dependency graph (.github-deps/*/
       # requirements.in regen comments). Without this, the runner's system
       # python3 (3.12 on ubuntu-24.04) silently diverges from the compile
       # environment (3.14), and a future transitive dep with
@@ -80,11 +80,11 @@ jobs:
         # release-time scan prioritises current OWASP / security-audit rule
         # coverage at tag-cut time, while the review pipeline's semgrep is
         # frozen at 1.111.0 to keep AI grounding signal stable across runs.
-        # See .github/requirements/semgrep-release/requirements.in for the
+        # See .github-deps/semgrep-release/requirements.in for the
         # regen command; the other pin moves on its own cadence via
-        # .github/requirements/semgrep-review/.
+        # .github-deps/semgrep-review/.
         run: |
-          python3 -m pip install --quiet --require-hashes -r .github/requirements/semgrep-release/requirements.txt
+          python3 -m pip install --quiet --require-hashes -r .github-deps/semgrep-release/requirements.txt
           semgrep --error --config=p/owasp-top-ten --config=p/security-audit --severity=ERROR .
 
       - name: gitleaks
@@ -224,14 +224,14 @@ jobs:
         # manifest $schema field together.
         run: |
           # Pin jsonschema (and the validate-side requests dep) via
-          # .github/requirements/validate/requirements.txt — hash-locked
+          # .github-deps/validate/requirements.txt — hash-locked
           # so a yanked or tampered tarball is rejected at install. Same
           # lock backs plugin-json-validate.yml; bump via Dependabot pip
           # ecosystem (drift is intentional, gated by both workflows).
           # Python is pinned to 3.14 by the setup-python step above so
           # the install resolves on the same interpreter pip-compile
           # used for the lock.
-          python3 -m pip install --quiet --require-hashes -r .github/requirements/validate/requirements.txt
+          python3 -m pip install --quiet --require-hashes -r .github-deps/validate/requirements.txt
           python3 - <<'PY'
           import json, sys
           from pathlib import Path

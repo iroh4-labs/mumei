@@ -40,8 +40,19 @@ updates:
   # recompiles transitive hashes inside its own updater; the operator
   # only regenerates locally as a fallback when that recompile fails
   # (e.g. Dependabot's pip-tools version drifts from the project's).
+  #
+  # The locks live in `.github-deps/`, NOT `.github/requirements/`, and that is
+  # load-bearing — do not tidy them back under `.github/`. Dependabot's backend
+  # grants the `workflows` write scope only to the `github-actions` ecosystem, so
+  # a pip job that resolves an update under `.github/` is then refused when it
+  # submits: `400 The request contains invalid or unauthorized changes`, which the
+  # updater mislabels `dependency_file_not_supported`. Every pip run failed that
+  # way and not one pip lock was ever updated here (#191). The guard is
+  # undocumented by GitHub; it is dependabot-core#15237, and the fix is the one
+  # scikit-hep/hypothesis-awkward#131 made — move out of `.github/`, whereupon the
+  # stalled pip PRs opened within the minute.
   - package-ecosystem: "pip"
-    directory: "/.github/requirements/semgrep-release"
+    directory: "/.github-deps/semgrep-release"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -63,7 +74,7 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: "pip"
-    directory: "/.github/requirements/semgrep-review"
+    directory: "/.github-deps/semgrep-review"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -84,7 +95,7 @@ updates:
       - "pip"
     open-pull-requests-limit: 5
     # review-pipeline semgrep is frozen at 1.111.0 for grounding signal
-    # stability (.github/requirements/semgrep-review/requirements.in).
+    # stability (.github-deps/semgrep-review/requirements.in).
     # Block every auto-bump (major / minor / patch) so Dependabot does
     # not fight the freeze; a 1.111.x → 1.111.y patch bump still shifts
     # the AI reviewer's grounding fingerprint, so policy is "all bumps
@@ -108,7 +119,7 @@ updates:
         versions: [">=81"]
 
   - package-ecosystem: "pip"
-    directory: "/.github/requirements/validate"
+    directory: "/.github-deps/validate"
     schedule:
       interval: "weekly"
       day: "monday"
