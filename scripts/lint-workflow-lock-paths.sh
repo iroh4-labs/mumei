@@ -14,11 +14,17 @@
 # `.github/` (Dependabot refuses to write there, #191) and rewrote four lock paths
 # by hand.
 #
-# Matching is deliberately syntax-agnostic: it collects every `<dir>/requirements.txt`
-# appearing on a non-comment line of any workflow, rather than keying off `-r` or
-# `semgrep_lock=`. A future reference written some other way is covered for free —
-# a lint that only recognises today's spelling degrades to silence, which is the
-# very failure this file exists to prevent.
+# The check runs in BOTH directions, and it has to. Forwards: every lock a workflow
+# names must be a tracked file. Backwards: every lock tracked under .github-deps/
+# must be named by some workflow. The forward check alone leaves the matcher's own
+# vocabulary unguarded — rename a lock and it simply stops being seen, quietly,
+# because the other locks keep the match set non-empty. Any matcher hardcodes
+# something, so widening the regex only relocates the blind spot; the backward check
+# anchors on the DIRECTORY instead of the filename, and that is what terminates it.
+#
+# Matching is otherwise syntax-agnostic: it collects paths from non-comment lines of
+# any workflow rather than keying off `-r` or `semgrep_lock=`, so a reference written
+# some other way tomorrow is covered for free.
 #
 # set -u, no set -e (explicit handling).
 set -u
@@ -65,7 +71,7 @@ fi
 # read as "all locks present" while checking zero of them — the same
 # absent-reads-as-clean bug this lint exists to catch.
 if [[ -z "$paths" ]]; then
-  echo "lint-workflow-lock-paths: no lock path found in .github/workflows/*.yml" >&2
+  echo "lint-workflow-lock-paths: no lock path found in .github/workflows/" >&2
   echo "  the workflows reference locks; matching zero of them means this lint has gone blind." >&2
   echo "  fix the matcher rather than deleting the check." >&2
   exit 1
@@ -102,11 +108,18 @@ fi
 # anchored to. Here the anchor is the DIRECTORY, not the filename: a lock that sits
 # in .github-deps/ and is referenced by nothing is either dead weight or a file the
 # matcher can no longer see — and both deserve a failure.
+#
+# Excluded from "is a lock": `.in` (pip-compile inputs, never installed) and `.md`
+# (a README explaining why this directory is not under `.github/` is a thing someone
+# will reasonably add — schemas/README.md is the precedent — and it must not read as
+# an unreferenced lock). This excludes NON-locks by extension rather than enumerating
+# what a lock is called, which is what keeps the rename hole shut: a lock is never
+# renamed to `.md`.
 orphans=()
 while IFS= read -r lock; do
   [[ -z "$lock" ]] && continue
   printf '%s\n' "$paths" | grep -qxF "$lock" || orphans+=("$lock")
-done < <(git ls-files '.github-deps/*' | grep -vE '\.in$')
+done < <(git ls-files '.github-deps/*' | grep -vE '\.(in|md)$')
 
 if ((${#orphans[@]} > 0)); then
   echo "lint-workflow-lock-paths: lock is tracked but no workflow references it:" >&2

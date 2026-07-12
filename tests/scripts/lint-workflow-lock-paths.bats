@@ -225,6 +225,18 @@ YAML
   [[ "$stderr" == *".github-deps/unused/requirements.txt"* ]]
 }
 
+@test "a README beside the locks is documentation, not an unreferenced lock -> exit 0" {
+  _init_repo
+  # schemas/README.md is the precedent: mumei documents a directory from inside it.
+  # A README explaining why these locks are not under .github/ is a thing someone
+  # will reasonably add, and it must not be mistaken for a lock nothing installs.
+  printf '# CI dependency locks\n' >.github-deps/README.md
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 0 ]
+}
+
 @test "requirements.in is a source, not an installed lock -> exit 0" {
   _init_repo
   # The .in files are pip-compile inputs; no workflow installs them, and demanding
