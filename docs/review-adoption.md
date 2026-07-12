@@ -30,7 +30,7 @@ permissions:
   id-token: write
 jobs:
   claude:
-    uses: iroha924/mumei/.github/workflows/review-reusable.yml@<TAG>
+    uses: iroha924/mumei/.github/workflows/review-reusable.yml@<40-CHAR-SHA> # v0.11.1
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
@@ -40,13 +40,24 @@ check as `<workflow> / <caller job> / <called job>`, and the called job here is
 already named `review` — a caller workflow named `review` with a job named
 `review` shows up in the PR as `review / review / review`.
 
-Replace `<TAG>` with a mumei release tag. For stronger supply-chain integrity
-prefer a full commit SHA over a tag (`uses: iroha924/mumei/.github/workflows/review-reusable.yml@<40-char-sha>`)
-— tags are mutable in principle, and a moved or compromised tag would run
-different workflow code with your repo's `pull-requests: write` /
-`id-token: write` permissions and your Claude OAuth secret. Pinning by SHA
-eliminates that class of risk; pinning by tag is acceptable for low-stakes
-internal projects but explicitly weaker. Never use `@main`.
+**Pin by 40-character commit SHA, not by tag.** Take the SHA of a mumei release
+tag and keep the tag in a trailing comment — exactly what mumei's own
+`mutable-tag-guard` requires of every action it consumes. This is not a
+belt-and-braces suggestion. It is the difference between two outcomes:
+
+- A **SHA** names the content. Whatever happens to the tag, the account, or the
+  repository name, the code that runs is the code you reviewed.
+- A **tag** names a label on a repository path. A label can move, and a path can
+  change owner. Then the job runs someone else's code with your
+  `pull-requests: write`, your `id-token: write`, and your Claude OAuth secret.
+
+The second case is not hypothetical here. mumei has been renamed twice, and the
+retired account names (`hir4ta`, `iroh4-labs`) are deliberately **not** held.
+Anyone may register them, and GitHub's redirect from the old path dies the moment
+they do. A tag-pinned adopter would then be pointed at a stranger's repository. A
+SHA-pinned one would not notice. See [docs/threat-model.md](./threat-model.md) R8.
+
+Never use `@main`.
 
 That's the entire adoption. The workflow itself **inlines** the universal
 rubric (no runtime network fetch — the rubric YAML carrier moves with the

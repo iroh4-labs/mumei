@@ -200,9 +200,16 @@ users can model them rather than discovering them later.
   workflow pinned by **tag** to a squatted name would run someone else's
   code in a job holding their `CLAUDE_CODE_OAUTH_TOKEN`. A 40-char SHA
   pin survives this (the content is fixed); a tag does not. The
-  mitigation is to hold the retired names in placeholder accounts, and
-  the honest statement is that mumei cannot enforce that from inside the
-  repository — it is an account-registration fact, not a code one.
+  The retired names are **deliberately not held**: mumei accepts that they
+  may be registered by anyone. The mitigation is therefore the one that
+  works without owning them — `docs/review-adoption.md` now requires
+  adopters to pin by 40-character SHA rather than by tag, which is what
+  mumei's own `mutable-tag-guard` already demands of every action it
+  consumes. A SHA names content; a tag names a label on a path, and a
+  path can change hands. Old release signatures remain verifiable
+  regardless: the certificate records the repository path at signing
+  time and Rekor is append-only, so a squatter cannot forge or invalidate
+  them (see `docs/security-policy.md` for the per-tag identity table).
 - **R9 — The escape hatch is reachable from inside the session.**
   `MUMEI_BYPASS=1` short-circuits every hook, silently and by design —
   it is meant to look like the hook never fired. That design assumed a
