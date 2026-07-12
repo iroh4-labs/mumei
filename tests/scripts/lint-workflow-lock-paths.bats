@@ -225,6 +225,23 @@ YAML
   [[ "$stderr" == *".github-deps/unused"* ]]
 }
 
+@test "a lock nested deeper than the lint understands -> exit 1, not a silent collapse" {
+  _init_repo
+  # The directory check reads a lock dir as .github-deps/<name>/. A lock below that
+  # would fold onto its first-level ancestor, and a rename among siblings there would
+  # be tolerated in silence. The layout is therefore enforced, not assumed: the next
+  # person to nest deeper gets a red check telling them to teach the lint, which is
+  # the opposite of what every other finding on this file has been.
+  mkdir -p .github-deps/grp/b
+  printf 'requests==2.34.2\n' >.github-deps/grp/b/requirements.txt
+  git add -A
+
+  _run_lint
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *".github-deps/grp/b/requirements.txt"* ]]
+  [[ "$stderr" == *"deeper than this lint understands"* ]]
+}
+
 @test "non-lock files beside the locks are free -> exit 0 (no denylist to keep current)" {
   _init_repo
   # The unit checked is the directory, not the file, so nothing here needs to be

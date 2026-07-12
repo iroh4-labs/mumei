@@ -116,6 +116,29 @@ fi
 # Files inside it are free — put a README in, a .gitignore, anything. Rename the lock
 # and the directory's referenced-lock count drops to zero, and it fails. No enumeration
 # of what a lock is called, and none of what it is not.
+# That directory check reads a lock dir as `.github-deps/<name>/`, i.e. it assumes
+# locks live exactly one level down. The assumption is true today and it is cheap to
+# hold — but an assumption a lint makes silently is the thing this lint is about. A
+# lock nested deeper (`.github-deps/grp/b/requirements.txt`) would collapse onto its
+# first-level ancestor, and a rename among siblings there would be tolerated without a
+# word. So the layout is not assumed, it is ENFORCED: go deeper and the lint fails and
+# says to update it. The next person gets a red check, not a blind spot.
+deep=()
+while IFS= read -r f; do
+  [[ -n "$f" ]] && deep+=("$f")
+done < <(git ls-files '.github-deps/*' | awk -F/ 'NF>3 {print}')
+
+if ((${#deep[@]} > 0)); then
+  echo "lint-workflow-lock-paths: lock tree is deeper than this lint understands:" >&2
+  for f in "${deep[@]}"; do
+    echo "  ${f}" >&2
+  done
+  echo "  it reads a lock directory as .github-deps/<name>/, so anything below that" >&2
+  echo "  collapses onto its ancestor and a rename there would pass unnoticed." >&2
+  echo "  Teach the lint the new layout rather than letting it guess." >&2
+  exit 1
+fi
+
 unreferenced=()
 while IFS= read -r dir; do
   [[ -z "$dir" ]] && continue
