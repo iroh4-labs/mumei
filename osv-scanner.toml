@@ -26,3 +26,50 @@ input. Reassess on 2027-05-23 — by then the review pipeline should
 have moved off 1.111.0 anyway, or the upstream advisory should have
 been backported to the 4.25.x line.
 """
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2132"
+ignoreUntil = 2027-01-15
+reason = """
+CVE-2026-7246 / GHSA-47fr-3ffg-hgmw click.edit() OS-command injection: a caller that
+passes attacker-controlled text to click.edit() can have it executed as
+a shell command. Fixed in click 8.3.3.
+
+Path: click==8.1.8 is a transitive dependency of semgrep==1.168.0
+(see .github-deps/semgrep-release/requirements.txt), also pulled via
+click-option-group / uvicorn / requests. It cannot be bumped to 8.3.3:
+semgrep 1.168.0 hard-pins `click~=8.1.8` (== >=8.1.8,<8.2.0) in its
+requires_dist, so 8.2+ is unreachable until semgrep upstream relaxes
+that pin — no semgrep bump Dependabot proposes will pull the fix.
+
+Exploit path in mumei: none. mumei never calls click.edit(); the
+release-time scan invokes semgrep's non-interactive CLI against trusted
+repository files, and no PR-author input reaches click.edit(). Reassess
+on 2027-01-15 — drop this entry once a semgrep release relaxes the
+`click~=8.1.8` pin and the release lock resolves click>=8.3.3.
+"""
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3447"
+ignoreUntil = 2027-01-15
+reason = """
+setuptools MANIFEST.in Unicode-normalization bypass: FileList matches
+exclusion globs without NFC/NFD normalization, so on macOS APFS/HFS+ an
+attacker-named file can slip past exclusion rules and land in a built
+sdist. Fixed in setuptools 83.0.0.
+
+Path: setuptools==80.10.2 is present in
+.github-deps/semgrep-review/requirements.txt only because semgrep's
+opentelemetry dependency imports pkg_resources, which setuptools removed
+in 81.0; the lock therefore pins `setuptools<81` deliberately (see the
+requirements.in comment and dependabot.yml). The fix is 83.0.0 with no
+backport to the 80.x line, so it cannot be adopted without breaking
+semgrep at import time.
+
+Exploit path in mumei: none. The review and release pipelines never
+build a source distribution — setuptools is import-time scaffolding for
+semgrep, not a packaging tool here — so no MANIFEST.in exclusion is ever
+applied to attacker-named files. Reassess on 2027-01-15 — drop this
+entry once semgrep's dependency stops importing pkg_resources and the
+lock can move to setuptools>=83.0.0.
+"""
